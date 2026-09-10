@@ -66,13 +66,13 @@ class MockRepository(BaseRepository):
         aid = record.get("ACCOUNT_ID", str(uuid.uuid4()))
         record["ACCOUNT_ID"] = aid
         record["UPDATED_AT"] = dt.datetime.now()
-        record.setdefault("CREATED_AT", dt.datetime.now())
         idx = self._accounts[self._accounts["ACCOUNT_ID"] == aid].index
         if len(idx):
             for col in record:
                 if col in self._accounts.columns:
                     self._accounts.loc[idx[0], col] = record[col]
         else:
+            record.setdefault("CREATED_AT", dt.datetime.now())
             self._accounts = pd.concat(
                 [self._accounts, pd.DataFrame([record])], ignore_index=True
             )
@@ -97,13 +97,13 @@ class MockRepository(BaseRepository):
         fid = record.get("FACILITY_ID", str(uuid.uuid4()))
         record["FACILITY_ID"] = fid
         record["UPDATED_AT"] = dt.datetime.now()
-        record.setdefault("CREATED_AT", dt.datetime.now())
         idx = self._facilities[self._facilities["FACILITY_ID"] == fid].index
         if len(idx):
             for col in record:
                 if col in self._facilities.columns:
                     self._facilities.loc[idx[0], col] = record[col]
         else:
+            record.setdefault("CREATED_AT", dt.datetime.now())
             self._facilities = pd.concat(
                 [self._facilities, pd.DataFrame([record])], ignore_index=True
             )
@@ -132,13 +132,13 @@ class MockRepository(BaseRepository):
         fid = record.get("FLOCK_ID", str(uuid.uuid4()))
         record["FLOCK_ID"] = fid
         record["UPDATED_AT"] = dt.datetime.now()
-        record.setdefault("CREATED_AT", dt.datetime.now())
         idx = self._flocks[self._flocks["FLOCK_ID"] == fid].index
         if len(idx):
             for col in record:
                 if col in self._flocks.columns:
                     self._flocks.loc[idx[0], col] = record[col]
         else:
+            record.setdefault("CREATED_AT", dt.datetime.now())
             self._flocks = pd.concat(
                 [self._flocks, pd.DataFrame([record])], ignore_index=True
             )
@@ -162,7 +162,6 @@ class MockRepository(BaseRepository):
     def upsert_flock_transaction(self, record: dict) -> str:
         tid = record.get("FLOCK_TRANSACTION_ID", str(uuid.uuid4()))
         record["FLOCK_TRANSACTION_ID"] = tid
-        record.setdefault("CREATED_AT", dt.datetime.now())
         idx = self._flock_transactions[
             self._flock_transactions["FLOCK_TRANSACTION_ID"] == tid
         ].index
@@ -171,6 +170,7 @@ class MockRepository(BaseRepository):
                 if col in self._flock_transactions.columns:
                     self._flock_transactions.loc[idx[0], col] = record[col]
         else:
+            record.setdefault("CREATED_AT", dt.datetime.now())
             self._flock_transactions = pd.concat(
                 [self._flock_transactions, pd.DataFrame([record])], ignore_index=True
             )
@@ -235,15 +235,22 @@ class MockRepository(BaseRepository):
             how="left",
             suffixes=("", "_IB"),
         )
-        # The synthetic data already has REPORTING_YEAR/WEEK on production rows
+        # Use the row-level reporting period, with its import batch as fallback,
+        # so the displayed values and filters have the same meaning.
+        for period_col in ("REPORTING_YEAR", "REPORTING_WEEK"):
+            batch_col = f"{period_col}_IB"
+            if period_col not in df.columns and batch_col in df.columns:
+                df[period_col] = df[batch_col]
+            elif batch_col in df.columns:
+                df[period_col] = df[period_col].where(
+                    df[period_col].notna(), df[batch_col]
+                )
         if reporting_year is not None:
-            yr_col = "REPORTING_YEAR_IB" if "REPORTING_YEAR_IB" in df.columns else "REPORTING_YEAR"
-            if yr_col in df.columns:
-                df = df[df[yr_col] == reporting_year]
+            if "REPORTING_YEAR" in df.columns:
+                df = df[df["REPORTING_YEAR"] == reporting_year]
         if reporting_week is not None:
-            wk_col = "REPORTING_WEEK_IB" if "REPORTING_WEEK_IB" in df.columns else "REPORTING_WEEK"
-            if wk_col in df.columns:
-                df = df[df[wk_col] == reporting_week]
+            if "REPORTING_WEEK" in df.columns:
+                df = df[df["REPORTING_WEEK"] == reporting_week]
         if grader_number:
             df = df[df["GRADER_NUMBER"] == grader_number]
         if barn_identity:
