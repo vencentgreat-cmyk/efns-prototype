@@ -1,0 +1,42 @@
+Dataverse_Table,Dataverse_Column,Dataverse_Type,Dataverse_Required,Target_Table,Target_Column,Mapping_Status,Notes
+??? (Account),??? (accountid),Guid,Yes,CORE.ACCOUNT,ACCOUNT_ID,UNKNOWN,MAP after metadata export
+??? (Account),??? (name),String,Yes,CORE.ACCOUNT,ORGANIZATION_NAME,PROVISIONAL,Inferred from observation
+??? (Account),??? (registration_number),String?,Unknown,CORE.ACCOUNT,REGISTRATION_NUMBER,PROVISIONAL,Inferred
+??? (Account),??? (address),String?,Unknown,CORE.ACCOUNT,ADDRESS_LINE1,PROVISIONAL,Inferred
+??? (Account),??? (licence),String?,Unknown,CORE.ACCOUNT,LICENCE_NUMBER,PROVISIONAL,Inferred
+??? (Account),??? (producer_role),Boolean?,Unknown,CORE.ACCOUNT,PRODUCER_ROLE,PROVISIONAL,May be choice field in Dataverse
+??? (Account),??? (breeder_role),Boolean?,Unknown,CORE.ACCOUNT,BREEDER_ROLE,PROVISIONAL,May be choice field in Dataverse
+??? (Account),??? (hatchery_role),Boolean?,Unknown,CORE.ACCOUNT,HATCHERY_ROLE,PROVISIONAL,May be choice field in Dataverse
+??? (Account),??? (grader_role),Boolean?,Unknown,CORE.ACCOUNT,GRADER_ROLE,PROVISIONAL,May be choice field in Dataverse
+??? (Account),??? (status),Choice?,Unknown,CORE.ACCOUNT,STATUS,PROVISIONAL,Inferred
+??? (Facility),??? (facilityid),Guid,Yes,CORE.FACILITY,FACILITY_ID,UNKNOWN,Map after metadata
+??? (Facility),??? (account_lookup),Lookup,Yes,CORE.FACILITY,ACCOUNT_ID,PROVISIONAL,FK to Account; need logical name
+??? (Facility),??? (name),String,Yes,CORE.FACILITY,FACILITY_NAME,PROVISIONAL,Inferred
+??? (Facility),??? (type),Choice?,Unknown,CORE.FACILITY,FACILITY_TYPE,PROVISIONAL,pullet/layer/other (confirm)
+??? (Facility),??? (status),Choice?,Unknown,CORE.FACILITY,STATUS,PROVISIONAL,Inferred
+??? (Facility),??? (activation_date),Date?,Unknown,CORE.FACILITY,ACTIVATION_DATE,PROVISIONAL,Inferred
+??? (Facility),??? (closure_date),Date?,Unknown,CORE.FACILITY,CLOSURE_DATE,PROVISIONAL,Inferred
+??? (Flock),??? (flockid),Guid,Yes,CORE.FLOCK,FLOCK_ID,UNKNOWN,Map after metadata
+??? (Flock),??? (account_lookup),Lookup,Yes,CORE.FLOCK,ACCOUNT_ID,PROVISIONAL,FK to Account
+??? (Flock),??? (facility_lookup),Lookup,Maybe,CORE.FLOCK,FACILITY_ID,PROVISIONAL,FK to Facility; may be through Account
+??? (Flock),??? (flock_number),String?,Unknown,CORE.FLOCK,FLOCK_NUMBER,PROVISIONAL,Inferred
+??? (Flock),??? (bird_count),Whole Number?,Unknown,CORE.FLOCK,BIRD_COUNT,PROVISIONAL,Inferred
+??? (Flock),??? (placement_date),Date?,Unknown,CORE.FLOCK,PLACEMENT_DATE,PROVISIONAL,Inferred
+??? (Flock),??? (hatch_date),Date?,Unknown,CORE.FLOCK,HATCH_DATE,PROVISIONAL,Inferred
+??? (Flock),??? (egg_colour),Choice?,Unknown,CORE.FLOCK,EGG_COLOUR,PROVISIONAL,Inferred
+??? (Flock),??? (status),Choice?,Unknown,CORE.FLOCK,STATUS,PROVISIONAL,Inferred
+??? (Flock),??? (disposal_method),Choice?,Unknown,CORE.FLOCK,DISPOSAL_METHOD,PROVISIONAL,Inferred
+??? (Flock Transaction),??? (id),Guid,Yes,CORE.FLOCK_TRANSACTION,FLOCK_TRANSACTION_ID,UNKNOWN,Map after metadata
+??? (Flock Transaction),??? (flock_lookup),Lookup,Yes,CORE.FLOCK_TRANSACTION,FLOCK_ID,PROVISIONAL,FK to Flock
+??? (Flock Transaction),??? (type),Choice?,Unknown,CORE.FLOCK_TRANSACTION,TRANSACTION_TYPE,PROVISIONAL,Count/Delivery/Removal/Sale (confirm)
+??? (Flock Transaction),??? (quantity),Whole Number?,Unknown,CORE.FLOCK_TRANSACTION,QUANTITY,PROVISIONAL,Inferred
+??? (Production),??? (id),Guid,Yes,CORE.PRODUCTION_RECORD,PRODUCTION_ID,UNKNOWN,May not exist as table in Dataverse; may be a form/view
+??? (Production),??? (grader_number),String?,Unknown,CORE.PRODUCTION_RECORD,GRADER_NUMBER,PROVISIONAL,Inferred from CSV concept
+??? (Production),??? (barn_identity),String?,Unknown,CORE.PRODUCTION_RECORD,BARN_IDENTITY,PROVISIONAL,Inferred from CSV concept
+??? (Production),??? (flock_age),Whole Number?,Unknown,CORE.PRODUCTION_RECORD,FLOCK_AGE,PROVISIONAL,Inferred
+??? (Production),??? (egg_colour),Choice?,Unknown,CORE.PRODUCTION_RECORD,EGG_COLOUR,PROVISIONAL,Inferred
+??? (Production),??? (net_weight),Decimal?,Unknown,CORE.PRODUCTION_RECORD,NET_WEIGHT,PROVISIONAL,Inferred
+??? (Production),??? (total_received),Decimal?,Unknown,CORE.PRODUCTION_RECORD,TOTAL_RECEIVED,PROVISIONAL,Inferred
+??? (Production),??? (rejected),Decimal?,Unknown,CORE.PRODUCTION_RECORD,REJECTED,PROVISIONAL,Inferred
+??? (Production),??? (loss),Decimal?,Unknown,CORE.PRODUCTION_RECORD,LOSS,PROVISIONAL,Inferred
+??? (Production),??? (total_accepted),Decimal?,Unknown,CORE.PRODUCTION_RECORD,TOTAL_ACCEPTED,PROVISIONAL,Inferred
