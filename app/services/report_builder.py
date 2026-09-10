@@ -41,7 +41,7 @@ REPORT_FIELDS = {
         ("BIRD_COUNT", "Bird Count", "BIRD_COUNT"),
         ("PLACEMENT_DATE", "Placement Date", "PLACEMENT_DATE"),
         ("HATCH_DATE", "Hatch Date", "HATCH_DATE"),
-        ("EGG_COLOUR", "Egg Colour", "EGG_COLOUR"),
+        ("EGG_COLOUR", "Egg Colour", "EGG_COLOUR_FLOCK"),
         ("EST_PROD_COMPLETION", "Est. Completion", "EST_PROD_COMPLETION"),
         ("DISPOSAL_METHOD", "Disposal Method", "DISPOSAL_METHOD"),
         ("FLOCK_STATUS", "Flock Status", "STATUS_FLOCK"),
@@ -98,52 +98,67 @@ def build_report(
     has_flock = "Flock" in sections_needed
     has_production = "Production" in sections_needed
 
-    # --- Build hierarchical base (Account ← Facility ← Flock) ---
-    accounts = repo.get_accounts()
-    accounts = accounts.rename(columns={"STATUS": "STATUS_ACCT"})
+    # --- Load and disambiguate source entities ---
+    accounts = repo.get_accounts().rename(columns={"STATUS": "STATUS_ACCT"})
+    facilities = repo.get_facilities().rename(columns={"STATUS": "STATUS_FAC"})
+    flocks = repo.get_flocks().rename(
+        columns={"STATUS": "STATUS_FLOCK", "EGG_COLOUR": "EGG_COLOUR_FLOCK"}
+    )
+    prod = None
+    if has_production:
+        prod = repo.get_production_records().rename(
+            columns={"EGG_COLOUR": "EGG_COLOUR_PROD"}
+        )
 
-    facilities = repo.get_facilities()
-    facilities = facilities.rename(columns={"STATUS": "STATUS_FAC"})
-
-    flocks = repo.get_flocks()
-    flocks = flocks.rename(columns={"STATUS": "STATUS_FLOCK"})
-
-    # Join chain
+    # FLOCK is the bridge between production and the operational hierarchy.
+    # Starting mixed reports from production gives each production row its
+    # related flock/account values instead of concatenating unrelated rows.
     df = None
-    if has_account or has_facility or has_flock:
-        # Start with accounts
-        df = accounts.copy()
-        if has_facility or has_flock:
-            df = df.merge(facilities, on="ACCOUNT_ID", how="left", suffixes=("", "_FAC"))
-        if has_flock:
-            df = df.merge(flocks, on=["ACCOUNT_ID", "FACILITY_ID"], how="left", suffixes=("", "_FLOCK"))
-
-    # --- Production ---
-    prod = repo.get_production_records() if has_production else None
-
-    # --- Join production to hierarchical base (provisional) ---
-    if has_production and df is not None:
-        # PROVISIONAL join on FLOCK_ID. If FLOCK_ID is absent, production appears as standalone rows.
-        if "FLOCK_ID" in df.columns and "FLOCK_ID" in prod.columns:
-            df = df.merge(
-                prod,
-                on="FLOCK_ID",
+    if has_production and (has_account or has_facility or has_flock):
+        hierarchy = flocks.copy()
+        if has_facility:
+            hierarchy = hierarchy.merge(
+                facilities,
+                on=["ACCOUNT_ID", "FACILITY_ID"],
                 how="left",
-                suffixes=("_HIER", "_PROD"),
+                suffixes=("_FLOCK", "_FAC"),
             )
-        else:
-            # No FLOCK_ID available — attach production rows as additional non-merged rows
-            # This is a best-effort v0.1 approach.
-            # Pad columns to match
-            for col in df.columns:
-                if col not in prod.columns:
-                    prod[col] = None
-            for col in prod.columns:
-                if col not in df.columns:
-                    df[col] = None
-            df = pd.concat([df, prod], ignore_index=True)
+            hierarchy["FACILITY_NAME"] = hierarchy["FACILITY_NAME"].fillna(
+                "Unassigned"
+            )
+            hierarchy["STATUS_FAC"] = hierarchy["STATUS_FAC"].fillna(
+                "Unassigned"
+            )
+        if has_account:
+            hierarchy = hierarchy.merge(
+                accounts, on="ACCOUNT_ID", how="left", suffixes=("_HIER", "_ACCT")
+            )
+        df = prod.merge(hierarchy, on="FLOCK_ID", how="left")
     elif has_production:
         df = prod.copy()
+    elif has_flock:
+        df = flocks.copy()
+        if has_facility:
+            df = df.merge(
+                facilities,
+                on=["ACCOUNT_ID", "FACILITY_ID"],
+                how="left",
+                suffixes=("_FLOCK", "_FAC"),
+            )
+            df["FACILITY_NAME"] = df["FACILITY_NAME"].fillna("Unassigned")
+            df["STATUS_FAC"] = df["STATUS_FAC"].fillna("Unassigned")
+        if has_account:
+            df = df.merge(
+                accounts, on="ACCOUNT_ID", how="left", suffixes=("_HIER", "_ACCT")
+            )
+    elif has_facility:
+        df = facilities.copy()
+        if has_account:
+            df = df.merge(
+                accounts, on="ACCOUNT_ID", how="left", suffixes=("_FAC", "_ACCT")
+            )
+    elif has_account:
+        df = accounts.copy()
 
     if df is None or df.empty:
         return pd.DataFrame({"Message": ["No data for selected fields."]})

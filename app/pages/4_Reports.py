@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from data.repositories import get_repository
-from app.services.report_builder import REPORT_FIELDS, build_report
+from services.report_builder import REPORT_FIELDS, build_report
 
 
 st.set_page_config(page_title="Reports", page_icon="🥚")
