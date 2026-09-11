@@ -1,4 +1,4 @@
-# EFNS Internal Data System — Prototype v0.1
+# EFNS Internal Data System — Prototype v0.2
 
 **Egg Farmers of Nova Scotia (EFNS)**
 
@@ -9,20 +9,12 @@ targeting Snowflake as the cloud data platform.
 
 ## Quick Start
 
-```bash
-# 1. Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate   # Linux/macOS
-# venv\Scripts\activate    # Windows
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Copy and review configuration
-cp .env.example .env
-
-# 4. Run the Streamlit app (mock mode — no Snowflake needed)
-streamlit run app/app.py
+```powershell
+# Run from the repository root
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
+.\.venv\Scripts\python.exe -m streamlit run app/Home.py
 ```
 
 Open http://localhost:8501 in a browser.
@@ -34,11 +26,11 @@ Open http://localhost:8501 in a browser.
 | Feature | Status |
 |---------|--------|
 | Logical data model (ACCOUNT, FACILITY, FLOCK, PRODUCTION) | PROVISIONAL |
-| CSV ingestion pipeline (RAW → CORE) | Working (mock) |
+| EIMS workbook ingestion (RAW → normalized union model) | Working (mock) |
 | Production data search/filter | Working |
 | Accounts/Facilities/Flocks CRUD views | Working |
 | Customizable report builder with CSV & Excel export | Working |
-| Snowflake-ready SQL (schemas: RAW, CORE, REPORTING) | Ready to deploy |
+| Snowflake SQL (schemas: RAW, CORE, REPORTING) | Provisional; not deployment-ready |
 | Synthetic data generator (deterministic, seeded) | Working |
 | Modular repository pattern (Mock ↔ Snowflake) | Stub ready |
 
@@ -49,16 +41,20 @@ Open http://localhost:8501 in a browser.
 ```
 efns-prototype/
 ├── app/
-│   ├── app.py                    # Home page + navigation
+│   ├── Home.py                   # Entry point + grouped navigation
+│   ├── ui.py                     # Shared visual system
 │   ├── pages/
 │   │   ├── 1_Production_Import.py
 │   │   ├── 2_Production_Data.py
 │   │   ├── 3_Accounts_Facilities_Flocks.py
 │   │   └── 4_Reports.py
 │   └── services/
+│       ├── export.py             # Spreadsheet-safe exports
 │       └── report_builder.py     # Dynamic report assembly
 │
 ├── data/
+│   ├── constants.py              # EIMS import constants and mappings
+│   ├── importing.py              # Workbook read/normalize/validate helpers
 │   ├── repositories/
 │   │   ├── __init__.py           # Factory: get_repository()
 │   │   ├── base.py               # Abstract BaseRepository
@@ -84,6 +80,8 @@ efns-prototype/
 │   └── DATAVERSE_TO_TARGET_MAPPING.csv
 │
 ├── tests/
+│   ├── test_phase1_2_regressions.py
+│   ├── test_phase1_domain.py
 │   └── test_synthetic.py
 │
 ├── requirements.txt
@@ -107,11 +105,11 @@ Set `REPOSITORY_MODE=snowflake` in `.env` to switch (requires credentials).
 ### Data Flow
 
 ```
-CSV Upload → Python Ingestion → RAW (IMPORT_BATCH, IMPORT_RAW_ROW)
+EIMS Workbook → Python Ingestion → RAW source rows (MockRepository)
                                        ↓
                                Validation / Transformation
                                        ↓
-                               CORE (PRODUCTION_RECORD, SIZE_BREAKDOWN)
+                               Transitional normalized production union
                                        ↓
                                REPORTING (Views, Report Builder)
                                        ↓
@@ -151,14 +149,15 @@ See `docs/DATAVERSE_DISCOVERY_CHECKLIST.md` for the full list, but key items:
 
 ### Production Pipeline Context
 
-The current CSV workflow involves:
+The current workbook workflow involves:
 - External farm/grader CSV
 - EFNS staff consolidation into a larger spreadsheet
 - Calculations / classification
 - Manual entry into EIMS by Sara
 
-This prototype models the CSV ingestion path, but the actual production CSV
-format and column mapping will need to be refined based on real file samples.
+This prototype reads the 35 saved source columns from the `EIMS 3` worksheet.
+Incoming source fields are preserved by the mock repository while the final
+Dataverse-to-Snowflake schema remains unresolved.
 
 ---
 

@@ -1,66 +1,96 @@
-# ============================================================
-# EFNS Prototype v0.1 — Production Data Page
-# ============================================================
-"""Searchable, filterable production records table."""
+"""Searchable and filterable production records."""
 
-import pandas as pd
 import streamlit as st
 
+from app.services.export import spreadsheet_safe
+from app.ui import apply_theme, page_header, section_intro
 from data.repositories import get_repository
 
 
-st.set_page_config(page_title="Production Data", page_icon="🥚")
-
+apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()
-
 repo = st.session_state.repo
 
-st.title("Production Data")
-st.caption("Filterable production records — PROVISIONAL schema")
+page_header(
+    "Production Data",
+    "Review production records using a consistent row-level reporting period.",
+    "PRODUCTION",
+)
 
-# --- Filters ---
-st.markdown("### Filters")
-col1, col2, col3, col4, col5 = st.columns(5)
+all_records = repo.get_production_records()
 
-with col1:
-    all_years = [None] + sorted(
-        repo.get_production_records()["REPORTING_YEAR"].dropna().unique().tolist()
-    ) if "REPORTING_YEAR" in repo.get_production_records().columns else [None]
-    reporting_year = st.selectbox(
-        "Reporting Year",
-        ["All"] + [str(int(y)) for y in all_years[1:]],
+filter_keys = (
+    "production_year_filter",
+    "production_week_filter",
+    "production_grader_filter",
+    "production_barn_filter",
+    "production_colour_filter",
+)
+
+
+def reset_filters() -> None:
+    for key in filter_keys:
+        st.session_state.pop(key, None)
+
+
+with st.container(border=True):
+    section_intro("Filters", "Narrow the table by reporting period and operational attributes.")
+    reset_col, _ = st.columns([1, 5])
+    reset_col.button("Reset filters", on_click=reset_filters, width="stretch")
+    filter_columns = st.columns(5)
+    years = (
+        sorted(all_records["REPORTING_YEAR"].dropna().astype(int).unique().tolist())
+        if "REPORTING_YEAR" in all_records
+        else []
     )
-    reporting_year = int(reporting_year) if reporting_year != "All" else None
-
-with col2:
-    all_weeks = [None]
-    df_temp = repo.get_production_records(reporting_year=reporting_year)
-    if "REPORTING_WEEK" in df_temp.columns:
-        all_weeks += sorted(df_temp["REPORTING_WEEK"].dropna().unique().tolist())
-    reporting_week = st.selectbox(
-        "Reporting Week",
-        ["All"] + [str(int(w)) for w in all_weeks[1:]],
+    year_value = filter_columns[0].selectbox(
+        "Reporting Year", ["All", *years], key="production_year_filter"
     )
-    reporting_week = int(reporting_week) if reporting_week != "All" else None
+    reporting_year = None if year_value == "All" else int(year_value)
 
-with col3:
-    all_graders = sorted(df_temp["GRADER_NUMBER"].dropna().unique().tolist()) if "GRADER_NUMBER" in df_temp.columns else []
-    grader = st.selectbox("Grader Number", ["All"] + all_graders)
-    grader = grader if grader != "All" else None
+    period_records = repo.get_production_records(reporting_year=reporting_year)
+    weeks = (
+        sorted(period_records["REPORTING_WEEK"].dropna().astype(int).unique().tolist())
+        if "REPORTING_WEEK" in period_records
+        else []
+    )
+    week_value = filter_columns[1].selectbox(
+        "Reporting Week", ["All", *weeks], key="production_week_filter"
+    )
+    reporting_week = None if week_value == "All" else int(week_value)
 
-with col4:
-    all_barns = sorted(df_temp["BARN_IDENTITY"].dropna().unique().tolist()) if "BARN_IDENTITY" in df_temp.columns else []
-    barn = st.selectbox("Barn Identity", ["All"] + all_barns)
-    barn = barn if barn != "All" else None
+    graders = (
+        sorted(period_records["GRADER_NUMBER"].dropna().astype(str).unique().tolist())
+        if "GRADER_NUMBER" in period_records
+        else []
+    )
+    grader_value = filter_columns[2].selectbox(
+        "Grader Number", ["All", *graders], key="production_grader_filter"
+    )
+    grader = None if grader_value == "All" else grader_value
 
-with col5:
-    all_colours = sorted(df_temp["EGG_COLOUR"].dropna().unique().tolist()) if "EGG_COLOUR" in df_temp.columns else []
-    colour = st.selectbox("Egg Colour", ["All"] + all_colours)
-    colour = colour if colour != "All" else None
+    barns = (
+        sorted(period_records["BARN_IDENTITY"].dropna().astype(str).unique().tolist())
+        if "BARN_IDENTITY" in period_records
+        else []
+    )
+    barn_value = filter_columns[3].selectbox(
+        "Barn Identity", ["All", *barns], key="production_barn_filter"
+    )
+    barn = None if barn_value == "All" else barn_value
 
-# --- Query ---
-df = repo.get_production_records(
+    colours = (
+        sorted(period_records["EGG_COLOUR"].dropna().astype(str).unique().tolist())
+        if "EGG_COLOUR" in period_records
+        else []
+    )
+    colour_value = filter_columns[4].selectbox(
+        "Egg Colour", ["All", *colours], key="production_colour_filter"
+    )
+    colour = None if colour_value == "All" else colour_value
+
+records = repo.get_production_records(
     reporting_year=reporting_year,
     reporting_week=reporting_week,
     grader_number=grader,
@@ -68,40 +98,68 @@ df = repo.get_production_records(
     egg_colour=colour,
 )
 
-# --- Summary ---
-st.divider()
-col_a, col_b, col_c, col_d, col_e = st.columns(5)
-with col_a:
-    st.metric("Rows", len(df))
-with col_b:
-    st.metric("Total Received", f"{df['TOTAL_RECEIVED'].sum():,.1f}" if "TOTAL_RECEIVED" in df.columns else "N/A")
-with col_c:
-    st.metric("Total Accepted", f"{df['TOTAL_ACCEPTED'].sum():,.1f}" if "TOTAL_ACCEPTED" in df.columns else "N/A")
-with col_d:
-    st.metric("Total Rejected", f"{df['REJECTED'].sum():,.1f}" if "REJECTED" in df.columns and df["REJECTED"].notna().any() else "N/A")
-with col_e:
-    st.metric("Total Loss", f"{df['LOSS'].sum():,.1f}" if "LOSS" in df.columns and df["LOSS"].notna().any() else "N/A")
+metrics = st.columns(4)
+for column, label, field in zip(
+    metrics,
+    ("Total Received", "Total Accepted", "Total Rejected", "Total Loss"),
+    ("TOTAL_RECEIVED", "TOTAL_ACCEPTED", "REJECTED", "LOSS"),
+):
+    value = records[field].sum() if field in records else None
+    column.metric(label, "N/A" if value is None else f"{value:,.1f}")
 
-# --- Data table ---
-st.divider()
-st.subheader("Production Records")
-
-display_cols = [
-    c for c in [
-        "PRODUCTION_ID", "REPORTING_YEAR", "REPORTING_WEEK", "GRADER_NUMBER",
-        "BARN_IDENTITY", "FLOCK_AGE", "EGG_COLOUR", "NET_WEIGHT", "NET_BOXES",
-        "NET_PER_BOX", "TOTAL_RECEIVED", "REJECTED", "LOSS",
-        "LEGACY_REJECT_LOSS_TOTAL", "TOTAL_ACCEPTED", "IMPORT_ID", "CREATED_AT",
-    ] if c in df.columns
-]
-st.dataframe(df[display_cols], use_container_width=True, hide_index=True)
-
-# --- CSV Export ---
-if not df.empty:
-    csv_data = df[display_cols].to_csv(index=False)
-    st.download_button(
-        "Export Filtered Results to CSV",
-        csv_data,
-        "production_export.csv",
-        "text/csv",
+with st.container(border=True):
+    section_intro(
+        f"Production records · {len(records):,} rows",
+        "Filtered operational and source-traceability fields.",
     )
+    display_columns = [
+        column
+        for column in (
+            "PRODUCTION_ID",
+            "REPORTING_YEAR",
+            "REPORTING_WEEK",
+            "PRODUCER_NUMBER",
+            "GRADER_NUMBER",
+            "BARN_IDENTITY",
+            "EGG_COLOUR",
+            "TOTAL_RECEIVED",
+            "REJECTED",
+            "LOSS",
+            "TOTAL_ACCEPTED",
+            "TOTAL",
+            "SOURCE_TYPE",
+            "MATCH_STATUS",
+            "SOURCE_ROW_NUMBER",
+            "IMPORT_ID",
+        )
+        if column in records.columns
+    ]
+    st.caption(f"Showing {len(records):,} of {len(all_records):,} production records.")
+    st.dataframe(
+        records[display_columns],
+        width="stretch",
+        height=470,
+        hide_index=True,
+        column_config={
+            "PRODUCTION_ID": "Production ID",
+            "REPORTING_YEAR": "Year",
+            "REPORTING_WEEK": "Week",
+            "PRODUCER_NUMBER": "Producer",
+            "GRADER_NUMBER": "Grader",
+            "BARN_IDENTITY": "Barn",
+            "EGG_COLOUR": "Egg Colour",
+            "TOTAL_RECEIVED": st.column_config.NumberColumn("Received", format="%.1f"),
+            "REJECTED": st.column_config.NumberColumn("Rejected", format="%.1f"),
+            "LOSS": st.column_config.NumberColumn("Loss", format="%.1f"),
+            "TOTAL_ACCEPTED": st.column_config.NumberColumn("Accepted", format="%.1f"),
+            "SOURCE_TYPE": "Source",
+            "MATCH_STATUS": "Match Status",
+        },
+    )
+    if not records.empty:
+        st.download_button(
+            "Export filtered CSV",
+            spreadsheet_safe(records[display_columns]).to_csv(index=False),
+            "production_export.csv",
+            "text/csv",
+        )

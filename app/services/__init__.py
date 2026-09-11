@@ -1,1 +1,1 @@
-# EFNS Prototype v0.1 — services package
+"""Application services shared by Streamlit pages."""

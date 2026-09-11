@@ -32,6 +32,13 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
+    def find_accounts_by_registration_number(
+        self, registration_number: str
+    ) -> pd.DataFrame:
+        """Return every account matching an external registration number."""
+        ...
+
+    @abstractmethod
     def upsert_account(self, record: dict) -> str:
         """Insert or update an account. Returns account_id."""
         ...
@@ -57,6 +64,14 @@ class BaseRepository(ABC):
     def delete_facility(self, facility_id: str) -> bool:
         ...
 
+    @abstractmethod
+    def get_facility_details(self, facility_id: Optional[str] = None) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def upsert_facility_detail(self, record: dict) -> str:
+        ...
+
     # ------------------------------------------------------------------
     # Flocks
     # ------------------------------------------------------------------
@@ -65,6 +80,10 @@ class BaseRepository(ABC):
     def get_flocks(
         self, account_id: Optional[str] = None, facility_id: Optional[str] = None
     ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def get_flock(self, flock_id: str) -> Optional[dict]:
         ...
 
     @abstractmethod
@@ -87,6 +106,87 @@ class BaseRepository(ABC):
     def upsert_flock_transaction(self, record: dict) -> str:
         ...
 
+    @abstractmethod
+    def delete_flock_transaction(self, transaction_id: str) -> bool:
+        ...
+
+    # Quota management (provisional)
+    @abstractmethod
+    def get_quota_registrations(
+        self,
+        account_id: Optional[str] = None,
+        status: Optional[str] = None,
+        quota_type: Optional[str] = None,
+        active_only: bool = False,
+    ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def get_quota_registration(self, quota_id: str) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    def upsert_quota_registration(self, record: dict) -> str:
+        ...
+
+    @abstractmethod
+    def delete_quota_registration(self, quota_id: str) -> bool:
+        ...
+
+    @abstractmethod
+    def get_quota_transactions(
+        self,
+        account_id: Optional[str] = None,
+        quota_id: Optional[str] = None,
+        quota_type: Optional[str] = None,
+        transaction_type: Optional[str] = None,
+        date_from=None,
+        date_to=None,
+    ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def upsert_quota_transaction(self, record: dict) -> str:
+        ...
+
+    @abstractmethod
+    def delete_quota_transaction(self, transaction_id: str) -> bool:
+        ...
+
+    # Salmonella testing (provisional)
+    @abstractmethod
+    def get_salmonella_tests(
+        self,
+        account_id: Optional[str] = None,
+        facility_id: Optional[str] = None,
+        flock_id: Optional[str] = None,
+        permit_number: Optional[str] = None,
+        test_result: Optional[str] = None,
+        inspector: Optional[str] = None,
+        case_number: Optional[str] = None,
+        invoice_number: Optional[str] = None,
+        date_from=None,
+        date_to=None,
+    ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def get_salmonella_test(self, test_id: str) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    def upsert_salmonella_test(self, record: dict) -> str:
+        ...
+
+    @abstractmethod
+    def delete_salmonella_test(self, test_id: str) -> bool:
+        ...
+
+    @abstractmethod
+    def get_salmonella_test_samples(self, test_id: Optional[str] = None) -> pd.DataFrame:
+        """Extension point; sample fields await Dataverse metadata."""
+        ...
+
     # ------------------------------------------------------------------
     # Imports & Production
     # ------------------------------------------------------------------
@@ -98,6 +198,16 @@ class BaseRepository(ABC):
 
     @abstractmethod
     def get_import_batches(self) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:
+        """Preserve source rows and their technical validation state."""
+        ...
+
+    @abstractmethod
+    def get_raw_rows(self, import_id: str) -> pd.DataFrame:
+        """Return source rows stored for one import batch."""
         ...
 
     @abstractmethod
@@ -119,4 +229,9 @@ class BaseRepository(ABC):
     @abstractmethod
     def get_production_summary_metrics(self) -> dict:
         """Return aggregate summary metrics for the home page."""
+        ...
+
+    @abstractmethod
+    def get_dashboard_metrics(self) -> dict:
+        """Return operational counts used by the dashboard."""
         ...

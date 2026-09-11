@@ -19,6 +19,13 @@ from typing import Optional
 
 import pandas as pd
 
+from data.constants import (
+    QUOTA_TRANSACTION_TYPES,
+    QUOTA_TYPES,
+    SALMONELLA_RESULTS,
+    SOURCE_TYPE_SYNTHETIC,
+)
+
 # ----------------------------------------------------------------------
 # Fabricated name pools (clearly synthetic)
 # ----------------------------------------------------------------------
@@ -140,8 +147,57 @@ def generate_facilities(accounts: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
     return df
 
 
+def generate_facility_details(facilities: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
+    """Generate provisional barn/house subdivisions for facilities."""
+    rng = random.Random(seed + 7)
+    rows = []
+    for _, facility in facilities.iterrows():
+        for number in range(1, rng.randint(2, 4)):
+            rows.append(
+                {
+                    "FACILITY_DETAIL_ID": _make_id(rng),
+                    "FACILITY_ID": facility["FACILITY_ID"],
+                    "DETAIL_NAME": f"House {number}",
+                    "DETAIL_TYPE": "Barn Area",
+                    "STATUS": "Active",
+                    "COMMENTS": "Synthetic provisional facility detail.",
+                }
+            )
+    frame = pd.DataFrame(rows)
+    frame["CREATED_AT"] = dt.datetime.now()
+    frame["UPDATED_AT"] = dt.datetime.now()
+    return frame
+
+
+def generate_quota_registrations(accounts: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
+    rng = random.Random(seed + 8)
+    rows = []
+    for index, (_, account) in enumerate(accounts.iterrows(), start=1):
+        for quota_type in ([QUOTA_TYPES[index % len(QUOTA_TYPES)]] if index % 3 else QUOTA_TYPES[:2]):
+            rows.append(
+                {
+                    "QUOTA_ID": _make_id(rng),
+                    "REGISTRATION_NUMBER": f"Q-{index:04d}-{quota_type[0]}",
+                    "ACCOUNT_ID": account["ACCOUNT_ID"],
+                    "QUOTA_NAME": f"{account['ORGANIZATION_NAME']} · {quota_type}",
+                    "QUOTA_TYPE": quota_type,
+                    "STATUS": "Active" if rng.random() < 0.85 else "Inactive",
+                    "EFFECTIVE_DATE": dt.date.today() - dt.timedelta(days=rng.randint(30, 900)),
+                    "END_DATE": None,
+                    "COMMENTS": "Synthetic provisional allocation.",
+                }
+            )
+    frame = pd.DataFrame(rows)
+    frame["CREATED_AT"] = dt.datetime.now()
+    frame["UPDATED_AT"] = dt.datetime.now()
+    return frame
+
 def generate_flocks(
-    accounts: pd.DataFrame, facilities: pd.DataFrame, seed: int = 42
+    accounts: pd.DataFrame,
+    facilities: pd.DataFrame,
+    seed: int = 42,
+    quotas: Optional[pd.DataFrame] = None,
+    facility_details: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     rng = random.Random(seed + 2)
     rows = []
@@ -157,12 +213,31 @@ def generate_flocks(
             bird_count = rng.randint(4000, 25000)
             est_completion = placement + dt.timedelta(days=rng.randint(400, 560))
             status = rng.choice(["Active", "Active", "Active", "Depopulated", "Planned"])
+            account_quotas = (
+                quotas[(quotas["ACCOUNT_ID"] == acc["ACCOUNT_ID"]) & (quotas["STATUS"] == "Active")]
+                if quotas is not None and not quotas.empty
+                else pd.DataFrame()
+            )
+            quota_row = account_quotas.iloc[0] if not account_quotas.empty else None
+            matching_details = (
+                facility_details[facility_details["FACILITY_ID"] == fac_row["FACILITY_ID"]]
+                if facility_details is not None and not facility_details.empty and fac_row is not None
+                else pd.DataFrame()
+            )
+            detail_row = matching_details.iloc[0] if not matching_details.empty else None
+            permit_number = f"PERMIT-{10000 + flock_counter}"
             rows.append(
                 {
                     "FLOCK_ID": _make_id(rng),
                     "ACCOUNT_ID": acc["ACCOUNT_ID"],
                     "FACILITY_ID": fac_row["FACILITY_ID"] if fac_row is not None else None,
+                    "FACILITY_DETAIL_ID": detail_row["FACILITY_DETAIL_ID"] if detail_row is not None else None,
+                    "QUOTA_ID": quota_row["QUOTA_ID"] if quota_row is not None else None,
+                    "FLOCK_QUOTA_TYPE": quota_row["QUOTA_TYPE"] if quota_row is not None else "Egg Production",
                     "FLOCK_NUMBER": f"F-{flock_counter:04d}",
+                    "PERMIT_NUMBER": permit_number,
+                    "PERMIT_DATE": hatch - dt.timedelta(days=14),
+                    "DATE_ORDERED": hatch - dt.timedelta(days=35),
                     "LICENCE_NUMBER": acc["LICENCE_NUMBER"],
                     "BIRD_COUNT": bird_count,
                     "PLACEMENT_DATE": placement,
@@ -175,6 +250,19 @@ def generate_flocks(
                         if status == "Depopulated"
                         else None
                     ),
+                    "DISPOSAL_DATE": (
+                        est_completion + dt.timedelta(days=rng.randint(-5, 40))
+                        if status == "Depopulated"
+                        else None
+                    ),
+                    "BIRDS_DISPOSED": bird_count if status == "Depopulated" else 0,
+                    "BIRD_STRAIN": rng.choice(["Lohmann", "Hy-Line", "Novogen"]),
+                    "BREEDER": rng.choice(["Atlantic Breeders", "Maritime Breeders", None]),
+                    "HATCHERY": rng.choice(["Valley Hatchery", "Coastal Hatchery", None]),
+                    "PULLET_GROWER": rng.choice(["North Growers", "Central Growers", None]),
+                    "DISPOSAL_PLANT": rng.choice(["Regional Plant", "Valley Plant", None]),
+                    "COMMENTS": "Synthetic provisional flock record.",
+                    "CREATE_DELIVERY_TRANSACTION": False,
                     "DISPOSAL_METHOD": rng.choice(_DISPOSAL_METHODS) if status == "Depopulated" else None,
                     "STATUS": status,
                 }
@@ -211,9 +299,73 @@ def generate_flock_transactions(flocks: pd.DataFrame, seed: int = 42) -> pd.Data
     return df
 
 
+def generate_quota_transactions(
+    quotas: pd.DataFrame, accounts: pd.DataFrame, seed: int = 42
+) -> pd.DataFrame:
+    rng = random.Random(seed + 9)
+    rows = []
+    account_ids = accounts["ACCOUNT_ID"].tolist()
+    for _, quota in quotas.head(12).iterrows():
+        related = rng.choice([value for value in account_ids if value != quota["ACCOUNT_ID"]])
+        transaction_type = rng.choice(QUOTA_TRANSACTION_TYPES)
+        effective = dt.date.today() - dt.timedelta(days=rng.randint(1, 180))
+        rows.append(
+            {
+                "QUOTA_TRANSACTION_ID": _make_id(rng),
+                "TRANSACTION_TYPE": transaction_type,
+                "QUOTA_ID": quota["QUOTA_ID"],
+                "EFFECTIVE_DATE": effective,
+                "END_DATE": effective + dt.timedelta(days=180) if "Lease" in transaction_type else None,
+                "QUOTA_COUNT": rng.randint(100, 2500),
+                "OWNER_ACCOUNT_ID": quota["ACCOUNT_ID"],
+                "RELATED_ACCOUNT_ID": related,
+                "RELATED_QUOTA_ID": None,
+                "RELATED_TRANSACTION_ID": None,
+                "PRICE": round(rng.uniform(0, 15), 2),
+                "QUOTA_LEASE_TYPE": "Fixed Term" if "Lease" in transaction_type else None,
+                "COMMENTS": "Synthetic provisional quota transaction.",
+            }
+        )
+    frame = pd.DataFrame(rows)
+    frame["CREATED_AT"] = dt.datetime.now()
+    frame["UPDATED_AT"] = dt.datetime.now()
+    return frame
+
+
+def generate_salmonella_tests(flocks: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
+    rng = random.Random(seed + 10)
+    rows = []
+    for index, (_, flock) in enumerate(flocks.head(16).iterrows(), start=1):
+        testing = dt.date.today() - dt.timedelta(days=rng.randint(1, 240))
+        result = rng.choice(SALMONELLA_RESULTS)
+        rows.append(
+            {
+                "SALMONELLA_TEST_ID": _make_id(rng),
+                "FLOCK_ID": flock["FLOCK_ID"],
+                "ACCOUNT_ID": flock["ACCOUNT_ID"],
+                "PERMIT_NUMBER": flock["PERMIT_NUMBER"],
+                "TESTING_DATE": testing,
+                "INSPECTOR": rng.choice(["A. Inspector", "B. Inspector", "C. Inspector"]),
+                "NUMBER_OF_SAMPLES": rng.randint(2, 12),
+                "TEST_RESULT": result,
+                "DATE_RESULT_SENT": testing + dt.timedelta(days=rng.randint(2, 10)) if result != "Pending" else None,
+                "DATE_RECEIVED": testing + dt.timedelta(days=rng.randint(1, 4)),
+                "CASE_FILE_NUMBER": f"CASE-{index:05d}",
+                "INVOICE_NUMBER": f"INV-{index:05d}",
+                "INVOICE_DATE": testing + dt.timedelta(days=7),
+                "COMMENTS": "Synthetic provisional test record.",
+            }
+        )
+    frame = pd.DataFrame(rows)
+    frame["CREATED_AT"] = dt.datetime.now()
+    frame["UPDATED_AT"] = dt.datetime.now()
+    return frame
+
+
 def generate_production(
     n: int = 200, seed: int = 42, reporting_year: Optional[int] = None,
     flocks: Optional[pd.DataFrame] = None,
+    accounts: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """Generate normalized production records (as they would appear in CORE).
 
@@ -227,8 +379,18 @@ def generate_production(
     flock_ids = None
     if flocks is not None and not flocks.empty and "FLOCK_ID" in flocks.columns:
         flock_ids = flocks["FLOCK_ID"].tolist()
+    flock_context = {}
+    if flocks is not None and not flocks.empty:
+        flock_context = flocks.set_index("FLOCK_ID")[
+            ["ACCOUNT_ID", "FACILITY_ID"]
+        ].to_dict("index")
+    registration_by_account = {}
+    if accounts is not None and not accounts.empty:
+        registration_by_account = accounts.set_index("ACCOUNT_ID")[
+            "REGISTRATION_NUMBER"
+        ].to_dict()
     rows = []
-    for _ in range(n):
+    for row_index in range(n):
         week = rng.randint(1, 52)
         net_weight = round(rng.uniform(800, 4000), 2)
         net_boxes = round(rng.uniform(40, 220), 2)
@@ -246,11 +408,18 @@ def generate_production(
             loss = round(rng.uniform(0.0, 3.0), 2)
             legacy_total = None
             total_accepted = round(total_received - rejected - loss, 2)
+        flock_id = rng.choice(flock_ids) if flock_ids else None
+        context = flock_context.get(flock_id, {})
+        producer_account_id = context.get("ACCOUNT_ID")
         rows.append(
             {
                 "PRODUCTION_ID": _make_id(rng),
                 "IMPORT_ID": None,  # filled by repository
-                "FLOCK_ID": rng.choice(flock_ids) if flock_ids else None,  # PROVISIONAL
+                "PRODUCER_NUMBER": registration_by_account.get(producer_account_id),
+                "PRODUCER_ACCOUNT_ID": producer_account_id,
+                "GRADER_ACCOUNT_ID": None,
+                "FACILITY_ID": context.get("FACILITY_ID"),
+                "FLOCK_ID": flock_id,  # PROVISIONAL synthetic link
                 "GRADER_NUMBER": f"G-{rng.randint(100, 130)}",
                 "BARN_IDENTITY": f"Barn-{rng.choice('ABCDEFGH')}{rng.randint(1, 6)}",
                 "FLOCK_AGE": rng.randint(18, 90),
@@ -265,10 +434,16 @@ def generate_production(
                 "TOTAL_ACCEPTED": total_accepted,
                 "REPORTING_YEAR": year,
                 "REPORTING_WEEK": week,
+                "SOURCE_TYPE": SOURCE_TYPE_SYNTHETIC,
+                "MATCH_STATUS": None,
+                "SOURCE_ROW_NUMBER": row_index + 2,
+                "SOURCE_WEEK_CODE": f"{year}{week:02d}",
             }
         )
     df = pd.DataFrame(rows)
-    df["CREATED_AT"] = dt.datetime.now()
+    now = dt.datetime.now()
+    df["CREATED_AT"] = now
+    df["UPDATED_AT"] = now
     return df
 
 
@@ -298,15 +473,32 @@ def generate_all(seed: int = 42) -> dict:
     """Generate a complete consistent synthetic dataset."""
     accounts = generate_accounts(seed=seed)
     facilities = generate_facilities(accounts, seed=seed)
-    flocks = generate_flocks(accounts, facilities, seed=seed)
+    facility_details = generate_facility_details(facilities, seed=seed)
+    quota_registrations = generate_quota_registrations(accounts, seed=seed)
+    flocks = generate_flocks(
+        accounts,
+        facilities,
+        seed=seed,
+        quotas=quota_registrations,
+        facility_details=facility_details,
+    )
     transactions = generate_flock_transactions(flocks, seed=seed)
-    production = generate_production(seed=seed, flocks=flocks)
+    quota_transactions = generate_quota_transactions(quota_registrations, accounts, seed=seed)
+    salmonella_tests = generate_salmonella_tests(flocks, seed=seed)
+    production = generate_production(seed=seed, flocks=flocks, accounts=accounts)
     sizes = generate_size_breakdown(production, seed=seed)
     return {
         "accounts": accounts,
         "facilities": facilities,
+        "facility_details": facility_details,
         "flocks": flocks,
         "flock_transactions": transactions,
+        "quota_registrations": quota_registrations,
+        "quota_transactions": quota_transactions,
+        "salmonella_tests": salmonella_tests,
+        "salmonella_test_samples": pd.DataFrame(
+            columns=["SALMONELLA_TEST_SAMPLE_ID", "SALMONELLA_TEST_ID"]
+        ),
         "production": production,
         "size_breakdown": sizes,
     }
