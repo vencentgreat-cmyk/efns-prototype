@@ -8,7 +8,7 @@ from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 import pandas as pd
 import streamlit as st
 
-from app.ui import apply_theme, page_header
+from app.ui import apply_theme, clear_widget_prefix, page_header
 from data.constants import (
     QUOTA_LEASE_TYPES,
     QUOTA_TRANSACTION_TYPES,
@@ -700,6 +700,8 @@ with st.expander(
             default_record_label,
         ),
         key="quota_tx_record",
+        on_change=clear_widget_prefix,
+        args=("quota_tx_", ("quota_tx_record",)),
     )
 
     current = {}

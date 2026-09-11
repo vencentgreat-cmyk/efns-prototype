@@ -7,7 +7,7 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 
-from app.ui import apply_theme, page_header, section_intro
+from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro
 from data.constants import EGG_COLOURS, FLOCK_QUOTA_TYPES, FLOCK_STATUSES, UNASSIGNED_LABEL
 from data.repositories import get_repository
 from data.validation import validate_flock
@@ -16,6 +16,12 @@ apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()
 repo = st.session_state.repo
+
+def option_index(options, value, default=0):
+    return options.index(value) if value in options else default
+
+def label_for_id(mapping, value, default=None):
+    return next((label for label, item_id in mapping.items() if item_id == value), default)
 
 page_header("Flocks", "Create and maintain flock records with explicit account, facility, and quota relationships.", "FLOCK MANAGEMENT")
 st.info("Quota types and several operational fields are provisional pending Dataverse metadata.")
@@ -53,7 +59,7 @@ else:
 with st.expander("Create or edit a flock", expanded=False):
     all_flocks = repo.get_flocks()
     edit_options = {f"{row.FLOCK_NUMBER} · {row.PERMIT_NUMBER}": row.FLOCK_ID for row in all_flocks.itertuples()}
-    edit_label = st.selectbox("Record", ["Create new", *edit_options], key="flock_edit_record")
+    edit_label = st.selectbox("Record", ["Create new", *edit_options], key="flock_edit_record", on_change=clear_widget_prefix, args=("flock_form_", ()))
     current = repo.get_flock(edit_options[edit_label]) if edit_label != "Create new" else {}
 
     general_tab, detail_tab = st.tabs(["General & relationships", "Flock details"])
@@ -67,17 +73,19 @@ with st.expander("Create or edit a flock", expanded=False):
         related_facilities = repo.get_facilities(account_id=selected_account_id)
         related_facility_labels = {row.FACILITY_NAME: row.FACILITY_ID for row in related_facilities.itertuples()}
         facility_names = list(related_facility_labels)
-        selected_facility_label = left.selectbox("Facility *", facility_names, key="flock_form_facility")
+        selected_facility_label = left.selectbox("Facility *", facility_names, index=option_index(facility_names, label_for_id(related_facility_labels, current.get("FACILITY_ID"))), key="flock_form_facility")
         selected_facility_id = related_facility_labels.get(selected_facility_label)
         details = repo.get_facility_details(facility_id=selected_facility_id)
         detail_labels = {row.DETAIL_NAME: row.FACILITY_DETAIL_ID for row in details.itertuples()}
-        selected_detail_label = left.selectbox("Facility Detail", [UNASSIGNED_LABEL, *detail_labels], key="flock_form_detail")
+        detail_options = [UNASSIGNED_LABEL, *detail_labels]
+        selected_detail_label = left.selectbox("Facility Detail", detail_options, index=option_index(detail_options, label_for_id(detail_labels, current.get("FACILITY_DETAIL_ID"), UNASSIGNED_LABEL)), key="flock_form_detail")
         active_quotas = repo.get_quota_registrations(account_id=selected_account_id, active_only=True)
         quota_labels = {f"{row.QUOTA_NAME} · {row.REGISTRATION_NUMBER}": row.QUOTA_ID for row in active_quotas.itertuples()}
-        quota_label = left.selectbox("Quota Registration", [UNASSIGNED_LABEL, *quota_labels], key="flock_form_quota")
-        quota_type = left.selectbox("Flock Quota Type", FLOCK_QUOTA_TYPES, key="flock_form_quota_type")
+        quota_options = [UNASSIGNED_LABEL, *quota_labels]
+        quota_label = left.selectbox("Quota Registration", quota_options, index=option_index(quota_options, label_for_id(quota_labels, current.get("QUOTA_ID"), UNASSIGNED_LABEL)), key="flock_form_quota")
+        quota_type = left.selectbox("Flock Quota Type", FLOCK_QUOTA_TYPES, index=option_index(list(FLOCK_QUOTA_TYPES), current.get("FLOCK_QUOTA_TYPE")), key="flock_form_quota_type")
         flock_number = right.text_input("Flock Number *", value=str(current.get("FLOCK_NUMBER") or ""), key="flock_form_number")
-        status = right.selectbox("Status", FLOCK_STATUSES, key="flock_form_status")
+        status = right.selectbox("Status", FLOCK_STATUSES, index=option_index(list(FLOCK_STATUSES), current.get("STATUS")), key="flock_form_status")
         create_delivery = right.toggle("Create Delivery Transaction", value=bool(current.get("CREATE_DELIVERY_TRANSACTION", False)), key="flock_form_delivery")
         st.caption(f"Flock ID: {current.get('FLOCK_ID', 'Assigned when saved')} · Created/updated timestamps are managed by the repository.")
 
@@ -89,7 +97,7 @@ with st.expander("Create or edit a flock", expanded=False):
         ordered_date = left.date_input("Date Ordered", value=current.get("DATE_ORDERED"), key="flock_form_ordered")
         placement_date = left.date_input("Placement Date", value=current.get("PLACEMENT_DATE"), key="flock_form_placement")
         bird_count = left.number_input("Bird Count *", min_value=0, value=int(current.get("BIRD_COUNT") or 0), key="flock_form_birds")
-        egg_colour = left.selectbox("Flock / Egg Colour", EGG_COLOURS, key="flock_form_colour")
+        egg_colour = left.selectbox("Flock / Egg Colour", EGG_COLOURS, index=option_index(list(EGG_COLOURS), current.get("EGG_COLOUR")), key="flock_form_colour")
         bird_strain = right.text_input("Bird Strain", value=str(current.get("BIRD_STRAIN") or ""), key="flock_form_strain")
         estimated_disposal = right.date_input("Estimated Disposal Date", value=current.get("EST_DISPOSAL"), key="flock_form_est_disposal")
         disposal_date = right.date_input("Disposal Date", value=current.get("DISPOSAL_DATE"), key="flock_form_disposal")

@@ -1,11 +1,12 @@
 # ============================================================
-# EFNS Prototype v0.1 — Accounts, Facilities, Flocks Page
+# EFNS Prototype — Accounts, Facilities, and Facility Details
 # ============================================================
-"""CRUD-style prototype views. All schema is PROVISIONAL."""
+"""Account and facility workspace; flock writes live on the dedicated page."""
 
 import streamlit as st
 
-from app.ui import apply_theme, page_header, section_intro
+from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro
+from data.constants import ACCOUNT_STATUSES, FACILITY_STATUSES
 from data.repositories import get_repository
 
 apply_theme()
@@ -14,14 +15,17 @@ if "repo" not in st.session_state:
 
 repo = st.session_state.repo
 
+def choice_index(options, current):
+    return options.index(current) if current in options else 0
+
 page_header(
-    "Accounts, Facilities & Flocks",
-    "Manage the provisional operational hierarchy in clear, focused work areas.",
+    "Accounts & Facilities",
+    "Manage accounts, facilities, and facility details in focused work areas.",
     "ACCOUNT & FACILITY",
 )
 st.info("The entity names and relationships remain provisional pending Dataverse metadata.")
 
-tab1, tab2, tab3 = st.tabs(["Accounts", "Facilities", "Flocks"])
+tab1, tab2 = st.tabs(["Accounts", "Facilities"])
 
 # =====================================================================
 # ACCOUNTS
@@ -57,24 +61,36 @@ with tab1:
         st.info("No accounts in the database.")
 
     with st.expander("Add or update an account", expanded=False):
-        st.caption("Leave Account ID blank to create a record. Enter an existing ID to update it.")
+        account_records = {
+            f"{row.ORGANIZATION_NAME} · {row.REGISTRATION_NUMBER}": row.ACCOUNT_ID
+            for row in accounts.itertuples()
+        }
+        account_record_label = st.selectbox(
+            "Record", ["Create new", *account_records], key="acc_record",
+            on_change=clear_widget_prefix, args=("acc_", ("acc_record",)),
+        )
+        current_account = (
+            repo.get_account(account_records[account_record_label])
+            if account_record_label != "Create new"
+            else {}
+        )
         identity_col, contact_col = st.columns(2)
         with identity_col:
-            existing_id = st.text_input("Account ID", key="acc_id")
-            org_name = st.text_input("Organization Name", key="acc_name")
-            reg_num = st.text_input("Registration Number", key="acc_reg")
-            city = st.text_input("City", key="acc_city")
-            status = st.selectbox("Status", ["Active", "Inactive"], key="acc_status")
+            st.text_input("Account ID", value=current_account.get("ACCOUNT_ID", "Assigned when saved"), disabled=True, key="acc_id")
+            org_name = st.text_input("Organization Name", value=str(current_account.get("ORGANIZATION_NAME") or ""), key="acc_name")
+            reg_num = st.text_input("Registration Number", value=str(current_account.get("REGISTRATION_NUMBER") or ""), key="acc_reg")
+            city = st.text_input("City", value=str(current_account.get("CITY") or ""), key="acc_city")
+            status = st.selectbox("Status", ACCOUNT_STATUSES, index=choice_index(ACCOUNT_STATUSES, current_account.get("STATUS")), key="acc_status")
         with contact_col:
-            contact = st.text_input("Contact Name", key="acc_contact")
-            contact_email = st.text_input("Contact Email", key="acc_email")
+            contact = st.text_input("Contact Name", value=str(current_account.get("CONTACT_NAME") or ""), key="acc_contact")
+            contact_email = st.text_input("Contact Email", value=str(current_account.get("CONTACT_EMAIL") or ""), key="acc_email")
             st.markdown("**Operational roles**")
-            is_producer = st.checkbox("Producer Role", value=True, key="acc_prod")
-            is_breeder = st.checkbox("Breeder Role", key="acc_breed")
-            is_hatchery = st.checkbox("Hatchery Role", key="acc_hatch")
-            is_grader = st.checkbox("Grader Role", key="acc_grad")
+            is_producer = st.checkbox("Producer Role", value=bool(current_account.get("PRODUCER_ROLE", True)), key="acc_prod")
+            is_breeder = st.checkbox("Breeder Role", value=bool(current_account.get("BREEDER_ROLE", False)), key="acc_breed")
+            is_hatchery = st.checkbox("Hatchery Role", value=bool(current_account.get("HATCHERY_ROLE", False)), key="acc_hatch")
+            is_grader = st.checkbox("Grader Role", value=bool(current_account.get("GRADER_ROLE", False)), key="acc_grad")
 
-        action_label = "Update Account" if existing_id.strip() else "Create Account"
+        action_label = "Update Account" if current_account else "Create Account"
         if st.button(action_label, key="acc_save", type="primary"):
             if not org_name:
                 st.error("Organization name is required.")
@@ -92,8 +108,8 @@ with tab1:
                     "HATCHERY_ROLE": is_hatchery,
                     "GRADER_ROLE": is_grader,
                 }
-                if existing_id.strip():
-                    record["ACCOUNT_ID"] = existing_id.strip()
+                if current_account:
+                    record["ACCOUNT_ID"] = current_account["ACCOUNT_ID"]
                 aid = repo.upsert_account(record)
                 st.success(f"Account saved: {aid}")
                 st.rerun()
@@ -175,26 +191,40 @@ with tab2:
         st.info("No facilities in the database.")
 
     with st.expander("Add or update a facility", expanded=False):
-        st.caption("Leave Facility ID blank to create a record. Enter an existing ID to update it.")
-        existing_fid = st.text_input("Facility ID (leave blank to create new)", key="fac_id")
-        fac_name = st.text_input("Facility Name", key="fac_name")
-        fac_type = st.selectbox("Facility Type", ["Pullet", "Layer", "Other"], key="fac_type")
-        fac_status = st.selectbox("Facility Status", ["Active", "Inactive", "Closed"], key="fac_status")
-        # Pick account
         accounts_for_picker = repo.get_accounts()
         acc_options = {
             f"{row.ORGANIZATION_NAME} · {row.REGISTRATION_NUMBER or row.ACCOUNT_ID[:8]}": row.ACCOUNT_ID
             for row in accounts_for_picker.itertuples()
         }
+        facility_records = {
+            f"{row.FACILITY_NAME} · {row.FACILITY_ID[:8]}": row.FACILITY_ID
+            for row in facilities.itertuples()
+        }
+        facility_record_label = st.selectbox(
+            "Record", ["Create new", *facility_records], key="fac_record",
+            on_change=clear_widget_prefix, args=("fac_", ("fac_record",)),
+        )
+        current_facility = {}
+        if facility_record_label != "Create new":
+            facility_id = facility_records[facility_record_label]
+            current_facility = facilities[facilities["FACILITY_ID"] == facility_id].iloc[0].to_dict()
+        st.text_input("Facility ID", value=current_facility.get("FACILITY_ID", "Assigned when saved"), disabled=True, key="fac_id")
+        fac_name = st.text_input("Facility Name", value=str(current_facility.get("FACILITY_NAME") or ""), key="fac_name")
+        facility_types = ("Pullet", "Layer", "Other")
+        fac_type = st.selectbox("Facility Type", facility_types, index=choice_index(facility_types, current_facility.get("FACILITY_TYPE")), key="fac_type")
+        fac_status = st.selectbox("Facility Status", FACILITY_STATUSES, index=choice_index(FACILITY_STATUSES, current_facility.get("STATUS")), key="fac_status")
+        account_labels = list(acc_options)
+        account_index = next((index for index, label in enumerate(account_labels) if acc_options[label] == current_facility.get("ACCOUNT_ID")), 0)
         selected_acc = st.selectbox(
             "Account",
-            ["-- Select --"] + list(acc_options.keys()),
+            account_labels,
+            index=account_index,
             key="fac_account",
         )
 
-        action_label = "Update Facility" if existing_fid.strip() else "Create Facility"
+        action_label = "Update Facility" if current_facility else "Create Facility"
         if st.button(action_label, key="fac_save", type="primary"):
-            if not fac_name or selected_acc == "-- Select --":
+            if not fac_name:
                 st.error("Facility name and account are required.")
             else:
                 record = {
@@ -203,8 +233,8 @@ with tab2:
                     "STATUS": fac_status,
                     "ACCOUNT_ID": acc_options[selected_acc],
                 }
-                if existing_fid.strip():
-                    record["FACILITY_ID"] = existing_fid.strip()
+                if current_facility:
+                    record["FACILITY_ID"] = current_facility["FACILITY_ID"]
                 fid = repo.upsert_facility(record)
                 st.success(f"Facility saved: {fid}")
                 st.rerun()
@@ -243,103 +273,3 @@ with tab2:
                     )
                     st.success(f"Facility Detail saved: {detail_id}")
                     st.rerun()
-
-# =====================================================================
-# FLOCKS
-# =====================================================================
-with tab3:
-    section_intro("Flocks", "Placement, status, facility assignment, and transaction history.")
-    # Filter
-    all_accounts = repo.get_accounts()
-    acc_map = {
-        f"{row.ORGANIZATION_NAME} · {row.REGISTRATION_NUMBER or row.ACCOUNT_ID[:8]}": row.ACCOUNT_ID
-        for row in all_accounts.itertuples()
-    }
-    filter_acc = st.selectbox(
-        "Filter by Account",
-        ["All"] + list(acc_map.keys()),
-        key="flock_filter",
-    )
-    aid = acc_map.get(filter_acc) if filter_acc != "All" else None
-
-    flocks = repo.get_flocks(account_id=aid)
-
-    if not flocks.empty:
-        # Merge for readability
-        acc_df = all_accounts[["ACCOUNT_ID", "ORGANIZATION_NAME"]]
-        fac_df = repo.get_facilities()[["FACILITY_ID", "FACILITY_NAME"]]
-        df_show = flocks.merge(acc_df, on="ACCOUNT_ID", how="left")
-        df_show = df_show.merge(fac_df, on="FACILITY_ID", how="left", suffixes=("", "_FAC"))
-        df_show["FACILITY_NAME"] = df_show["FACILITY_NAME"].fillna("Unassigned")
-        st.dataframe(
-            df_show[[
-                "FLOCK_ID", "FLOCK_NUMBER", "ORGANIZATION_NAME", "FACILITY_NAME",
-                "BIRD_COUNT", "PLACEMENT_DATE", "HATCH_DATE", "EGG_COLOUR",
-                "EST_PROD_COMPLETION", "EST_DISPOSAL", "ACTUAL_DISPOSAL",
-                "DISPOSAL_METHOD", "STATUS",
-            ]],
-            width="stretch",
-            height=430,
-            hide_index=True,
-            column_config={
-                "FLOCK_ID": "Flock ID",
-                "FLOCK_NUMBER": "Flock",
-                "ORGANIZATION_NAME": "Account",
-                "FACILITY_NAME": "Facility",
-                "BIRD_COUNT": st.column_config.NumberColumn("Bird Count", format="%d"),
-                "PLACEMENT_DATE": "Placement",
-                "HATCH_DATE": "Hatch Date",
-                "EGG_COLOUR": "Egg Colour",
-                "EST_PROD_COMPLETION": "Est. Completion",
-                "EST_DISPOSAL": "Est. Disposal",
-                "ACTUAL_DISPOSAL": "Actual Disposal",
-                "DISPOSAL_METHOD": "Disposal Method",
-            },
-        )
-
-        # Show transactions for selected flock
-        st.divider()
-        st.markdown("#### Flock Transactions")
-        selected_flock = st.selectbox(
-            "Select a flock to view transactions",
-            df_show["FLOCK_NUMBER"].tolist(),
-            key="tx_flock",
-        )
-        if selected_flock:
-            flock_id = df_show[df_show["FLOCK_NUMBER"] == selected_flock]["FLOCK_ID"].iloc[0]
-            txns = repo.get_flock_transactions(flock_id=flock_id)
-            if not txns.empty:
-                st.dataframe(
-                    txns[["FLOCK_TRANSACTION_ID", "TRANSACTION_TYPE", "QUANTITY",
-                           "TRANSACTION_DATE", "NOTES"]],
-                    width="stretch",
-                    hide_index=True,
-                )
-            else:
-                st.info("No transactions for this flock.")
-    else:
-        st.info("No flocks found for the selected filter.")
-
-    # Add flock form
-    with st.expander("Add New Flock"):
-        st.markdown("##### Add Flock")
-        f_acc = st.selectbox("Account", ["-- Select --"] + list(acc_map.keys()), key="add_flock_acc")
-        flock_num = st.text_input("Flock Number", key="add_flock_num")
-        bird_ct = st.number_input("Bird Count", min_value=0, value=10000, key="add_flock_birds")
-        egg_col = st.selectbox("Egg Colour", ["White", "Brown", "Mostly White", "Mostly Brown"], key="add_flock_colour")
-        flock_stat = st.selectbox("Status", ["Planned", "Active", "Depopulated"], key="add_flock_status")
-
-        if st.button("Add Flock", key="add_flock_btn"):
-            if f_acc == "-- Select --" or not flock_num:
-                st.error("Account and flock number are required.")
-            else:
-                record = {
-                    "ACCOUNT_ID": acc_map[f_acc],
-                    "FLOCK_NUMBER": flock_num,
-                    "BIRD_COUNT": bird_ct,
-                    "EGG_COLOUR": egg_col,
-                    "STATUS": flock_stat,
-                }
-                fid = repo.upsert_flock(record)
-                st.success(f"Flock created: {fid}")
-                st.rerun()

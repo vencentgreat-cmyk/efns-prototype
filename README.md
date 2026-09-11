@@ -28,11 +28,12 @@ Open http://localhost:8501 in a browser.
 | Logical data model (ACCOUNT, FACILITY, FLOCK, PRODUCTION) | PROVISIONAL |
 | EIMS workbook ingestion (RAW → normalized union model) | Working (mock) |
 | Production data search/filter | Working |
-| Accounts/Facilities/Flocks CRUD views | Working |
+| Accounts/Facilities/Facility Details CRUD | Working |
+| Flock, transaction, Quota and Salmonella workspaces | Working (provisional rules) |
 | Customizable report builder with CSV & Excel export | Working |
-| Snowflake SQL (schemas: RAW, CORE, REPORTING) | Provisional; not deployment-ready |
+| Snowflake SQL (schemas: RAW, CORE, REPORTING) | Provisional DEV definitions; not executed |
 | Synthetic data generator (deterministic, seeded) | Working |
-| Modular repository pattern (Mock ↔ Snowflake) | Stub ready |
+| Modular repository pattern (Mock ↔ Snowflake) | Parameterized CRUD/import adapter; integration pending |
 
 ---
 
@@ -59,7 +60,7 @@ efns-prototype/
 │   │   ├── __init__.py           # Factory: get_repository()
 │   │   ├── base.py               # Abstract BaseRepository
 │   │   ├── mock.py               # In-memory MockRepository
-│   │   └── snowflake.py          # Snowflake stub (not yet active)
+│   │   └── snowflake.py          # Snowflake CRUD/import adapter
 │   └── synthetic.py              # Synthetic data generator
 │
 ├── sql/
@@ -77,6 +78,7 @@ efns-prototype/
 │   ├── DATAVERSE_DISCOVERY_CHECKLIST.md
 │   ├── ASSUMPTIONS_AND_GAPS.md
 │   ├── TARGET_MODEL_DRAFT.md
+│   ├── DATA_DICTIONARY.md
 │   └── DATAVERSE_TO_TARGET_MAPPING.csv
 │
 ├── tests/

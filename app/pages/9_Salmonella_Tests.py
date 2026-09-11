@@ -5,7 +5,7 @@ import datetime as dt
 import streamlit as st
 
 from app.services.salmonella_reporting import build_salmonella_report
-from app.ui import apply_theme, page_header
+from app.ui import apply_theme, clear_widget_prefix, page_header
 from data.constants import SALMONELLA_RESULTS
 from data.repositories import get_repository
 from data.validation import validate_salmonella_test
@@ -14,6 +14,10 @@ apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()
 repo = st.session_state.repo
+def option_index(options, value, default=0):
+    return options.index(value) if value in options else default
+def label_for_id(mapping, value):
+    return next((label for label, item_id in mapping.items() if item_id == value), None)
 page_header("Salmonella Tests", "Maintain flock-linked tests, result dates, case references, and invoices.", "FLOCK MANAGEMENT")
 st.info("Inspector is provisional free text. Sample-level business fields await authoritative metadata.")
 
@@ -31,17 +35,18 @@ else:
 
 with st.expander("Create or edit a Salmonella test", expanded=False):
     options = {f"{row.PERMIT_NUMBER} · {row.TESTING_DATE} · {row.SALMONELLA_TEST_ID[:8]}": row.SALMONELLA_TEST_ID for row in repo.get_salmonella_tests().itertuples()}
-    edit_label = st.selectbox("Record", ["Create new", *options], key="salmonella_record")
+    edit_label = st.selectbox("Record", ["Create new", *options], key="salmonella_record", on_change=clear_widget_prefix, args=("salmonella_", ("salmonella_record",)))
     current = repo.get_salmonella_test(options[edit_label]) if edit_label != "Create new" else {}
     left, right = st.columns(2)
-    flock_label = left.selectbox("Flock / Permit Number *", list(flock_labels), key="salmonella_flock")
+    flock_options = list(flock_labels)
+    flock_label = left.selectbox("Flock / Permit Number *", flock_options, index=option_index(flock_options, label_for_id(flock_labels, current.get("FLOCK_ID"))), key="salmonella_flock")
     flock = repo.get_flock(flock_labels[flock_label])
     left.text_input("Account", value=account_names.get(flock["ACCOUNT_ID"], ""), disabled=True, key="salmonella_account_display")
     left.text_input("Permit Number", value=str(flock.get("PERMIT_NUMBER") or ""), disabled=True, key="salmonella_permit_display")
     testing_date = left.date_input("Testing Date *", value=current.get("TESTING_DATE") or dt.date.today(), key="salmonella_testing_date")
     samples = left.number_input("Number of Samples *", min_value=0, value=int(current.get("NUMBER_OF_SAMPLES") or 0), key="salmonella_samples")
     inspector = left.text_input("Inspector", value=str(current.get("INSPECTOR") or ""), key="salmonella_inspector")
-    result = right.selectbox("Salmonella Test Result", SALMONELLA_RESULTS, key="salmonella_result")
+    result = right.selectbox("Salmonella Test Result", SALMONELLA_RESULTS, index=option_index(list(SALMONELLA_RESULTS), current.get("TEST_RESULT")), key="salmonella_result")
     received = right.date_input("Date Received", value=current.get("DATE_RECEIVED"), key="salmonella_received")
     result_sent = right.date_input("Date Result Sent", value=current.get("DATE_RESULT_SENT"), key="salmonella_sent")
     case_number = right.text_input("Case / File Number", value=str(current.get("CASE_FILE_NUMBER") or ""), key="salmonella_case")

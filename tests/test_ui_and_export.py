@@ -78,7 +78,9 @@ def test_primary_workflows_expose_clear_controls():
     assert any(button.label == "Reset filters" for button in app.button)
 
     app.switch_page("pages/3_Accounts_Facilities_Flocks.py").run()
-    assert [tab.label for tab in app.tabs][:3] == ["Accounts", "Facilities", "Flocks"]
+    source = (Path(__file__).parents[1] / "app" / "pages" / "3_Accounts_Facilities_Flocks.py").read_text(encoding="utf-8")
+    assert 'st.tabs(["Accounts", "Facilities"])' in source
+    assert "Add New Flock" not in source
 
     app.switch_page("pages/4_Reports.py").run()
     assert any("Selected fields: 0" in caption.value for caption in app.caption)

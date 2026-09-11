@@ -73,7 +73,7 @@
 2. **Synthetic data** — Generated from seeded random pools. Not representative of real patterns.
 3. **PRODUCTION-to-FLOCK provisional link** — Fabricated random assignment for report demo.
 4. **No authentication** — Not needed for v0.1 prototype.
-5. **No error handling on Snowflake path** — SnowflakeRepository stub raises NotImplementedError
+5. **Snowflake DEV integration pending** — the adapter now converts errors and rolls back transactions, but still needs real-account integration testing
    for write operations.
 
 ## Mapping authority

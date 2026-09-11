@@ -7,6 +7,13 @@ import html
 import streamlit as st
 
 
+def clear_widget_prefix(prefix: str, keep: tuple[str, ...] = ()) -> None:
+    """Clear dependent widgets after an edit-record selector changes."""
+    for key in list(st.session_state):
+        if key.startswith(prefix) and key not in keep:
+            st.session_state.pop(key, None)
+
+
 def apply_theme() -> None:
     """Add styles only for EFNS-owned markup; native widgets use config.toml."""
     st.markdown(

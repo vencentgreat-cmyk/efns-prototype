@@ -3,6 +3,7 @@
 import datetime as dt
 
 import pytest
+import pandas as pd
 
 from app.services.report_builder import build_report
 from app.services.salmonella_reporting import build_salmonella_report
@@ -179,3 +180,17 @@ def test_custom_reports_include_quota_and_salmonella_fields():
     assert {"Account Name", "Facility Name", "Flock Number", "Salmonella Test Result"}.issubset(
         salmonella_report.columns
     )
+def test_delete_protection_blocks_referenced_account():
+    repo = MockRepository(seed=42)
+    account_id = repo.get_facilities().iloc[0]["ACCOUNT_ID"]
+    with pytest.raises(ValueError, match="related records"):
+        repo.delete_account(account_id)
+
+
+def test_duplicate_import_bundle_is_rejected_and_atomic():
+    repo = MockRepository(seed=42)
+    batch = {"FILENAME": "same.xlsx", "FILE_HASH": "sha256-value"}
+    import_id, count = repo.import_production_bundle(batch, [], pd.DataFrame())
+    assert import_id and count == 0
+    with pytest.raises(ValueError, match="already been imported"):
+        repo.import_production_bundle(batch, [], pd.DataFrame())

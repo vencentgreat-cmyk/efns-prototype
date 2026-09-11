@@ -53,6 +53,8 @@ if uploaded is None:
     st.stop()
 
 file_bytes = uploaded.getvalue()
+file_hash = hashlib.sha256(file_bytes).hexdigest()
+existing_import = repo.find_import_by_hash(file_hash)
 try:
     raw_df = read_eims_workbook(io.BytesIO(file_bytes))
 except ValueError:
@@ -88,6 +90,10 @@ with st.container(border=True):
 
 with st.container(border=True):
     section_intro("Technical validation", "Required columns, reporting period, and numeric checks.")
+    allow_duplicate = False
+    if existing_import:
+        st.warning(f"This exact file was already imported as {existing_import['IMPORT_ID']}.")
+        allow_duplicate = st.checkbox("Import this duplicate file anyway")
     if errors:
         st.error(f"{len(errors)} blocking validation error(s) found.")
         for error in errors[:30]:
@@ -150,10 +156,10 @@ with st.container(border=True):
     if st.button(
         "Import validated records",
         type="primary",
-        disabled=bool(errors) or not confirm_import,
+        disabled=bool(errors) or not confirm_import or bool(existing_import and not allow_duplicate),
     ):
         try:
-            import_id = repo.create_import_batch(
+            import_id, imported_count = repo.import_production_bundle(
                 {
                     "FILENAME": filename,
                     "SOURCE": "EIMS Production Workbook - EIMS 3",
@@ -162,17 +168,16 @@ with st.container(border=True):
                     "STATUS": "Validated",
                     "ERROR_COUNT": len(errors),
                     "NOTES": "Imported from the EIMS 3 worksheet.",
-                    "FILE_HASH": hashlib.sha256(file_bytes).hexdigest(),
+                    "FILE_HASH": file_hash,
                     "FILE_SIZE_BYTES": len(file_bytes),
                     "WORKSHEET_NAME": EIMS_WORKSHEET_NAME,
                     "SOURCE_RECORD_COUNT": len(raw_df),
-                }
+                },
+                build_raw_rows(raw_df, "VALID", warnings),
+                normalized_df,
+                allow_duplicate=allow_duplicate,
             )
-            repo.insert_raw_rows(import_id, build_raw_rows(raw_df, "VALID", warnings))
-            imported_count = repo.insert_production_records(normalized_df, import_id)
             st.success(f"Imported {imported_count} production records.")
             st.code(import_id, language=None)
-        except NotImplementedError as exc:
-            st.error(str(exc))
         except Exception as exc:
             st.error(f"Import failed: {exc}")
