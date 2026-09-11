@@ -13,6 +13,12 @@ import pandas as pd
 
 from data.repositories.base import BaseRepository
 from data.synthetic import generate_all
+from data.validation import (
+    validate_flock,
+    validate_quota_registration,
+    validate_quota_transaction,
+    validate_salmonella_test,
+)
 
 
 class MockRepository(BaseRepository):
@@ -26,11 +32,17 @@ class MockRepository(BaseRepository):
         data = generate_all(seed=seed)
         self._accounts = data["accounts"].copy()
         self._facilities = data["facilities"].copy()
+        self._facility_details = data["facility_details"].copy()
         self._flocks = data["flocks"].copy()
         self._flock_transactions = data["flock_transactions"].copy()
+        self._quota_registrations = data["quota_registrations"].copy()
+        self._quota_transactions = data["quota_transactions"].copy()
+        self._salmonella_tests = data["salmonella_tests"].copy()
+        self._salmonella_test_samples = data["salmonella_test_samples"].copy()
         self._production = data["production"].copy()
         self._size_breakdown = data["size_breakdown"].copy()
         self._import_batches: list[dict] = []
+        self._raw_rows: list[dict] = []
         # Link production to a synthetic import batch
         self._ensure_default_batch()
 
@@ -61,6 +73,22 @@ class MockRepository(BaseRepository):
     def get_account(self, account_id: str) -> Optional[dict]:
         match = self._accounts[self._accounts["ACCOUNT_ID"] == account_id]
         return match.iloc[0].to_dict() if len(match) else None
+
+    def find_accounts_by_registration_number(
+        self, registration_number: str
+    ) -> pd.DataFrame:
+        value = str(registration_number).strip().casefold()
+        if not value:
+            return self._accounts.iloc[0:0].copy()
+        matches = (
+            self._accounts["REGISTRATION_NUMBER"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.casefold()
+            == value
+        )
+        return self._accounts[matches].copy()
 
     def upsert_account(self, record: dict) -> str:
         aid = record.get("ACCOUNT_ID", str(uuid.uuid4()))
@@ -114,6 +142,28 @@ class MockRepository(BaseRepository):
         self._facilities = self._facilities[self._facilities["FACILITY_ID"] != facility_id]
         return len(self._facilities) < before
 
+    def get_facility_details(self, facility_id: Optional[str] = None) -> pd.DataFrame:
+        frame = self._facility_details.copy()
+        if facility_id:
+            frame = frame[frame["FACILITY_ID"] == facility_id]
+        return frame
+
+    def upsert_facility_detail(self, record: dict) -> str:
+        facility_id = record.get("FACILITY_ID")
+        if not facility_id or facility_id not in set(self._facilities["FACILITY_ID"]):
+            raise ValueError("Facility Detail requires an existing Facility.")
+        detail_id = record.get("FACILITY_DETAIL_ID", str(uuid.uuid4()))
+        stored = dict(record, FACILITY_DETAIL_ID=detail_id, UPDATED_AT=dt.datetime.now())
+        idx = self._facility_details[self._facility_details["FACILITY_DETAIL_ID"] == detail_id].index
+        if len(idx):
+            for column, value in stored.items():
+                if column in self._facility_details.columns:
+                    self._facility_details.loc[idx[0], column] = value
+        else:
+            stored.setdefault("CREATED_AT", dt.datetime.now())
+            self._facility_details = pd.concat([self._facility_details, pd.DataFrame([stored])], ignore_index=True)
+        return detail_id
+
     # ------------------------------------------------------------------
     # Flocks
     # ------------------------------------------------------------------
@@ -128,8 +178,16 @@ class MockRepository(BaseRepository):
             df = df[df["FACILITY_ID"] == facility_id]
         return df
 
+    def get_flock(self, flock_id: str) -> Optional[dict]:
+        match = self._flocks[self._flocks["FLOCK_ID"] == flock_id]
+        return match.iloc[0].to_dict() if len(match) else None
+
     def upsert_flock(self, record: dict) -> str:
-        fid = record.get("FLOCK_ID", str(uuid.uuid4()))
+        if "PERMIT_NUMBER" in record or "QUOTA_ID" in record:
+            errors = validate_flock(self, record)
+            if errors:
+                raise ValueError(" ".join(errors))
+        fid = record.get("FLOCK_ID") or str(uuid.uuid4())
         record["FLOCK_ID"] = fid
         record["UPDATED_AT"] = dt.datetime.now()
         idx = self._flocks[self._flocks["FLOCK_ID"] == fid].index
@@ -160,8 +218,13 @@ class MockRepository(BaseRepository):
         return df
 
     def upsert_flock_transaction(self, record: dict) -> str:
-        tid = record.get("FLOCK_TRANSACTION_ID", str(uuid.uuid4()))
+        if self.get_flock(record.get("FLOCK_ID", "")) is None:
+            raise ValueError("Flock Transaction requires an existing Flock.")
+        if float(record.get("QUANTITY") or 0) <= 0:
+            raise ValueError("Transaction Quantity must be greater than zero.")
+        tid = record.get("FLOCK_TRANSACTION_ID") or str(uuid.uuid4())
         record["FLOCK_TRANSACTION_ID"] = tid
+        record["UPDATED_AT"] = dt.datetime.now()
         idx = self._flock_transactions[
             self._flock_transactions["FLOCK_TRANSACTION_ID"] == tid
         ].index
@@ -175,6 +238,222 @@ class MockRepository(BaseRepository):
                 [self._flock_transactions, pd.DataFrame([record])], ignore_index=True
             )
         return tid
+
+    def delete_flock_transaction(self, transaction_id: str) -> bool:
+        before = len(self._flock_transactions)
+        self._flock_transactions = self._flock_transactions[
+            self._flock_transactions["FLOCK_TRANSACTION_ID"] != transaction_id
+        ]
+        return len(self._flock_transactions) < before
+
+    # ------------------------------------------------------------------
+    # Quota management
+    # ------------------------------------------------------------------
+
+    def get_quota_registrations(
+        self,
+        account_id: Optional[str] = None,
+        status: Optional[str] = None,
+        quota_type: Optional[str] = None,
+        active_only: bool = False,
+    ) -> pd.DataFrame:
+        frame = self._quota_registrations.copy()
+        if account_id:
+            frame = frame[frame["ACCOUNT_ID"] == account_id]
+        if status:
+            frame = frame[frame["STATUS"] == status]
+        if quota_type:
+            frame = frame[frame["QUOTA_TYPE"] == quota_type]
+        if active_only:
+            today = pd.Timestamp(dt.date.today())
+            frame = frame[frame["STATUS"] == "Active"]
+            if "EFFECTIVE_DATE" in frame:
+                frame = frame[
+                    frame["EFFECTIVE_DATE"].isna()
+                    | (pd.to_datetime(frame["EFFECTIVE_DATE"]) <= today)
+                ]
+            if "END_DATE" in frame:
+                frame = frame[
+                    frame["END_DATE"].isna()
+                    | (pd.to_datetime(frame["END_DATE"]) >= today)
+                ]
+        return frame
+
+    def get_quota_registration(self, quota_id: str) -> Optional[dict]:
+        match = self._quota_registrations[self._quota_registrations["QUOTA_ID"] == quota_id]
+        return match.iloc[0].to_dict() if len(match) else None
+
+    def upsert_quota_registration(self, record: dict) -> str:
+        errors = validate_quota_registration(self, record)
+        if errors:
+            raise ValueError(" ".join(errors))
+        quota_id = record.get("QUOTA_ID") or str(uuid.uuid4())
+        stored = dict(record, QUOTA_ID=quota_id, UPDATED_AT=dt.datetime.now())
+        idx = self._quota_registrations[self._quota_registrations["QUOTA_ID"] == quota_id].index
+        if len(idx):
+            for column, value in stored.items():
+                if column in self._quota_registrations.columns:
+                    self._quota_registrations.loc[idx[0], column] = value
+        else:
+            stored.setdefault("CREATED_AT", dt.datetime.now())
+            self._quota_registrations = pd.concat(
+                [self._quota_registrations, pd.DataFrame([stored])], ignore_index=True
+            )
+        return quota_id
+
+    def delete_quota_registration(self, quota_id: str) -> bool:
+        before = len(self._quota_registrations)
+        self._quota_registrations = self._quota_registrations[
+            self._quota_registrations["QUOTA_ID"] != quota_id
+        ]
+        return len(self._quota_registrations) < before
+
+    def get_quota_transactions(
+        self,
+        account_id: Optional[str] = None,
+        quota_id: Optional[str] = None,
+        quota_type: Optional[str] = None,
+        transaction_type: Optional[str] = None,
+        date_from=None,
+        date_to=None,
+    ) -> pd.DataFrame:
+        frame = self._quota_transactions.copy()
+        if account_id:
+            frame = frame[
+                (frame["OWNER_ACCOUNT_ID"] == account_id)
+                | (frame["RELATED_ACCOUNT_ID"] == account_id)
+            ]
+        if quota_id:
+            frame = frame[frame["QUOTA_ID"] == quota_id]
+        if transaction_type:
+            frame = frame[frame["TRANSACTION_TYPE"] == transaction_type]
+        if quota_type:
+            quota_ids = set(
+                self.get_quota_registrations(quota_type=quota_type)["QUOTA_ID"]
+            )
+            frame = frame[frame["QUOTA_ID"].isin(quota_ids)]
+        dates = pd.to_datetime(frame["EFFECTIVE_DATE"], errors="coerce")
+        if date_from is not None:
+            frame = frame[dates >= pd.Timestamp(date_from)]
+            dates = pd.to_datetime(frame["EFFECTIVE_DATE"], errors="coerce")
+        if date_to is not None:
+            frame = frame[dates <= pd.Timestamp(date_to)]
+        return frame
+
+    def upsert_quota_transaction(self, record: dict) -> str:
+        errors = validate_quota_transaction(self, record)
+        if errors:
+            raise ValueError(" ".join(errors))
+        transaction_id = record.get("QUOTA_TRANSACTION_ID") or str(uuid.uuid4())
+        quota = self.get_quota_registration(record["QUOTA_ID"])
+        stored = dict(
+            record,
+            QUOTA_TRANSACTION_ID=transaction_id,
+            OWNER_ACCOUNT_ID=quota["ACCOUNT_ID"],
+            UPDATED_AT=dt.datetime.now(),
+        )
+        idx = self._quota_transactions[
+            self._quota_transactions["QUOTA_TRANSACTION_ID"] == transaction_id
+        ].index
+        if len(idx):
+            for column, value in stored.items():
+                if column in self._quota_transactions.columns:
+                    self._quota_transactions.loc[idx[0], column] = value
+        else:
+            stored.setdefault("CREATED_AT", dt.datetime.now())
+            self._quota_transactions = pd.concat(
+                [self._quota_transactions, pd.DataFrame([stored])], ignore_index=True
+            )
+        return transaction_id
+
+    def delete_quota_transaction(self, transaction_id: str) -> bool:
+        before = len(self._quota_transactions)
+        self._quota_transactions = self._quota_transactions[
+            self._quota_transactions["QUOTA_TRANSACTION_ID"] != transaction_id
+        ]
+        return len(self._quota_transactions) < before
+
+    # ------------------------------------------------------------------
+    # Salmonella tests
+    # ------------------------------------------------------------------
+
+    def get_salmonella_tests(
+        self,
+        account_id: Optional[str] = None,
+        facility_id: Optional[str] = None,
+        flock_id: Optional[str] = None,
+        permit_number: Optional[str] = None,
+        test_result: Optional[str] = None,
+        inspector: Optional[str] = None,
+        case_number: Optional[str] = None,
+        invoice_number: Optional[str] = None,
+        date_from=None,
+        date_to=None,
+    ) -> pd.DataFrame:
+        frame = self._salmonella_tests.copy()
+        if account_id:
+            frame = frame[frame["ACCOUNT_ID"] == account_id]
+        if flock_id:
+            frame = frame[frame["FLOCK_ID"] == flock_id]
+        if facility_id:
+            flock_ids = set(self.get_flocks(facility_id=facility_id)["FLOCK_ID"])
+            frame = frame[frame["FLOCK_ID"].isin(flock_ids)]
+        text_filters = (
+            ("PERMIT_NUMBER", permit_number),
+            ("TEST_RESULT", test_result),
+            ("INSPECTOR", inspector),
+            ("CASE_FILE_NUMBER", case_number),
+            ("INVOICE_NUMBER", invoice_number),
+        )
+        for column, value in text_filters:
+            if value:
+                frame = frame[frame[column] == value]
+        dates = pd.to_datetime(frame["TESTING_DATE"], errors="coerce")
+        if date_from is not None:
+            frame = frame[dates >= pd.Timestamp(date_from)]
+            dates = pd.to_datetime(frame["TESTING_DATE"], errors="coerce")
+        if date_to is not None:
+            frame = frame[dates <= pd.Timestamp(date_to)]
+        return frame
+
+    def get_salmonella_test(self, test_id: str) -> Optional[dict]:
+        match = self._salmonella_tests[
+            self._salmonella_tests["SALMONELLA_TEST_ID"] == test_id
+        ]
+        return match.iloc[0].to_dict() if len(match) else None
+
+    def upsert_salmonella_test(self, record: dict) -> str:
+        errors = validate_salmonella_test(self, record)
+        if errors:
+            raise ValueError(" ".join(errors))
+        test_id = record.get("SALMONELLA_TEST_ID") or str(uuid.uuid4())
+        stored = dict(record, SALMONELLA_TEST_ID=test_id, UPDATED_AT=dt.datetime.now())
+        idx = self._salmonella_tests[
+            self._salmonella_tests["SALMONELLA_TEST_ID"] == test_id
+        ].index
+        if len(idx):
+            for column, value in stored.items():
+                if column in self._salmonella_tests.columns:
+                    self._salmonella_tests.loc[idx[0], column] = value
+        else:
+            stored.setdefault("CREATED_AT", dt.datetime.now())
+            self._salmonella_tests = pd.concat(
+                [self._salmonella_tests, pd.DataFrame([stored])], ignore_index=True
+            )
+        return test_id
+
+    def delete_salmonella_test(self, test_id: str) -> bool:
+        before = len(self._salmonella_tests)
+        self._salmonella_tests = self._salmonella_tests[
+            self._salmonella_tests["SALMONELLA_TEST_ID"] != test_id
+        ]
+        return len(self._salmonella_tests) < before
+
+    def get_salmonella_test_samples(self, test_id: Optional[str] = None) -> pd.DataFrame:
+        frame = self._salmonella_test_samples.copy()
+        if test_id and not frame.empty:
+            frame = frame[frame["SALMONELLA_TEST_ID"] == test_id]
+        return frame
 
     # ------------------------------------------------------------------
     # Imports & Production
@@ -194,20 +473,41 @@ class MockRepository(BaseRepository):
     def get_import_batches(self) -> pd.DataFrame:
         return pd.DataFrame(self._import_batches)
 
+    def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:
+        for row in rows:
+            stored = dict(row)
+            stored.setdefault("RAW_ROW_ID", str(uuid.uuid4()))
+            stored["IMPORT_ID"] = import_id
+            stored.setdefault("VALIDATION_STATUS", "PENDING")
+            stored.setdefault("MATCH_STATUS", None)
+            stored.setdefault("VALIDATION_MESSAGES", [])
+            self._raw_rows.append(stored)
+        return len(rows)
+
+    def get_raw_rows(self, import_id: str) -> pd.DataFrame:
+        rows = [row for row in self._raw_rows if row["IMPORT_ID"] == import_id]
+        return pd.DataFrame(rows)
+
     def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:
         """Insert production records. Returns count inserted."""
         records = records.copy()
         records["IMPORT_ID"] = import_id
-        records["CREATED_AT"] = dt.datetime.now()
+        now = dt.datetime.now()
+        if "CREATED_AT" not in records.columns:
+            records["CREATED_AT"] = now
+        else:
+            records["CREATED_AT"] = records["CREATED_AT"].fillna(now)
+        if "UPDATED_AT" not in records.columns:
+            records["UPDATED_AT"] = now
+        else:
+            records["UPDATED_AT"] = records["UPDATED_AT"].fillna(now)
         if "PRODUCTION_ID" not in records.columns:
             records["PRODUCTION_ID"] = [str(uuid.uuid4()) for _ in range(len(records))]
-        # Ensure column alignment
-        for col in self._production.columns:
-            if col not in records.columns and col not in ("SIZE_BREAKDOWN_ID",):
-                records[col] = None
-        # Only keep columns in _production, dropping extras from uploaded CSV
-        keep_cols = [c for c in self._production.columns if c in records.columns]
-        records = records[keep_cols]
+        # Transitional union model: preserve every incoming field until the
+        # Dataverse-to-target model is finalized.
+        all_columns = list(dict.fromkeys([*self._production.columns, *records.columns]))
+        self._production = self._production.reindex(columns=all_columns)
+        records = records.reindex(columns=all_columns)
         self._production = pd.concat([self._production, records], ignore_index=True)
         # Update batch
         for i, batch in enumerate(self._import_batches):
@@ -279,4 +579,25 @@ class MockRepository(BaseRepository):
             "total_accepted": float(total_accepted),
             "total_rejected": float(total_rejected),
             "total_loss": float(total_loss),
+        }
+
+    def get_dashboard_metrics(self) -> dict:
+        today = dt.date.today()
+        recent_cutoff = today - dt.timedelta(days=30)
+        quota_dates = pd.to_datetime(
+            self._quota_transactions["EFFECTIVE_DATE"], errors="coerce"
+        ).dt.date
+        return {
+            "active_account_count": int((self._accounts["STATUS"] == "Active").sum()),
+            "active_facility_count": int((self._facilities["STATUS"] == "Active").sum()),
+            "active_flock_count": int((self._flocks["STATUS"] == "Active").sum()),
+            "active_quota_count": len(self.get_quota_registrations(active_only=True)),
+            "recent_quota_transaction_count": int((quota_dates >= recent_cutoff).sum()),
+            "pending_salmonella_count": int(
+                (self._salmonella_tests["TEST_RESULT"] == "Pending").sum()
+            ),
+            "attention_salmonella_count": int(
+                self._salmonella_tests["TEST_RESULT"].isin(["Positive", "Inconclusive"]).sum()
+            ),
+            "production_record_count": len(self._production),
         }

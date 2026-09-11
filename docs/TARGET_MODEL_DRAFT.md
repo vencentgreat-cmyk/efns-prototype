@@ -212,3 +212,17 @@ When Dataverse metadata becomes available:
 6. Map choice/integer values to labels
 7. Handle polymorphic lookups (e.g., `regardingobjectid` → multiple target tables)
 8. Implement real business rules and validation
+
+## Transitional application fields
+
+The mock application currently preserves the following production/import fields
+without changing the provisional Snowflake SQL: `PRODUCER_NUMBER`,
+`PRODUCER_ACCOUNT_ID`, `GRADER_ACCOUNT_ID`, `FACILITY_ID`, `MATCH_STATUS`,
+`SOURCE_TYPE`, `SOURCE_ROW_NUMBER`, `SOURCE_WEEK_CODE`, `UPDATED_AT`, and all 35
+normalized EIMS source values. Imported records begin as `EIMS_IMPORT` /
+`UNMATCHED`, with relationship IDs left null. Synthetic records use `SYNTHETIC`
+and a nullable match status.
+
+These fields are candidates for Phase 5 schema alignment. Their final types,
+constraints, and relationships must be determined from Dataverse metadata. The
+authoritative provisional mapping remains `DATAVERSE_TO_TARGET_MAPPING.csv`.

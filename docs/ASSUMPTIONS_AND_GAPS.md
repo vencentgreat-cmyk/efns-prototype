@@ -75,3 +75,9 @@
 4. **No authentication** — Not needed for v0.1 prototype.
 5. **No error handling on Snowflake path** — SnowflakeRepository stub raises NotImplementedError
    for write operations.
+
+## Mapping authority
+
+`DATAVERSE_TO_TARGET_MAPPING.csv` is the single authoritative provisional mapping
+artifact in this repository. Documentation may explain the mapping but must not
+duplicate it as a second field-by-field table.
