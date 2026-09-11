@@ -55,6 +55,8 @@ class MockRepository(BaseRepository):
             "REPORTING_YEAR": dt.date.today().year,
             "REPORTING_WEEK": 1,
             "UPLOAD_TIMESTAMP": dt.datetime.now(),
+            "CREATED_AT": dt.datetime.now(),
+            "UPDATED_AT": dt.datetime.now(),
             "STATUS": "Committed",
             "ROW_COUNT": len(self._production),
             "ERROR_COUNT": 0,
@@ -107,6 +109,14 @@ class MockRepository(BaseRepository):
         return aid
 
     def delete_account(self, account_id: str) -> bool:
+        references = (
+            not self.get_facilities(account_id=account_id).empty
+            or not self.get_flocks(account_id=account_id).empty
+            or not self.get_quota_registrations(account_id=account_id).empty
+            or not self.get_salmonella_tests(account_id=account_id).empty
+        )
+        if references:
+            raise ValueError("Account cannot be deleted while related records exist.")
         before = len(self._accounts)
         self._accounts = self._accounts[self._accounts["ACCOUNT_ID"] != account_id]
         return len(self._accounts) < before
@@ -138,6 +148,8 @@ class MockRepository(BaseRepository):
         return fid
 
     def delete_facility(self, facility_id: str) -> bool:
+        if not self.get_flocks(facility_id=facility_id).empty or not self.get_facility_details(facility_id).empty:
+            raise ValueError("Facility cannot be deleted while related records exist.")
         before = len(self._facilities)
         self._facilities = self._facilities[self._facilities["FACILITY_ID"] != facility_id]
         return len(self._facilities) < before
@@ -183,10 +195,9 @@ class MockRepository(BaseRepository):
         return match.iloc[0].to_dict() if len(match) else None
 
     def upsert_flock(self, record: dict) -> str:
-        if "PERMIT_NUMBER" in record or "QUOTA_ID" in record:
-            errors = validate_flock(self, record)
-            if errors:
-                raise ValueError(" ".join(errors))
+        errors = validate_flock(self, record)
+        if errors:
+            raise ValueError(" ".join(errors))
         fid = record.get("FLOCK_ID") or str(uuid.uuid4())
         record["FLOCK_ID"] = fid
         record["UPDATED_AT"] = dt.datetime.now()
@@ -203,6 +214,14 @@ class MockRepository(BaseRepository):
         return fid
 
     def delete_flock(self, flock_id: str) -> bool:
+        production = self._production
+        has_production = "FLOCK_ID" in production and bool((production["FLOCK_ID"] == flock_id).any())
+        if (
+            not self.get_flock_transactions(flock_id).empty
+            or not self.get_salmonella_tests(flock_id=flock_id).empty
+            or has_production
+        ):
+            raise ValueError("Flock cannot be deleted while related records exist.")
         before = len(self._flocks)
         self._flocks = self._flocks[self._flocks["FLOCK_ID"] != flock_id]
         return len(self._flocks) < before
@@ -302,6 +321,11 @@ class MockRepository(BaseRepository):
         return quota_id
 
     def delete_quota_registration(self, quota_id: str) -> bool:
+        if (
+            not self.get_quota_transactions(quota_id=quota_id).empty
+            or bool((self._flocks["QUOTA_ID"] == quota_id).any())
+        ):
+            raise ValueError("Quota Registration cannot be deleted while related records exist.")
         before = len(self._quota_registrations)
         self._quota_registrations = self._quota_registrations[
             self._quota_registrations["QUOTA_ID"] != quota_id
@@ -464,6 +488,8 @@ class MockRepository(BaseRepository):
         import_id = record.get("IMPORT_ID", str(uuid.uuid4()))
         record["IMPORT_ID"] = import_id
         record.setdefault("UPLOAD_TIMESTAMP", dt.datetime.now())
+        record.setdefault("CREATED_AT", dt.datetime.now())
+        record.setdefault("UPDATED_AT", dt.datetime.now())
         record.setdefault("STATUS", "Uploaded")
         record.setdefault("ROW_COUNT", 0)
         record.setdefault("ERROR_COUNT", 0)
@@ -473,13 +499,43 @@ class MockRepository(BaseRepository):
     def get_import_batches(self) -> pd.DataFrame:
         return pd.DataFrame(self._import_batches)
 
+    def find_import_by_hash(self, file_hash: str) -> Optional[dict]:
+        for batch in self._import_batches:
+            if batch.get("FILE_HASH") == file_hash:
+                return dict(batch)
+        return None
+
+    def import_production_bundle(
+        self,
+        batch: dict,
+        raw_rows: list[dict],
+        records: pd.DataFrame,
+        allow_duplicate: bool = False,
+    ) -> tuple[str, int]:
+        file_hash = batch.get("FILE_HASH")
+        if file_hash and self.find_import_by_hash(file_hash) and not allow_duplicate:
+            raise ValueError("This exact file has already been imported.")
+        snapshots = (
+            [dict(item) for item in self._import_batches],
+            [dict(item) for item in self._raw_rows],
+            self._production.copy(deep=True),
+        )
+        try:
+            import_id = self.create_import_batch(dict(batch))
+            self.insert_raw_rows(import_id, raw_rows)
+            count = self.insert_production_records(records, import_id)
+            return import_id, count
+        except Exception:
+            self._import_batches, self._raw_rows, self._production = snapshots
+            raise
+
     def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:
         for row in rows:
             stored = dict(row)
             stored.setdefault("RAW_ROW_ID", str(uuid.uuid4()))
             stored["IMPORT_ID"] = import_id
             stored.setdefault("VALIDATION_STATUS", "PENDING")
-            stored.setdefault("MATCH_STATUS", None)
+            stored.setdefault("MATCH_STATUS", "UNMATCHED")
             stored.setdefault("VALIDATION_MESSAGES", [])
             self._raw_rows.append(stored)
         return len(rows)

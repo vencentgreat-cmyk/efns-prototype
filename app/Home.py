@@ -146,7 +146,7 @@ navigation = st.navigation(
         "Account & Facility": [
             st.Page(
                 "pages/3_Accounts_Facilities_Flocks.py",
-                title="Accounts, Facilities & Flocks",
+                title="Accounts & Facilities",
                 icon=":material/account_tree:",
             ),
         ],

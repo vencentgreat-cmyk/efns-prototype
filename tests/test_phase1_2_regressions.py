@@ -42,11 +42,14 @@ def test_flock_egg_colour_survives_production_merge():
 def test_flock_without_facility_is_retained_and_marked_unassigned():
     repo = MockRepository(seed=42)
     account_id = repo.get_accounts().iloc[0]["ACCOUNT_ID"]
-    repo.upsert_flock(
-        {
-            "ACCOUNT_ID": account_id,
-            "FLOCK_NUMBER": "F-NO-FACILITY",
-        }
+    legacy = repo.get_flocks().iloc[:0].copy()
+    legacy.loc[0, "FLOCK_ID"] = "legacy-unassigned"
+    legacy.loc[0, "ACCOUNT_ID"] = account_id
+    legacy.loc[0, "FACILITY_ID"] = None
+    legacy.loc[0, "FLOCK_NUMBER"] = "F-NO-FACILITY"
+    original_get_flocks = repo.get_flocks
+    repo.get_flocks = lambda *args, **kwargs: __import__("pandas").concat(
+        [original_get_flocks(*args, **kwargs), legacy], ignore_index=True
     )
 
     report = build_report(repo, ["FLOCK_NUMBER", "FACILITY_NAME"])

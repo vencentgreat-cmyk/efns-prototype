@@ -201,6 +201,22 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
+    def find_import_by_hash(self, file_hash: str) -> Optional[dict]:
+        """Return an existing import batch for an exact SHA-256 hash."""
+        ...
+
+    @abstractmethod
+    def import_production_bundle(
+        self,
+        batch: dict,
+        raw_rows: list[dict],
+        records: pd.DataFrame,
+        allow_duplicate: bool = False,
+    ) -> tuple[str, int]:
+        """Persist batch, raw rows, and normalized rows atomically."""
+        ...
+
+    @abstractmethod
     def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:
         """Preserve source rows and their technical validation state."""
         ...

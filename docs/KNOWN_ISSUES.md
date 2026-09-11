@@ -1,14 +1,9 @@
 # Known Issues
 
-- Dataverse table names, choices, required fields, keys, and relationship
-  cardinalities are still unknown.
-- Production-to-flock links in synthetic records are fabricated for the demo.
-  Imported EIMS records remain `UNMATCHED`; no relationship IDs are inferred.
-- Mock data is in-memory and resets with each Streamlit session.
-- Snowflake write operations, including RAW row persistence, are not implemented.
-- The transitional production union accepts new columns intentionally. It must be
-  replaced by an approved schema and migration in the Snowflake implementation.
-- Authentication, authorization, durable audit identity, duplicate-file handling,
-  and transactional import rollback remain future deployment requirements.
-- Quota and disease-testing modules remain placeholders; their business rules are
-  not implemented.
+- Dataverse logical names, choices, required fields, keys and relationship cardinalities remain unknown.
+- Imported EIMS rows remain `UNMATCHED`; candidate generation and manual confirmation UI remain future work.
+- Mock data resets with each Streamlit session.
+- Snowflake SQL and repository writes require integration testing against a DEV account, warehouse and privileges.
+- Authentication, role authorization and durable user identity are deployment work.
+- Deletion blocks referenced records. Final soft-delete and retention rules require business/Dataverse decisions.
+- Sample-level Salmonella fields and final quota rules require authoritative metadata.

@@ -8,7 +8,7 @@ from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 import pandas as pd
 import streamlit as st
 
-from app.ui import apply_theme, page_header
+from app.ui import apply_theme, clear_widget_prefix, page_header
 from data.constants import QUOTA_STATUSES, QUOTA_TYPES
 from data.repositories import get_repository
 from data.validation import validate_quota_registration
@@ -498,6 +498,8 @@ with st.expander(
         record_options,
         index=option_index(record_options, default_record_label),
         key="quota_reg_record",
+        on_change=clear_widget_prefix,
+        args=("quota_reg_", ("quota_reg_record",)),
     )
 
     current = (

@@ -91,8 +91,7 @@ class TestMockRepository:
         assert record["ORGANIZATION_NAME"] == "Test Farm"
 
     def test_delete_account(self, repo):
-        df = repo.get_accounts()
-        aid = df["ACCOUNT_ID"].iloc[0]
+        aid = repo.upsert_account({"ORGANIZATION_NAME": "Unreferenced account"})
         assert repo.delete_account(aid)
         assert repo.get_account(aid) is None
 
