@@ -6,6 +6,7 @@
 - Full Flock validation at the repository boundary; the dedicated Flocks page is the only Flock editor.
 - EIMS validation, SHA-256 duplicate detection, RAW preservation and atomic RAW/normalized import.
 - Mock persistence and a parameterized Snowflake adapter for CRUD, import writes, filtered reads, commit and rollback.
+- Optimistic locking on Account edits: the edit form snapshots `UPDATED_AT` on open and passes it back as `EXPECTED_UPDATED_AT`; a concurrent save raises `ConcurrencyError` instead of silently overwriting. Both repositories enforce it (mock by stamp comparison, Snowflake by a bound `AND UPDATED_AT = %s` clause).
 - Provisional DEV SQL for RAW, CORE and REPORTING standard tables/views.
 - Automated pytest workflow for pushes and pull requests.
 

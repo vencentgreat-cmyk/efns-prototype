@@ -14,6 +14,17 @@ class RepositoryError(Exception):
     pass
 
 
+class ConcurrencyError(RepositoryError):
+    """Raised when a record changed since the editor last loaded it.
+
+    Signals an optimistic-locking conflict: the caller supplied an
+    ``EXPECTED_UPDATED_AT`` stamp that no longer matches the stored row,
+    meaning another editor saved first. The caller should reload and
+    reapply, rather than silently overwriting the newer version.
+    """
+    pass
+
+
 class BaseRepository(ABC):
     """Abstract repository interface for EFNS data access."""
 
