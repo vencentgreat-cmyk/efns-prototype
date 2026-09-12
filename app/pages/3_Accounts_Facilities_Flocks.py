@@ -18,6 +18,7 @@ from app.navigation import (
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro
 from data.constants import ACCOUNT_STATUSES
 from data.repositories import get_repository
+from data.repositories.base import RepositoryError
 
 
 apply_theme()
@@ -250,6 +251,11 @@ else:
 
     else:
         current = current or {}
+        # Snapshot the version stamp when the edit form opens so a concurrent
+        # save by another user is detected on submit (optimistic locking).
+        expected_stamp_key = f"account_form_expected_{view.record_id}"
+        if view.name == "edit" and view.record_id:
+            st.session_state.setdefault(expected_stamp_key, current.get("UPDATED_AT"))
         lookup_options = account_lookup(accounts, view.record_id)
         summary_tab, address_tab, roles_tab = st.tabs(["Account Information", "Address", "Account Roles"])
         with summary_tab:
@@ -333,9 +339,11 @@ else:
                 }
                 if not view.record_id:
                     record.pop("ACCOUNT_ID")
+                elif view.name == "edit":
+                    record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_stamp_key)
                 try:
                     saved_id = repo.upsert_account(record)
                     clear_widget_prefix("account_form_")
                     open_view("detail", saved_id)
-                except ValueError as exc:
+                except (ValueError, RepositoryError) as exc:
                     st.error(str(exc))

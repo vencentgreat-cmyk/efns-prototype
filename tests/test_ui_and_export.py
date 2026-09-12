@@ -79,7 +79,10 @@ def test_primary_workflows_expose_clear_controls():
 
     app.switch_page("pages/3_Accounts_Facilities_Flocks.py").run()
     source = (Path(__file__).parents[1] / "app" / "pages" / "3_Accounts_Facilities_Flocks.py").read_text(encoding="utf-8")
-    assert 'st.tabs(["Accounts", "Facilities"])' in source
+    # The account workspace is now a Dynamics-style record page with a
+    # structured edit form; Facilities live on their own dedicated page.
+    assert 'st.tabs(["Account Information", "Address", "Account Roles"])' in source
+    assert (Path(__file__).parents[1] / "app" / "pages" / "11_Facilities.py").exists()
     assert "Add New Flock" not in source
 
     app.switch_page("pages/4_Reports.py").run()

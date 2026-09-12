@@ -4,6 +4,7 @@ import io
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from app.services.report_builder import build_report
 from data.constants import (
@@ -73,19 +74,23 @@ def test_imported_fields_survive_repository_round_trip():
     assert pd.isna(imported["GRADER_ACCOUNT_ID"])
 
 
-def test_account_candidate_lookup_supports_zero_one_and_multiple_results():
+def test_account_registration_lookup_is_unique_and_case_insensitive():
     repo = MockRepository(seed=42)
     registration = repo.get_accounts().iloc[0]["REGISTRATION_NUMBER"]
 
+    # Lookup resolves zero or exactly one owning account, case-insensitively.
     assert repo.find_accounts_by_registration_number("missing").empty
     assert len(repo.find_accounts_by_registration_number(registration)) == 1
-    repo.upsert_account(
-        {
-            "ORGANIZATION_NAME": "Second sanitized candidate",
-            "REGISTRATION_NUMBER": registration,
-        }
-    )
-    assert len(repo.find_accounts_by_registration_number(registration.lower())) == 2
+    assert len(repo.find_accounts_by_registration_number(str(registration).lower())) == 1
+
+    # Registration numbers are unique: a second account cannot reuse one.
+    with pytest.raises(ValueError):
+        repo.upsert_account(
+            {
+                "ORGANIZATION_NAME": "Second sanitized candidate",
+                "REGISTRATION_NUMBER": registration,
+            }
+        )
 
 
 def test_raw_rows_preserve_source_values_and_status():

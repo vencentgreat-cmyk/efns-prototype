@@ -8,7 +8,7 @@ from typing import Optional
 import uuid
 import pandas as pd
 
-from data.repositories.base import BaseRepository, RepositoryError
+from data.repositories.base import BaseRepository, ConcurrencyError, RepositoryError
 from data.validation import validate_flock, validate_quota_registration, validate_quota_transaction, validate_salmonella_test
 
 MODEL = {
@@ -59,17 +59,24 @@ class SnowflakeRepository(BaseRepository):
   frame = self._query(f"SELECT * FROM {self.database}.{schema or self.schema_core}.{table} WHERE {column} = %s", (value,))
   return frame.iloc[0].to_dict() if len(frame) else None
 
- def _upsert(self, table, record):
+ def _upsert(self, table, record, expected_updated_at=None):
   key, allowed_text = MODEL[table]; allowed = allowed_text.split()
   entity_id = record.get(key) or str(uuid.uuid4())
   values = {k: v for k, v in record.items() if k in allowed}
   if not values: raise RepositoryError(f"No writable fields supplied for {table}.")
-  update = f"UPDATE {self.database}.{self.schema_core}.{table} SET " + ", ".join(f"{k} = %s" for k in values) + f", UPDATED_AT = CURRENT_TIMESTAMP() WHERE {key} = %s"
+  lock = " AND UPDATED_AT = %s" if expected_updated_at is not None else ""
+  update = f"UPDATE {self.database}.{self.schema_core}.{table} SET " + ", ".join(f"{k} = %s" for k in values) + f", UPDATED_AT = CURRENT_TIMESTAMP() WHERE {key} = %s{lock}"
+  update_params = (*values.values(), entity_id) + ((expected_updated_at,) if expected_updated_at is not None else ())
   columns = [key, *values]
   insert = f"INSERT INTO {self.database}.{self.schema_core}.{table} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) VALUES ({', '.join(['%s'] * len(columns))}, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
   with self._cursor(True) as cursor:
-   cursor.execute(update, (*values.values(), entity_id))
-   if cursor.rowcount == 0: cursor.execute(insert, (entity_id, *values.values()))
+   cursor.execute(update, update_params)
+   if cursor.rowcount == 0:
+    if expected_updated_at is not None:
+     cursor.execute(f"SELECT COUNT(*) FROM {self.database}.{self.schema_core}.{table} WHERE {key} = %s", (entity_id,))
+     if (cursor.fetchone() or (0,))[0]:
+      raise ConcurrencyError(f"{table} was changed by someone else. Reload the record and reapply your edits.")
+    cursor.execute(insert, (entity_id, *values.values()))
   return entity_id
 
  def _delete(self, table, key, entity_id, references=()):
@@ -91,6 +98,7 @@ class SnowflakeRepository(BaseRepository):
  def get_account(self, account_id): return self._one("ACCOUNT", "ACCOUNT_ID", account_id)
  def find_accounts_by_registration_number(self, registration_number): return self._query(f"SELECT * FROM {self.database}.{self.schema_core}.ACCOUNT WHERE UPPER(TRIM(REGISTRATION_NUMBER)) = UPPER(TRIM(%s))", (registration_number,))
  def upsert_account(self, record):
+  expected_updated_at = record.pop("EXPECTED_UPDATED_AT", None)
   account_id = record.get("ACCOUNT_ID")
   registration = str(record.get("REGISTRATION_NUMBER") or "").strip()
   if registration:
@@ -100,7 +108,7 @@ class SnowflakeRepository(BaseRepository):
   for field in ("PARENT_ACCOUNT_ID", "GRADING_STATION_ACCOUNT_ID", "PULLET_GROWER_ACCOUNT_ID"):
    if account_id and record.get(field) == account_id:
     raise RepositoryError("Account cannot reference itself in an Account lookup.")
-  return self._upsert("ACCOUNT", record)
+  return self._upsert("ACCOUNT", record, expected_updated_at=expected_updated_at)
  def delete_account(self, value): return self._delete("ACCOUNT", "ACCOUNT_ID", value, (("ACCOUNT", "PARENT_ACCOUNT_ID"), ("ACCOUNT", "GRADING_STATION_ACCOUNT_ID"), ("ACCOUNT", "PULLET_GROWER_ACCOUNT_ID"), ("FACILITY", "ACCOUNT_ID"), ("FLOCK", "ACCOUNT_ID"), ("QUOTA_REGISTRATION", "ACCOUNT_ID"), ("SALMONELLA_TEST", "ACCOUNT_ID")))
  def get_facilities(self, account_id=None): return self._filtered("FACILITY", (("ACCOUNT_ID", account_id),))
  def upsert_facility(self, record): return self._upsert("FACILITY", record)

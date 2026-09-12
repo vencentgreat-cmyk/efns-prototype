@@ -11,7 +11,7 @@ from typing import Optional
 
 import pandas as pd
 
-from data.repositories.base import BaseRepository
+from data.repositories.base import BaseRepository, ConcurrencyError
 from data.synthetic import generate_all
 from data.validation import (
     validate_flock,
@@ -19,6 +19,21 @@ from data.validation import (
     validate_quota_transaction,
     validate_salmonella_test,
 )
+
+
+def _stamp(value) -> Optional[str]:
+    """Normalise an UPDATED_AT value to a comparable string.
+
+    Records read back through pandas surface as ``pd.Timestamp`` while
+    freshly written values are ``datetime.datetime``; comparing their ISO
+    strings keeps optimistic-locking checks reliable across both types.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    try:
+        return pd.Timestamp(value).isoformat()
+    except (ValueError, TypeError):
+        return str(value)
 
 
 class MockRepository(BaseRepository):
@@ -93,6 +108,7 @@ class MockRepository(BaseRepository):
         return self._accounts[matches].copy()
 
     def upsert_account(self, record: dict) -> str:
+        expected_updated_at = record.pop("EXPECTED_UPDATED_AT", None)
         aid = record.get("ACCOUNT_ID") or str(uuid.uuid4())
         registration = str(record.get("REGISTRATION_NUMBER") or "").strip()
         if registration:
@@ -119,6 +135,13 @@ class MockRepository(BaseRepository):
                 self._accounts[column] = None
         idx = self._accounts[self._accounts["ACCOUNT_ID"] == aid].index
         if len(idx):
+            if expected_updated_at is not None:
+                stored_stamp = _stamp(self._accounts.loc[idx[0], "UPDATED_AT"])
+                if stored_stamp != _stamp(expected_updated_at):
+                    raise ConcurrencyError(
+                        "This Account was changed by someone else since you opened it. "
+                        "Reload the record and reapply your edits."
+                    )
             for col in record:
                 self._accounts.loc[idx[0], col] = record[col]
         else:
