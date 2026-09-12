@@ -1,0 +1,14 @@
+# Snowflake CLI connection draft for local DEV only.
+# Copy the relevant values into your user-level Snowflake CLI configuration.
+# Do not rename this file to contain real credentials inside the repository.
+definition_version: 2
+entities:
+  efns_app:
+    type: streamlit
+    identifier:
+      name: EFNS_PROTOTYPE
+      database: EFNS_DEV
+      schema: APP
+    main_file: app/Home.py
+    pages_dir: app/pages
+    query_warehouse: EFNS_DEV_WH

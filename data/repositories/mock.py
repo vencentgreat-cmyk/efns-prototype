@@ -80,6 +80,36 @@ class MockRepository(BaseRepository):
         self._import_batches.append(batch)
         self._production["IMPORT_ID"] = import_id
 
+    def _upsert_frame(self, attribute: str, key: str, record: dict) -> str:
+        """Apply one timestamped, optimistic-locking upsert to a data frame."""
+        values = dict(record)
+        expected = values.pop("EXPECTED_UPDATED_AT", None)
+        entity_id = values.get(key) or str(uuid.uuid4())
+        values[key] = entity_id
+        frame = getattr(self, attribute)
+        for column in values:
+            if column not in frame.columns:
+                frame[column] = None
+        matches = frame[frame[key] == entity_id].index
+        if len(matches):
+            index = matches[0]
+            if expected is not None and _stamp(frame.loc[index].get("UPDATED_AT")) != _stamp(expected):
+                raise ConcurrencyError(
+                    "This record changed after it was opened. Reload it before saving again."
+                )
+            values["UPDATED_AT"] = dt.datetime.now()
+            for column, value in values.items():
+                frame.loc[index, column] = value
+        else:
+            if expected is not None:
+                raise ConcurrencyError("This record no longer exists. Return to the list and reload.")
+            now = dt.datetime.now()
+            values.setdefault("CREATED_AT", now)
+            values["UPDATED_AT"] = now
+            frame = pd.concat([frame, pd.DataFrame([values])], ignore_index=True)
+            setattr(self, attribute, frame)
+        return entity_id
+
     # ------------------------------------------------------------------
     # Accounts
     # ------------------------------------------------------------------
@@ -108,7 +138,7 @@ class MockRepository(BaseRepository):
         return self._accounts[matches].copy()
 
     def upsert_account(self, record: dict) -> str:
-        expected_updated_at = record.pop("EXPECTED_UPDATED_AT", None)
+        record = dict(record)
         aid = record.get("ACCOUNT_ID") or str(uuid.uuid4())
         registration = str(record.get("REGISTRATION_NUMBER") or "").strip()
         if registration:
@@ -127,29 +157,7 @@ class MockRepository(BaseRepository):
             if related_id and self.get_account(related_id) is None:
                 raise ValueError(f"{label} must reference an existing Account.")
         record["ACCOUNT_ID"] = aid
-        record["UPDATED_AT"] = dt.datetime.now()
-        # Keep repositories already held by a Streamlit session compatible
-        # when provisional Account fields are added to the application.
-        for column in record:
-            if column not in self._accounts.columns:
-                self._accounts[column] = None
-        idx = self._accounts[self._accounts["ACCOUNT_ID"] == aid].index
-        if len(idx):
-            if expected_updated_at is not None:
-                stored_stamp = _stamp(self._accounts.loc[idx[0], "UPDATED_AT"])
-                if stored_stamp != _stamp(expected_updated_at):
-                    raise ConcurrencyError(
-                        "This Account was changed by someone else since you opened it. "
-                        "Reload the record and reapply your edits."
-                    )
-            for col in record:
-                self._accounts.loc[idx[0], col] = record[col]
-        else:
-            record.setdefault("CREATED_AT", dt.datetime.now())
-            self._accounts = pd.concat(
-                [self._accounts, pd.DataFrame([record])], ignore_index=True
-            )
-        return aid
+        return self._upsert_frame("_accounts", "ACCOUNT_ID", record)
 
     def delete_account(self, account_id: str) -> bool:
         lookup_columns = (
@@ -186,20 +194,7 @@ class MockRepository(BaseRepository):
         return df
 
     def upsert_facility(self, record: dict) -> str:
-        fid = record.get("FACILITY_ID", str(uuid.uuid4()))
-        record["FACILITY_ID"] = fid
-        record["UPDATED_AT"] = dt.datetime.now()
-        idx = self._facilities[self._facilities["FACILITY_ID"] == fid].index
-        if len(idx):
-            for col in record:
-                if col in self._facilities.columns:
-                    self._facilities.loc[idx[0], col] = record[col]
-        else:
-            record.setdefault("CREATED_AT", dt.datetime.now())
-            self._facilities = pd.concat(
-                [self._facilities, pd.DataFrame([record])], ignore_index=True
-            )
-        return fid
+        return self._upsert_frame("_facilities", "FACILITY_ID", record)
 
     def delete_facility(self, facility_id: str) -> bool:
         if not self.get_flocks(facility_id=facility_id).empty or not self.get_facility_details(facility_id).empty:
@@ -214,21 +209,28 @@ class MockRepository(BaseRepository):
             frame = frame[frame["FACILITY_ID"] == facility_id]
         return frame
 
+    def get_facility_detail(self, detail_id: str) -> Optional[dict]:
+        matches = self._facility_details[
+            self._facility_details["FACILITY_DETAIL_ID"] == detail_id
+        ]
+        return matches.iloc[0].to_dict() if not matches.empty else None
+
     def upsert_facility_detail(self, record: dict) -> str:
         facility_id = record.get("FACILITY_ID")
         if not facility_id or facility_id not in set(self._facilities["FACILITY_ID"]):
             raise ValueError("Facility Detail requires an existing Facility.")
-        detail_id = record.get("FACILITY_DETAIL_ID", str(uuid.uuid4()))
-        stored = dict(record, FACILITY_DETAIL_ID=detail_id, UPDATED_AT=dt.datetime.now())
-        idx = self._facility_details[self._facility_details["FACILITY_DETAIL_ID"] == detail_id].index
-        if len(idx):
-            for column, value in stored.items():
-                if column in self._facility_details.columns:
-                    self._facility_details.loc[idx[0], column] = value
-        else:
-            stored.setdefault("CREATED_AT", dt.datetime.now())
-            self._facility_details = pd.concat([self._facility_details, pd.DataFrame([stored])], ignore_index=True)
-        return detail_id
+        return self._upsert_frame("_facility_details", "FACILITY_DETAIL_ID", record)
+
+    def delete_facility_detail(self, detail_id: str) -> bool:
+        if "FACILITY_DETAIL_ID" in self._flocks and bool(
+            (self._flocks["FACILITY_DETAIL_ID"] == detail_id).any()
+        ):
+            raise ValueError("Facility Detail cannot be deleted while a Flock references it.")
+        before = len(self._facility_details)
+        self._facility_details = self._facility_details[
+            self._facility_details["FACILITY_DETAIL_ID"] != detail_id
+        ]
+        return len(self._facility_details) < before
 
     # ------------------------------------------------------------------
     # Flocks
@@ -252,20 +254,7 @@ class MockRepository(BaseRepository):
         errors = validate_flock(self, record)
         if errors:
             raise ValueError(" ".join(errors))
-        fid = record.get("FLOCK_ID") or str(uuid.uuid4())
-        record["FLOCK_ID"] = fid
-        record["UPDATED_AT"] = dt.datetime.now()
-        idx = self._flocks[self._flocks["FLOCK_ID"] == fid].index
-        if len(idx):
-            for col in record:
-                if col in self._flocks.columns:
-                    self._flocks.loc[idx[0], col] = record[col]
-        else:
-            record.setdefault("CREATED_AT", dt.datetime.now())
-            self._flocks = pd.concat(
-                [self._flocks, pd.DataFrame([record])], ignore_index=True
-            )
-        return fid
+        return self._upsert_frame("_flocks", "FLOCK_ID", record)
 
     def delete_flock(self, flock_id: str) -> bool:
         production = self._production
@@ -295,22 +284,7 @@ class MockRepository(BaseRepository):
             raise ValueError("Flock Transaction requires an existing Flock.")
         if float(record.get("QUANTITY") or 0) <= 0:
             raise ValueError("Transaction Quantity must be greater than zero.")
-        tid = record.get("FLOCK_TRANSACTION_ID") or str(uuid.uuid4())
-        record["FLOCK_TRANSACTION_ID"] = tid
-        record["UPDATED_AT"] = dt.datetime.now()
-        idx = self._flock_transactions[
-            self._flock_transactions["FLOCK_TRANSACTION_ID"] == tid
-        ].index
-        if len(idx):
-            for col in record:
-                if col in self._flock_transactions.columns:
-                    self._flock_transactions.loc[idx[0], col] = record[col]
-        else:
-            record.setdefault("CREATED_AT", dt.datetime.now())
-            self._flock_transactions = pd.concat(
-                [self._flock_transactions, pd.DataFrame([record])], ignore_index=True
-            )
-        return tid
+        return self._upsert_frame("_flock_transactions", "FLOCK_TRANSACTION_ID", record)
 
     def delete_flock_transaction(self, transaction_id: str) -> bool:
         before = len(self._flock_transactions)
@@ -360,19 +334,7 @@ class MockRepository(BaseRepository):
         errors = validate_quota_registration(self, record)
         if errors:
             raise ValueError(" ".join(errors))
-        quota_id = record.get("QUOTA_ID") or str(uuid.uuid4())
-        stored = dict(record, QUOTA_ID=quota_id, UPDATED_AT=dt.datetime.now())
-        idx = self._quota_registrations[self._quota_registrations["QUOTA_ID"] == quota_id].index
-        if len(idx):
-            for column, value in stored.items():
-                if column in self._quota_registrations.columns:
-                    self._quota_registrations.loc[idx[0], column] = value
-        else:
-            stored.setdefault("CREATED_AT", dt.datetime.now())
-            self._quota_registrations = pd.concat(
-                [self._quota_registrations, pd.DataFrame([stored])], ignore_index=True
-            )
-        return quota_id
+        return self._upsert_frame("_quota_registrations", "QUOTA_ID", record)
 
     def delete_quota_registration(self, quota_id: str) -> bool:
         if (
@@ -422,29 +384,21 @@ class MockRepository(BaseRepository):
         errors = validate_quota_transaction(self, record)
         if errors:
             raise ValueError(" ".join(errors))
-        transaction_id = record.get("QUOTA_TRANSACTION_ID") or str(uuid.uuid4())
         quota = self.get_quota_registration(record["QUOTA_ID"])
-        stored = dict(
-            record,
-            QUOTA_TRANSACTION_ID=transaction_id,
-            OWNER_ACCOUNT_ID=quota["ACCOUNT_ID"],
-            UPDATED_AT=dt.datetime.now(),
-        )
-        idx = self._quota_transactions[
+        stored = dict(record, OWNER_ACCOUNT_ID=quota["ACCOUNT_ID"])
+        return self._upsert_frame("_quota_transactions", "QUOTA_TRANSACTION_ID", stored)
+
+    def get_quota_transaction(self, transaction_id: str) -> Optional[dict]:
+        matches = self._quota_transactions[
             self._quota_transactions["QUOTA_TRANSACTION_ID"] == transaction_id
-        ].index
-        if len(idx):
-            for column, value in stored.items():
-                if column in self._quota_transactions.columns:
-                    self._quota_transactions.loc[idx[0], column] = value
-        else:
-            stored.setdefault("CREATED_AT", dt.datetime.now())
-            self._quota_transactions = pd.concat(
-                [self._quota_transactions, pd.DataFrame([stored])], ignore_index=True
-            )
-        return transaction_id
+        ]
+        return matches.iloc[0].to_dict() if not matches.empty else None
 
     def delete_quota_transaction(self, transaction_id: str) -> bool:
+        if "RELATED_TRANSACTION_ID" in self._quota_transactions and bool(
+            (self._quota_transactions["RELATED_TRANSACTION_ID"] == transaction_id).any()
+        ):
+            raise ValueError("Quota Transaction cannot be deleted while another transaction references it.")
         before = len(self._quota_transactions)
         self._quota_transactions = self._quota_transactions[
             self._quota_transactions["QUOTA_TRANSACTION_ID"] != transaction_id
@@ -504,21 +458,7 @@ class MockRepository(BaseRepository):
         errors = validate_salmonella_test(self, record)
         if errors:
             raise ValueError(" ".join(errors))
-        test_id = record.get("SALMONELLA_TEST_ID") or str(uuid.uuid4())
-        stored = dict(record, SALMONELLA_TEST_ID=test_id, UPDATED_AT=dt.datetime.now())
-        idx = self._salmonella_tests[
-            self._salmonella_tests["SALMONELLA_TEST_ID"] == test_id
-        ].index
-        if len(idx):
-            for column, value in stored.items():
-                if column in self._salmonella_tests.columns:
-                    self._salmonella_tests.loc[idx[0], column] = value
-        else:
-            stored.setdefault("CREATED_AT", dt.datetime.now())
-            self._salmonella_tests = pd.concat(
-                [self._salmonella_tests, pd.DataFrame([stored])], ignore_index=True
-            )
-        return test_id
+        return self._upsert_frame("_salmonella_tests", "SALMONELLA_TEST_ID", record)
 
     def delete_salmonella_test(self, test_id: str) -> bool:
         before = len(self._salmonella_tests)

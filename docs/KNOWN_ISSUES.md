@@ -7,5 +7,8 @@
 - Authentication, role authorization and durable user identity are deployment work.
 - Deletion blocks referenced records. Final soft-delete and retention rules require business/Dataverse decisions.
 - Sample-level Salmonella fields and final quota rules require authoritative metadata.
-- Optimistic locking currently covers only Account edits. Facilities, Flocks, Quotas and Salmonella upserts still last-write-wins; extend the `EXPECTED_UPDATED_AT` pattern to them next.
-- The Snowflake optimistic-lock clause is verified only by SQL-shape unit tests with a stubbed cursor; it needs validation against a real DEV account (`UPDATED_AT` column present and populated on every CORE table).
+- Optimistic locking is implemented for current editable business entities, including the dedicated Facility Detail workspace. Real multi-session behavior still requires Snowflake DEV validation.
+- Snowflake optimistic locking and Snowpark affected-row parsing require validation against a real DEV account with populated `UPDATED_AT` columns.
+- Streamlit named-connection, active warehouse session, connector SSO and key-pair paths are implemented but still require deployment-specific validation.
+- Snowpark bulk writes use bounded multi-row `VALUES` statements. Real DEV testing must establish safe batch sizes for actual row widths and warehouse limits.
+- Quota and Facility Detail fields, choices and requiredness remain provisional pending EIMS metadata, although their list/new/detail/edit workflows are implemented.

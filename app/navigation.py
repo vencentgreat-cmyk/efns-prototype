@@ -29,12 +29,15 @@ def read_record_view() -> RecordView:
     return RecordView(name, str(record_id) if record_id else None)
 
 
-def open_view(name: str, record_id: str | None = None) -> None:
+def open_view(name: str, record_id: str | None = None, **parameters) -> None:
     """Navigate within the current module and preserve the state on refresh."""
     st.query_params.clear()
     st.query_params["view"] = name if name in VALID_VIEWS else "list"
     if record_id:
         st.query_params["id"] = str(record_id)
+    for key, value in parameters.items():
+        if value is not None and value != "":
+            st.query_params[key] = str(value)
     st.rerun()
 
 
@@ -63,6 +66,30 @@ def module_url(page_slug: str, record_id: str, label: str) -> str:
     query = urlencode({"view": "detail", "id": str(record_id)})
     display_label = str(label or record_id).replace("#", " ")
     return urlunsplit((parsed.scheme, parsed.netloc, path, query, display_label))
+
+
+def module_view_url(page_slug: str, view: str, record_id: str | None = None, **parameters) -> str:
+    """Build an absolute list/new/detail/edit URL for another module."""
+    raw_url = str(getattr(st.context, "url", "") or "http://localhost:8501")
+    parsed = urlsplit(raw_url)
+    if not parsed.scheme or not parsed.netloc:
+        parsed = urlsplit("http://localhost:8501")
+    query = {"view": view if view in VALID_VIEWS else "list"}
+    if record_id:
+        query["id"] = str(record_id)
+    query.update({key: str(value) for key, value in parameters.items() if value is not None and value != ""})
+    return urlunsplit((parsed.scheme, parsed.netloc, f"/{quote(page_slug, safe='_&-')}", urlencode(query), ""))
+
+
+def ensure_record_form_state(prefix: str, record_id: str | None) -> None:
+    """Discard widget values when a form starts editing a different record."""
+    marker = f"{prefix}loaded_record_id"
+    identity = str(record_id or "__new__")
+    if st.session_state.get(marker) != identity:
+        clear_keys = [key for key in st.session_state if key.startswith(prefix)]
+        for key in clear_keys:
+            st.session_state.pop(key, None)
+        st.session_state[marker] = identity
 
 
 def format_timestamp(value) -> str:
@@ -99,6 +126,8 @@ def record_command_bar(prefix: str, view: str, allow_delete: bool = True) -> str
             action = "back"
         if view == "detail" and st.button("Edit", icon=":material/edit:", type="primary", key=f"{prefix}_edit"):
             action = "edit"
+        if view == "detail" and st.button("Refresh", icon=":material/refresh:", key=f"{prefix}_refresh"):
+            action = "refresh"
         if view in {"new", "edit"}:
             if st.button("Save", icon=":material/save:", type="primary", key=f"{prefix}_save"):
                 action = "save"

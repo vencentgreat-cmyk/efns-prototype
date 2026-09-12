@@ -3,9 +3,10 @@ import datetime as dt
 import streamlit as st
 
 from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
-from app.ui import apply_theme, clear_widget_prefix, page_header
+from app.ui import apply_theme, clear_widget_prefix, page_header, show_data_error
 from data.constants import FLOCK_TRANSACTION_TYPES
 from data.repositories import get_repository
+from data.repositories.base import RepositoryError
 
 apply_theme()
 if "repo" not in st.session_state:
@@ -40,6 +41,7 @@ if view.name == "list":
     if keyword: display = display[display[["FLOCK_NUMBER", "TRANSACTION_TYPE", "NOTES"]].fillna("").astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)]
     if flock_filter != "All": display = display[display["FLOCK_ID"] == flock_options[flock_filter]]
     if type_filter != "All": display = display[display["TRANSACTION_TYPE"] == type_filter]
+    st.caption(f"{len(display):,} flock transaction(s)")
     if display.empty: st.info("No Flock Transactions match the current filters.")
     else:
         display = display.reset_index(drop=True); st.session_state.flock_tx_row_ids = display["FLOCK_TRANSACTION_ID"].tolist()
@@ -54,7 +56,9 @@ else:
     action = record_command_bar("flock_tx_record", view.name)
     if action in {"back", "cancel"}: open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "edit": clear_widget_prefix("flock_tx_form_"); open_view("edit", view.record_id)
-    if action == "delete": repo.delete_flock_transaction(view.record_id); open_view("list")
+    if action == "delete":
+        try: repo.delete_flock_transaction(view.record_id); open_view("list")
+        except (ValueError, RepositoryError) as exc: show_data_error(exc)
     if not is_form:
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
         summary, related = st.tabs(["Summary", "Related Records"])
@@ -69,6 +73,9 @@ else:
             st.link_button("Open related Flock", module_url("Flocks", current["FLOCK_ID"], flock_names.get(current["FLOCK_ID"], "Flock")), icon=":material/open_in_new:")
     else:
         current = current or {}
+        expected_key = f"flock_tx_form_expected_{view.record_id}"
+        if view.name == "edit" and view.record_id:
+            st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
         with st.container(border=True):
             flock_label = st.selectbox("Flock *", list(flock_options), index=option_index(list(flock_options), label_for_id(flock_options, current.get("FLOCK_ID"))), key="flock_tx_form_flock")
             transaction_type = st.selectbox("Transaction Type *", FLOCK_TRANSACTION_TYPES, index=option_index(list(FLOCK_TRANSACTION_TYPES), current.get("TRANSACTION_TYPE")), key="flock_tx_form_type")
@@ -78,5 +85,6 @@ else:
         if action == "save":
             record = {"FLOCK_TRANSACTION_ID": view.record_id, "FLOCK_ID": flock_options[flock_label], "TRANSACTION_TYPE": transaction_type, "QUANTITY": quantity, "TRANSACTION_DATE": transaction_date, "NOTES": notes or None}
             if not view.record_id: record.pop("FLOCK_TRANSACTION_ID")
+            else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
             try: saved_id = repo.upsert_flock_transaction(record); clear_widget_prefix("flock_tx_form_"); open_view("detail", saved_id)
-            except ValueError as exc: st.error(str(exc))
+            except (ValueError, RepositoryError) as exc: show_data_error(exc)

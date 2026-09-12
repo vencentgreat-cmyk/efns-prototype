@@ -28,12 +28,14 @@ Open http://localhost:8501 in a browser.
 | Logical data model (ACCOUNT, FACILITY, FLOCK, PRODUCTION) | PROVISIONAL |
 | EIMS workbook ingestion (RAW → normalized union model) | Working (mock) |
 | Production data search/filter | Working |
-| Accounts/Facilities/Facility Details CRUD | Working |
-| Flock, transaction, Quota and Salmonella workspaces | Working (provisional rules) |
+| Accounts/Facilities/Facility Details record workflows | Working |
+| Flock, transaction, Quota and Salmonella record workflows | Working (provisional rules) |
 | Customizable report builder with CSV & Excel export | Working |
 | Snowflake SQL (schemas: RAW, CORE, REPORTING) | Provisional DEV definitions; not executed |
 | Synthetic data generator (deterministic, seeded) | Working |
-| Modular repository pattern (Mock ↔ Snowflake) | Parameterized CRUD/import adapter; integration pending |
+| Modular repository pattern (Mock ↔ Snowflake) | Shared executor, parameterized CRUD/import adapter; DEV integration pending |
+| Multi-user edit protection | Account, Facility, Facility Detail, Flock, transactions, Quota and Salmonella |
+| System diagnostics | User-triggered, credential-safe status page |
 
 ---
 
@@ -55,6 +57,7 @@ efns-prototype/
 │
 ├── data/
 │   ├── constants.py              # EIMS import constants and mappings
+│   ├── connection.py             # Lazy Snowpark/connector execution boundary
 │   ├── importing.py              # Workbook read/normalize/validate helpers
 │   ├── repositories/
 │   │   ├── __init__.py           # Factory: get_repository()
@@ -100,9 +103,26 @@ efns-prototype/
 The UI talks to `BaseRepository`. Two implementations:
 
 - **MockRepository** — in-memory pandas DataFrames. Used for local development.
-- **SnowflakeRepository** — connects to Snowflake. Stub in v0.1, ready to expand.
+- **SnowflakeRepository** — parameterized CRUD, filtered reads, protected updates,
+  deletion checks and atomic imports through a shared SQL executor.
 
 Set `REPOSITORY_MODE=snowflake` in `.env` to switch (requires credentials).
+
+Snowflake runtime selection is lazy and ordered: Streamlit named connection,
+active warehouse Snowpark session, then Python connector. See
+`docs/CONNECTION_ARCHITECTURE.md` for authentication and deployment details.
+
+### Configuration and deployment
+
+- Local mock: keep `REPOSITORY_MODE=mock`; data lasts for the Streamlit session.
+- Local Streamlit: prefer a named Streamlit connection or SSO/external browser.
+- Warehouse runtime: use the supported Streamlit connection; active Snowpark
+  session is retained as a compatibility route.
+- Container runtime: inject connector configuration with the platform secret
+  manager. Do not copy `.env`, `secrets.toml`, tokens, or private keys into an image.
+
+Use `.env.example` and `snowflake.yml.example` only as templates. The System
+Status page opens no connection until the user explicitly runs diagnostics.
 
 ### Data Flow
 
@@ -146,7 +166,7 @@ See `docs/DATAVERSE_DISCOVERY_CHECKLIST.md` for the full list, but key items:
 4. **Column types** — approximate; need actual Dataverse column types
 5. **Choice/option-set values** — statuses, roles, types are educated guesses
 6. **Required vs optional** — not yet confirmed
-7. **Business rules** — data validation, quotas, Salmonella testing logic is not implemented
+7. **Business rules** — current validation, quota and Salmonella rules remain provisional
 8. **Production-to-flock link** — FLOCK_ID on PRODUCTION_RECORD is a fabricated provisional key
 
 ### Production Pipeline Context

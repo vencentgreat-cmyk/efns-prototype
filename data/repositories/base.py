@@ -14,6 +14,14 @@ class RepositoryError(Exception):
     pass
 
 
+class RepositoryConfigurationError(RepositoryError):
+    """Raised when a persistent repository is not configured for use."""
+
+
+class RepositoryConnectionError(RepositoryError):
+    """Raised when a configured data service cannot be reached safely."""
+
+
 class ConcurrencyError(RepositoryError):
     """Raised when a record changed since the editor last loaded it.
 
@@ -80,7 +88,15 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
+    def get_facility_detail(self, detail_id: str) -> Optional[dict]:
+        ...
+
+    @abstractmethod
     def upsert_facility_detail(self, record: dict) -> str:
+        ...
+
+    @abstractmethod
+    def delete_facility_detail(self, detail_id: str) -> bool:
         ...
 
     # ------------------------------------------------------------------
@@ -154,6 +170,10 @@ class BaseRepository(ABC):
         date_from=None,
         date_to=None,
     ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def get_quota_transaction(self, transaction_id: str) -> Optional[dict]:
         ...
 
     @abstractmethod

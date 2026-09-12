@@ -7,7 +7,8 @@ import io
 
 import streamlit as st
 
-from app.ui import apply_theme, page_header, section_intro
+from app.ui import apply_theme, page_header, section_intro, show_data_error
+from data.repositories.base import RepositoryError
 from data.constants import EIMS_WORKSHEET_NAME
 from data.importing import (
     build_raw_rows,
@@ -179,5 +180,7 @@ with st.container(border=True):
             )
             st.success(f"Imported {imported_count} production records.")
             st.code(import_id, language=None)
-        except Exception as exc:
-            st.error(f"Import failed: {exc}")
+        except RepositoryError as exc:
+            show_data_error(exc)
+        except Exception:
+            st.error("Import failed while processing the validated data.")
