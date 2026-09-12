@@ -24,6 +24,63 @@ Params = Sequence[object] | None
 ParamRows = Iterable[Sequence[object]]
 
 
+def _rewrite_placeholders(sql: str, source: str, target: str | None = None) -> tuple[str, int]:
+    """Rewrite/count bind markers outside quoted SQL literals.
+
+    This intentionally small scanner understands Snowflake's single-quoted
+    string literals and double-quoted identifiers, including doubled quote
+    escapes. Bind-looking text inside either form is left untouched.
+    """
+    output: list[str] = []
+    count = 0
+    index = 0
+    quote: str | None = None
+    while index < len(sql):
+        char = sql[index]
+        if quote:
+            output.append(char)
+            if char == quote:
+                if index + 1 < len(sql) and sql[index + 1] == quote:
+                    output.append(sql[index + 1])
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            output.append(char)
+            index += 1
+            continue
+        if sql.startswith(source, index):
+            output.append(source if target is None else target)
+            count += 1
+            index += len(source)
+            continue
+        output.append(char)
+        index += 1
+    return "".join(output), count
+
+
+def _validated_rows(sql: str, rows: ParamRows, marker: str) -> list[tuple[object, ...]]:
+    """Materialize a row iterable once and validate its bind shape."""
+    try:
+        values = [tuple(row) for row in rows]
+    except TypeError as exc:
+        raise RepositoryError("Bulk write rows must each be a sequence of bound values.") from exc
+    if not values:
+        return []
+    _, placeholder_count = _rewrite_placeholders(sql, marker)
+    row_length = len(values[0])
+    if any(len(row) != row_length for row in values):
+        raise RepositoryError("Bulk write rows must all contain the same number of values.")
+    if row_length != placeholder_count:
+        raise RepositoryError(
+            f"Bulk write row length ({row_length}) does not match the SQL bind count ({placeholder_count})."
+        )
+    return values
+
+
 @dataclass(frozen=True)
 class SnowflakeSettings:
     connection_name: str | None
@@ -168,7 +225,7 @@ class ConnectorExecutor(SqlExecutor):
 
     def executemany(self, sql: str, rows: ParamRows, *, batch_size: int = 500) -> int:
         del batch_size
-        values = list(rows)
+        values = _validated_rows(sql, rows, "%s")
         if not values:
             return 0
         with self._cursor() as cursor:
@@ -179,12 +236,16 @@ class ConnectorExecutor(SqlExecutor):
     def commit(self) -> None:
         try:
             self._connect().commit()
+        except RepositoryError:
+            raise
         except Exception as exc:
             raise RepositoryError("Snowflake could not commit the transaction.") from exc
 
     def rollback(self) -> None:
         try:
             self._connect().rollback()
+        except RepositoryError:
+            raise
         except Exception as exc:
             raise RepositoryError("Snowflake could not roll back the transaction.") from exc
 
@@ -201,7 +262,7 @@ class ConnectorExecutor(SqlExecutor):
 
 
 def _qmark(sql: str) -> str:
-    return sql.replace("%s", "?")
+    return _rewrite_placeholders(sql, "%s", "?")[0]
 
 
 def _affected_rows(rows: list[object]) -> int:
@@ -231,6 +292,8 @@ class SnowparkExecutor(SqlExecutor):
     def _collect(self, sql: str, params: Params = None) -> list:
         try:
             return list(self.session.sql(_qmark(sql), params=list(params or ())).collect())
+        except RepositoryError:
+            raise
         except Exception as exc:
             raise RepositoryError(
                 "Snowflake operation failed. Check SQL compatibility and assigned privileges."
@@ -241,6 +304,8 @@ class SnowparkExecutor(SqlExecutor):
             statement = self.session.sql(_qmark(sql), params=list(params or ()))
             rows = list(statement.collect())
             columns = [field.name for field in statement.schema.fields]
+        except RepositoryError:
+            raise
         except Exception as exc:
             raise RepositoryError(
                 "Snowflake operation failed. Check SQL compatibility and assigned privileges."
@@ -254,10 +319,13 @@ class SnowparkExecutor(SqlExecutor):
         return _affected_rows(self._collect(sql, params))
 
     def executemany(self, sql: str, rows: ParamRows, *, batch_size: int = 500) -> int:
-        values = list(rows)
+        if batch_size < 1:
+            raise RepositoryError("Snowpark bulk-write batch size must be at least one.")
+        qmark_sql = _qmark(sql)
+        values = _validated_rows(qmark_sql, rows, "?")
         if not values:
             return 0
-        match = self._VALUES.match(sql.strip())
+        match = self._VALUES.match(qmark_sql.strip())
         if not match:
             raise RepositoryError(
                 "Snowpark bulk writes require an INSERT statement with a VALUES clause; row-by-row fallback is disabled."

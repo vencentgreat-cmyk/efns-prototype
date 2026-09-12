@@ -9,6 +9,8 @@
 - A shared, lazy `SqlExecutor` boundary with Streamlit connection, active Snowpark session and connector runtimes. Snowpark uses public session APIs and bounded multi-row inserts.
 - Optimistic locking for Account, Facility, Facility Detail, Flock, Flock Transaction, Quota Registration, Quota Transaction and Salmonella Test upserts. Both repositories consume `EXPECTED_UPDATED_AT`; stale edits raise `ConcurrencyError`.
 - A System Status page with repository/runtime/configuration state and an explicit read-only connection check.
+- A schema-agnostic Source Data Profiler for in-memory CSV/XLSX/XLSM inspection, heuristic key/relationship suggestions, and profile-only CSV/Excel exports.
+- Offline executor coverage for runtime selection, settings, transactions, affected-row parsing and validated Connector/Snowpark bulk writes.
 - Provisional DEV SQL for RAW, CORE and REPORTING standard tables/views.
 - Automated pytest workflow for pushes and pull requests.
 
