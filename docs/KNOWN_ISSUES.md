@@ -12,3 +12,4 @@
 - Streamlit named-connection, active warehouse session, connector SSO and key-pair paths are implemented but still require deployment-specific validation.
 - Snowpark bulk writes use bounded multi-row `VALUES` statements. Real DEV testing must establish safe batch sizes for actual row widths and warehouse limits.
 - Quota and Facility Detail fields, choices and requiredness remain provisional pending EIMS metadata, although their list/new/detail/edit workflows are implemented.
+- Source profiling is advisory and processes all selected worksheets in application memory; authoritative types, keys and relationships require EIMS metadata confirmation.

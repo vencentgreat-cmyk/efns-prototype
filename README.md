@@ -36,6 +36,7 @@ Open http://localhost:8501 in a browser.
 | Modular repository pattern (Mock ↔ Snowflake) | Shared executor, parameterized CRUD/import adapter; DEV integration pending |
 | Multi-user edit protection | Account, Facility, Facility Detail, Flock, transactions, Quota and Salmonella |
 | System diagnostics | User-triggered, credential-safe status page |
+| Schema-agnostic source profiling | In-memory CSV/XLSX/XLSM profiling and profile-only exports |
 
 ---
 
@@ -50,15 +51,18 @@ efns-prototype/
 │   │   ├── 1_Production_Import.py
 │   │   ├── 2_Production_Data.py
 │   │   ├── 3_Accounts_Facilities_Flocks.py
-│   │   └── 4_Reports.py
+│   │   ├── 4_Reports.py
+│   │   └── 14_Source_Data_Profiler.py
 │   └── services/
 │       ├── export.py             # Spreadsheet-safe exports
+│       ├── profiling_export.py   # Profile-only CSV/Excel exports
 │       └── report_builder.py     # Dynamic report assembly
 │
 ├── data/
 │   ├── constants.py              # EIMS import constants and mappings
 │   ├── connection.py             # Lazy Snowpark/connector execution boundary
 │   ├── importing.py              # Workbook read/normalize/validate helpers
+│   ├── profiling.py              # Pure in-memory tabular profiler
 │   ├── repositories/
 │   │   ├── __init__.py           # Factory: get_repository()
 │   │   ├── base.py               # Abstract BaseRepository
@@ -82,11 +86,15 @@ efns-prototype/
 │   ├── ASSUMPTIONS_AND_GAPS.md
 │   ├── TARGET_MODEL_DRAFT.md
 │   ├── DATA_DICTIONARY.md
+│   ├── eims_metadata_meeting_checklist.md
+│   ├── source_to_target_mapping_template.csv
 │   └── DATAVERSE_TO_TARGET_MAPPING.csv
 │
 ├── tests/
 │   ├── test_phase1_2_regressions.py
 │   ├── test_phase1_domain.py
+│   ├── test_connection.py
+│   ├── test_profiling.py
 │   └── test_synthetic.py
 │
 ├── requirements.txt
@@ -111,6 +119,16 @@ Set `REPOSITORY_MODE=snowflake` in `.env` to switch (requires credentials).
 Snowflake runtime selection is lazy and ordered: Streamlit named connection,
 active warehouse Snowpark session, then Python connector. See
 `docs/CONNECTION_ARCHITECTURE.md` for authentication and deployment details.
+
+The declared Streamlit floor is `1.63.0`, the version verified in the project
+environment with `st.context`, horizontal containers and Material button icons.
+
+### Source Data Profiler
+
+The Administration profiler reads CSV, XLSX and XLSM source files in memory,
+profiles every worksheet, and suggests possible keys and relationship-shaped
+columns. Suggestions are advisory and contain no EIMS mappings. Downloads contain
+profile summaries and limited sample values rather than the complete source data.
 
 ### Configuration and deployment
 

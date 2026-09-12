@@ -198,6 +198,7 @@ navigation = st.navigation(
         ],
         "Administration": [
             st.Page("pages/12_System_Status.py", title="System Status", icon=":material/settings:"),
+            st.Page("pages/14_Source_Data_Profiler.py", title="Source Data Profiler", icon=":material/find_in_page:"),
         ],
     }
 )
