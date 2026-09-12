@@ -6,12 +6,28 @@ import html
 
 import streamlit as st
 
+from data.repositories.base import ConcurrencyError, RepositoryConfigurationError, RepositoryConnectionError, RepositoryError
+
 
 def clear_widget_prefix(prefix: str, keep: tuple[str, ...] = ()) -> None:
     """Clear dependent widgets after an edit-record selector changes."""
     for key in list(st.session_state):
         if key.startswith(prefix) and key not in keep:
             st.session_state.pop(key, None)
+
+
+def show_data_error(error: Exception) -> None:
+    """Render repository failures without exposing SQL or connection details."""
+    if isinstance(error, ConcurrencyError):
+        st.warning("This record has changed. Reload the record before saving your changes again.")
+    elif isinstance(error, RepositoryConfigurationError):
+        st.error("Snowflake is not configured. Review System Status and the deployment settings.")
+    elif isinstance(error, RepositoryConnectionError):
+        st.error("Snowflake could not be reached. Check connection settings, network access, and permissions.")
+    elif isinstance(error, RepositoryError):
+        st.error(str(error) or "The data operation could not be completed.")
+    else:
+        st.error(str(error))
 
 
 def apply_theme() -> None:

@@ -7,9 +7,10 @@ import pandas as pd
 import streamlit as st
 
 from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
-from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro
+from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import SALMONELLA_RESULTS, UNASSIGNED_LABEL
 from data.repositories import get_repository
+from data.repositories.base import RepositoryError
 from data.validation import validate_salmonella_test
 
 apply_theme()
@@ -57,7 +58,7 @@ if view.name == "list":
                     try:
                         repo.delete_salmonella_test(pending_delete)
                         st.session_state.pop("salmonella_delete_pending", None); st.rerun()
-                    except ValueError as exc: st.error(str(exc))
+                    except (ValueError, RepositoryError) as exc: show_data_error(exc)
                 if st.button("Cancel", key="salmonella_cancel_delete"):
                     st.session_state.pop("salmonella_delete_pending", None); st.rerun()
     filters = st.columns([2, 1, 1])
@@ -76,6 +77,7 @@ if view.name == "list":
             display = display[display[cols].fillna("").astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)]
         if result_filter != "All": display = display[display["TEST_RESULT"] == result_filter]
         if account_filter != "All": display = display[display["ACCOUNT_ID"] == account_options[account_filter]]
+    st.caption(f"{len(display):,} Salmonella test record(s)")
     if display.empty:
         st.info("No Salmonella Tests match the current filters.")
     else:
@@ -127,6 +129,9 @@ else:
             else: st.dataframe(sample_rows, width="stretch", hide_index=True)
     else:
         current = current or {}
+        expected_key = f"salmonella_form_expected_{view.record_id}"
+        if view.name == "edit" and view.record_id:
+            st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
         if not flock_options:
             st.error("Create a Flock before creating a Salmonella Test."); st.stop()
         with st.container(border=True):
@@ -152,6 +157,7 @@ else:
         if action == "save":
             record = {"SALMONELLA_TEST_ID": view.record_id, "FLOCK_ID": flock["FLOCK_ID"], "ACCOUNT_ID": flock["ACCOUNT_ID"], "PERMIT_NUMBER": flock["PERMIT_NUMBER"], "TESTING_DATE": testing_date, "INSPECTOR": inspector or None, "NUMBER_OF_SAMPLES": samples, "TEST_RESULT": result, "DATE_RECEIVED": received, "DATE_RESULT_SENT": result_sent, "CASE_FILE_NUMBER": case_number or None, "INVOICE_NUMBER": invoice_number or None, "INVOICE_DATE": invoice_date, "COMMENTS": comments or None}
             if not view.record_id: record.pop("SALMONELLA_TEST_ID")
+            else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
             errors = validate_salmonella_test(repo, record)
             if errors:
                 for error in errors: st.error(error)
@@ -159,4 +165,4 @@ else:
                 try:
                     saved_id = repo.upsert_salmonella_test(record)
                     clear_widget_prefix("salmonella_form_"); open_view("detail", saved_id)
-                except ValueError as exc: st.error(str(exc))
+                except (ValueError, RepositoryError) as exc: show_data_error(exc)

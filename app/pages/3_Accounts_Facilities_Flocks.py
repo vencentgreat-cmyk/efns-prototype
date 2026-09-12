@@ -15,7 +15,7 @@ from app.navigation import (
     record_command_bar,
     selected_row_index,
 )
-from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro
+from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import ACCOUNT_STATUSES
 from data.repositories import get_repository
 from data.repositories.base import RepositoryError
@@ -95,8 +95,8 @@ if view.name == "list":
                             repo.delete_account(pending_delete)
                             st.session_state.pop("account_delete_pending", None)
                             st.rerun()
-                        except ValueError as exc:
-                            st.error(str(exc))
+                        except (ValueError, RepositoryError) as exc:
+                            show_data_error(exc)
                     if st.button("Cancel", key="account_cancel_delete"):
                         st.session_state.pop("account_delete_pending", None)
                         st.rerun()
@@ -173,8 +173,8 @@ else:
                         repo.delete_account(view.record_id)
                         st.session_state.pop("account_record_delete_pending", None)
                         open_view("list")
-                    except ValueError as exc:
-                        st.error(str(exc))
+                    except (ValueError, RepositoryError) as exc:
+                        show_data_error(exc)
                 if st.button("Keep Account", key="account_record_keep"):
                     st.session_state.pop("account_record_delete_pending", None)
                     st.rerun()
@@ -222,7 +222,7 @@ else:
                 flock_transactions = flock_transactions[flock_transactions["FLOCK_ID"].isin(flock_ids)]
             related = (
                 ("Facilities", facilities, "FACILITY_ID", "FACILITY_NAME", "Facilities"),
-                ("Facility Details", facility_details, "FACILITY_ID", "DETAIL_NAME", "Facilities"),
+                ("Facility Details", facility_details, "FACILITY_DETAIL_ID", "DETAIL_NAME", "Facility_Details"),
                 ("Flocks", flocks, "FLOCK_ID", "FLOCK_NUMBER", "Flocks"),
                 ("Flock Transactions", flock_transactions, "FLOCK_TRANSACTION_ID", "TRANSACTION_TYPE", "Flock_Transactions"),
                 ("Quota Registrations", repo.get_quota_registrations(account_id=view.record_id), "QUOTA_ID", "QUOTA_NAME", "Quota_Registrations"),
@@ -346,4 +346,4 @@ else:
                     clear_widget_prefix("account_form_")
                     open_view("detail", saved_id)
                 except (ValueError, RepositoryError) as exc:
-                    st.error(str(exc))
+                    show_data_error(exc)

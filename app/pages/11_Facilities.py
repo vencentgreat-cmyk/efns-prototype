@@ -7,8 +7,9 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 
-from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
-from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro
+from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, module_view_url, open_view, read_record_view, record_command_bar, selected_row_index
+from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
+from data.repositories.base import RepositoryError
 from data.constants import FACILITY_STATUSES
 from data.repositories import get_repository
 
@@ -55,7 +56,7 @@ if view.name == "list":
                     try:
                         repo.delete_facility(st.session_state.facility_delete_pending)
                         st.session_state.pop("facility_delete_pending", None); st.rerun()
-                    except ValueError as exc: st.error(str(exc))
+                    except (ValueError, RepositoryError) as exc: show_data_error(exc)
                 if st.button("Cancel", key="facility_cancel_delete"):
                     st.session_state.pop("facility_delete_pending", None); st.rerun()
     filters = st.columns([2, 1, 1])
@@ -68,6 +69,7 @@ if view.name == "list":
         display = display[display[["FACILITY_NAME", "ACCOUNT_NAME"]].fillna("").astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)]
     if status != "All": display = display[display["STATUS"] == status]
     if facility_type != "All": display = display[display["FACILITY_TYPE"] == facility_type]
+    st.caption(f"{len(display):,} facility record(s)")
     if display.empty:
         st.info("No Facilities match the current filters.")
     else:
@@ -89,7 +91,7 @@ else:
     if action == "edit": clear_widget_prefix("facility_form_"); open_view("edit", view.record_id)
     if action == "delete" and view.record_id:
         try: repo.delete_facility(view.record_id); open_view("list")
-        except ValueError as exc: st.error(str(exc))
+        except (ValueError, RepositoryError) as exc: show_data_error(exc)
     if not is_form:
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
         summary, related = st.tabs(["Summary", "Related Records"])
@@ -103,8 +105,9 @@ else:
                 right.markdown(f"**Activation Date**  \n{current.get('ACTIVATION_DATE') or '—'}")
                 right.markdown(f"**Closure Date**  \n{current.get('CLOSURE_DATE') or '—'}")
         with related:
+            st.link_button("New Facility Detail", module_view_url("Facility_Details", "new", facility_id=view.record_id), icon=":material/add:", type="primary")
             for heading, frame, key, label, slug in (
-                ("Facility Details", repo.get_facility_details(view.record_id), "FACILITY_ID", "DETAIL_NAME", "Facilities"),
+                ("Facility Details", repo.get_facility_details(view.record_id), "FACILITY_DETAIL_ID", "DETAIL_NAME", "Facility_Details"),
                 ("Flocks", repo.get_flocks(facility_id=view.record_id), "FLOCK_ID", "FLOCK_NUMBER", "Flocks"),
                 ("Salmonella Tests", repo.get_salmonella_tests(facility_id=view.record_id), "SALMONELLA_TEST_ID", "PERMIT_NUMBER", "Salmonella_Tests"),
             ):
@@ -116,6 +119,9 @@ else:
                     st.dataframe(frame[["RECORD_LINK", *columns]], width="stretch", hide_index=True, column_config={"RECORD_LINK": st.column_config.LinkColumn("Record", display_text=r".*#(.*)$")})
     else:
         current = current or {}
+        expected_key = f"facility_form_expected_{view.record_id}"
+        if view.name == "edit" and view.record_id:
+            st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
         with st.container(border=True):
             left, right = st.columns(2)
             facility_name = left.text_input("Facility Name *", value=str(current.get("FACILITY_NAME") or ""), key="facility_form_name")
@@ -131,4 +137,7 @@ else:
             else:
                 record = {"FACILITY_ID": view.record_id, "FACILITY_NAME": facility_name.strip(), "ACCOUNT_ID": account_options[account_label], "FACILITY_TYPE": facility_type, "STATUS": status, "ACTIVATION_DATE": activation, "CONSTRUCTION_DATE": construction, "CLOSURE_DATE": closure, "INACTIVE_DATE": inactive}
                 if not view.record_id: record.pop("FACILITY_ID")
-                saved_id = repo.upsert_facility(record); clear_widget_prefix("facility_form_"); open_view("detail", saved_id)
+                else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
+                try:
+                    saved_id = repo.upsert_facility(record); clear_widget_prefix("facility_form_"); open_view("detail", saved_id)
+                except (ValueError, RepositoryError) as exc: show_data_error(exc)

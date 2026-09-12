@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from app.ui import apply_theme, page_header, section_intro
+from app.ui import apply_theme, page_header, section_intro, show_data_error
+from data.connection import LazySqlExecutor
 from data.repositories import get_repository
 
 
@@ -23,7 +24,6 @@ if "repo" not in st.session_state:
 def dashboard() -> None:
     apply_theme()
     repo = st.session_state.repo
-    operations = repo.get_dashboard_metrics()
     page_header(
         "Operations Dashboard",
         "A structured view of accounts, flocks, production activity, and recent imports.",
@@ -35,6 +35,25 @@ def dashboard() -> None:
         f'<div class="efns-repository">Active repository: <strong>{repository_name}</strong></div>',
         unsafe_allow_html=True,
     )
+
+    executor = getattr(repo, "executor", None)
+    snowflake_not_connected = (
+        repository_name == "Snowflake"
+        and isinstance(executor, LazySqlExecutor)
+        and not executor.is_resolved
+    )
+    if snowflake_not_connected and not st.button(
+        "Load Snowflake dashboard",
+        icon=":material/cloud_sync:",
+        type="primary",
+    ):
+        st.info("Snowflake has not been contacted. Open System Status to check the connection, or load dashboard data explicitly.")
+        return
+    try:
+        operations = repo.get_dashboard_metrics()
+    except Exception as exc:
+        show_data_error(exc)
+        return
 
     section_intro("Operational overview", "Current session counts from public repository queries.")
     cols = st.columns(4)
@@ -154,6 +173,11 @@ navigation = st.navigation(
                 title="Facilities",
                 icon=":material/domain:",
             ),
+            st.Page(
+                "pages/13_Facility_Details.py",
+                title="Facility Details",
+                icon=":material/home_work:",
+            ),
         ],
         "Flock Management": [
             st.Page("pages/5_Flocks.py", title="Flocks", icon=":material/egg:"),
@@ -172,6 +196,9 @@ navigation = st.navigation(
             ),
             st.Page("pages/10_Salmonella_Report.py", title="Salmonella Test Report", icon=":material/lab_profile:"),
         ],
+        "Administration": [
+            st.Page("pages/12_System_Status.py", title="System Status", icon=":material/settings:"),
+        ],
     }
 )
 
@@ -181,6 +208,13 @@ with st.sidebar:
         f'<div class="efns-repository">Repository: <strong>{repository_name}</strong></div>',
         unsafe_allow_html=True,
     )
+
+    if repository_name == "Mock":
+        st.caption("Runtime: Local Streamlit")
+        st.warning("Mock data is stored only in this browser session.")
+    else:
+        runtime_name = getattr(st.session_state.repo, "runtime_name", "Auto-detect")
+        st.caption(f"Runtime: {runtime_name}")
     st.markdown('<span class="efns-status">PROVISIONAL MODEL</span>', unsafe_allow_html=True)
 
 navigation.run()

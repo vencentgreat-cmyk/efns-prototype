@@ -8,9 +8,10 @@ import pandas as pd
 import streamlit as st
 
 from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
-from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro
+from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import EGG_COLOURS, FLOCK_QUOTA_TYPES, FLOCK_STATUSES, UNASSIGNED_LABEL
 from data.repositories import get_repository
+from data.repositories.base import RepositoryError
 from data.validation import validate_flock
 
 
@@ -52,7 +53,7 @@ if view.name == "list":
                     try:
                         repo.delete_flock(st.session_state.flock_delete_pending)
                         st.session_state.pop("flock_delete_pending", None); st.rerun()
-                    except ValueError as exc: st.error(str(exc))
+                    except (ValueError, RepositoryError) as exc: show_data_error(exc)
                 if st.button("Cancel", key="flock_cancel_delete"):
                     st.session_state.pop("flock_delete_pending", None); st.rerun()
     filters = st.columns([2, 1, 1, 1])
@@ -66,6 +67,7 @@ if view.name == "list":
     if account_filter != "All": display = display[display["ACCOUNT_ID"] == account_options[account_filter]]
     if status_filter != "All": display = display[display["STATUS"] == status_filter]
     if colour_filter != "All": display = display[display["EGG_COLOUR"] == colour_filter]
+    st.caption(f"{len(display):,} flock record(s)")
     if display.empty:
         st.info("No Flocks match the current filters.")
     else:
@@ -88,7 +90,7 @@ else:
     if action == "edit": clear_widget_prefix("flock_form_"); open_view("edit", view.record_id)
     if action == "delete" and view.record_id:
         try: repo.delete_flock(view.record_id); open_view("list")
-        except ValueError as exc: st.error(str(exc))
+        except (ValueError, RepositoryError) as exc: show_data_error(exc)
     if not is_form:
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
         summary, details, related = st.tabs(["Summary", "Details", "Related Records"])
@@ -124,6 +126,9 @@ else:
             else: st.dataframe(production, width="stretch", hide_index=True)
     else:
         current = current or {}
+        expected_key = f"flock_form_expected_{view.record_id}"
+        if view.name == "edit" and view.record_id:
+            st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
         current_account = current.get("ACCOUNT_ID")
         with st.container(border=True):
             general, lifecycle = st.tabs(["Summary & Relationships", "Flock Details"])
@@ -163,10 +168,11 @@ else:
         if action == "save":
             record = {"FLOCK_ID": view.record_id, "FLOCK_NUMBER": flock_number.strip(), "ACCOUNT_ID": account_id, "FACILITY_ID": facility_id, "FACILITY_DETAIL_ID": detail_options[detail_label], "QUOTA_ID": quota_options[quota_label], "FLOCK_QUOTA_TYPE": quota_type, "STATUS": status, "CREATE_DELIVERY_TRANSACTION": create_delivery, "PERMIT_NUMBER": permit_number.strip(), "PERMIT_DATE": permit_date, "HATCH_DATE": hatch_date, "DATE_ORDERED": ordered_date, "BIRD_COUNT": bird_count, "EGG_COLOUR": egg_colour, "BIRD_STRAIN": bird_strain or None, "PLACEMENT_DATE": placement_date, "EST_DISPOSAL": estimated_disposal, "DISPOSAL_DATE": disposal_date, "BIRDS_DISPOSED": birds_disposed, "COMMENTS": comments or None}
             if not view.record_id: record.pop("FLOCK_ID")
+            else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
             errors = validate_flock(repo, record)
             if errors:
                 for error in errors: st.error(error)
             else:
                 try:
                     saved_id = repo.upsert_flock(record); clear_widget_prefix("flock_form_"); open_view("detail", saved_id)
-                except ValueError as exc: st.error(str(exc))
+                except (ValueError, RepositoryError) as exc: show_data_error(exc)
