@@ -12,7 +12,7 @@ from data.repositories.base import BaseRepository, RepositoryError
 from data.validation import validate_flock, validate_quota_registration, validate_quota_transaction, validate_salmonella_test
 
 MODEL = {
- "ACCOUNT": ("ACCOUNT_ID", "REGISTRATION_NUMBER ORGANIZATION_NAME ADDRESS_LINE1 ADDRESS_LINE2 CITY PROVINCE POSTAL_CODE CONTACT_NAME CONTACT_PHONE CONTACT_EMAIL LICENCE_NUMBER PRODUCER_ROLE BREEDER_ROLE HATCHERY_ROLE GRADER_ROLE STATUS"),
+ "ACCOUNT": ("ACCOUNT_ID", "REGISTRATION_NUMBER ORGANIZATION_NAME ADDRESS_LINE1 ADDRESS_LINE2 ADDRESS_LINE3 CITY PROVINCE POSTAL_CODE COUNTRY_REGION LATITUDE LONGITUDE CONTACT_NAME CONTACT_PHONE CONTACT_EMAIL FAX WEBSITE LICENCE_NUMBER PARENT_ACCOUNT_ID GRADING_STATION_ACCOUNT_ID PULLET_GROWER_ACCOUNT_ID PROVINCE_OF_REGISTRATION SPENT_FOWL_PLANS DEFAULT_ON_REPORTS NO_SVG DESCRIPTION PRODUCER_ROLE BREEDER_ROLE HATCHERY_ROLE PULLET_GROWER_ROLE GRADER_ROLE PROCESSOR_BREAKER_ROLE DISPOSAL_PLANT_ROLE UNREGULATED_ROLE PROV_BOARD_EFC_ROLE GOVERNMENT_ROLE VENDOR_ROLE RESEARCH_EXEMPT_ROLE SHIPPER_ROLE OTHER_ROLE STATUS"),
  "FACILITY": ("FACILITY_ID", "ACCOUNT_ID FACILITY_NAME FACILITY_TYPE STATUS ACTIVATION_DATE CONSTRUCTION_DATE CLOSURE_DATE DESTRUCTION_DATE INACTIVE_DATE"),
  "FACILITY_DETAIL": ("FACILITY_DETAIL_ID", "FACILITY_ID DETAIL_NAME DETAIL_TYPE STATUS COMMENTS"),
  "FLOCK": ("FLOCK_ID", "FLOCK_NUMBER ACCOUNT_ID FACILITY_ID FACILITY_DETAIL_ID QUOTA_ID FLOCK_QUOTA_TYPE STATUS CREATE_DELIVERY_TRANSACTION PERMIT_NUMBER PERMIT_DATE HATCH_DATE DATE_ORDERED BIRD_COUNT EGG_COLOUR BIRD_STRAIN PLACEMENT_DATE EST_DISPOSAL DISPOSAL_DATE BIRDS_DISPOSED BREEDER HATCHERY PULLET_GROWER DISPOSAL_PLANT DISPOSAL_METHOD COMMENTS"),
@@ -90,8 +90,18 @@ class SnowflakeRepository(BaseRepository):
  def get_accounts(self): return self._filtered("ACCOUNT", [])
  def get_account(self, account_id): return self._one("ACCOUNT", "ACCOUNT_ID", account_id)
  def find_accounts_by_registration_number(self, registration_number): return self._query(f"SELECT * FROM {self.database}.{self.schema_core}.ACCOUNT WHERE UPPER(TRIM(REGISTRATION_NUMBER)) = UPPER(TRIM(%s))", (registration_number,))
- def upsert_account(self, record): return self._upsert("ACCOUNT", record)
- def delete_account(self, value): return self._delete("ACCOUNT", "ACCOUNT_ID", value, (("FACILITY", "ACCOUNT_ID"), ("FLOCK", "ACCOUNT_ID"), ("QUOTA_REGISTRATION", "ACCOUNT_ID"), ("SALMONELLA_TEST", "ACCOUNT_ID")))
+ def upsert_account(self, record):
+  account_id = record.get("ACCOUNT_ID")
+  registration = str(record.get("REGISTRATION_NUMBER") or "").strip()
+  if registration:
+   matches = self.find_accounts_by_registration_number(registration)
+   if not matches.empty and any(matches["ACCOUNT_ID"].astype(str) != str(account_id)):
+    raise RepositoryError("Registration Number is already used by another Account.")
+  for field in ("PARENT_ACCOUNT_ID", "GRADING_STATION_ACCOUNT_ID", "PULLET_GROWER_ACCOUNT_ID"):
+   if account_id and record.get(field) == account_id:
+    raise RepositoryError("Account cannot reference itself in an Account lookup.")
+  return self._upsert("ACCOUNT", record)
+ def delete_account(self, value): return self._delete("ACCOUNT", "ACCOUNT_ID", value, (("ACCOUNT", "PARENT_ACCOUNT_ID"), ("ACCOUNT", "GRADING_STATION_ACCOUNT_ID"), ("ACCOUNT", "PULLET_GROWER_ACCOUNT_ID"), ("FACILITY", "ACCOUNT_ID"), ("FLOCK", "ACCOUNT_ID"), ("QUOTA_REGISTRATION", "ACCOUNT_ID"), ("SALMONELLA_TEST", "ACCOUNT_ID")))
  def get_facilities(self, account_id=None): return self._filtered("FACILITY", (("ACCOUNT_ID", account_id),))
  def upsert_facility(self, record): return self._upsert("FACILITY", record)
  def delete_facility(self, value): return self._delete("FACILITY", "FACILITY_ID", value, (("FACILITY_DETAIL", "FACILITY_ID"), ("FLOCK", "FACILITY_ID")))

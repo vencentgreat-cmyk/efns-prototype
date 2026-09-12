@@ -4,7 +4,7 @@
 
 | Entity | Primary key | Required fields | Foreign keys | Main optional fields |
 |---|---|---|---|---|
-| Account | `ACCOUNT_ID` | `ORGANIZATION_NAME` | — | registration, address/contact, licence, roles, status |
+| Account | `ACCOUNT_ID` | `ORGANIZATION_NAME` | self lookups through `PARENT_ACCOUNT_ID`, `GRADING_STATION_ACCOUNT_ID`, `PULLET_GROWER_ACCOUNT_ID` | registration; email/phone/fax/website; three address lines, city, province, postal code, country, latitude/longitude; Province of Registration; Spent Fowl Plans; Default on Reports; No SVG; description; status; 14 role flags |
 | Facility | `FACILITY_ID` | account, name | Account | type, status, lifecycle dates |
 | Facility Detail | `FACILITY_DETAIL_ID` | facility, name | Facility | type, status, comments |
 | Quota Registration | `QUOTA_ID` | registration, account, type | Account | name, status, effective/end dates, comments |

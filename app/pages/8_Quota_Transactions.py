@@ -223,7 +223,7 @@ quota_account_ids = {
 # Record details from URL
 # ---------------------------------------------------------------------
 
-selected_transaction_id = st.query_params.get("transaction_id")
+selected_transaction_id = st.query_params.get("id") or st.query_params.get("transaction_id")
 
 if selected_transaction_id:
     transaction_matches = repo.get_quota_transactions()

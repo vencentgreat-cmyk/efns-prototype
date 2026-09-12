@@ -149,6 +149,11 @@ navigation = st.navigation(
                 title="Accounts & Facilities",
                 icon=":material/account_tree:",
             ),
+            st.Page(
+                "pages/11_Facilities.py",
+                title="Facilities",
+                icon=":material/domain:",
+            ),
         ],
         "Flock Management": [
             st.Page("pages/5_Flocks.py", title="Flocks", icon=":material/egg:"),
