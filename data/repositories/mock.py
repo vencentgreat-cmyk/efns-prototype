@@ -93,14 +93,34 @@ class MockRepository(BaseRepository):
         return self._accounts[matches].copy()
 
     def upsert_account(self, record: dict) -> str:
-        aid = record.get("ACCOUNT_ID", str(uuid.uuid4()))
+        aid = record.get("ACCOUNT_ID") or str(uuid.uuid4())
+        registration = str(record.get("REGISTRATION_NUMBER") or "").strip()
+        if registration:
+            duplicates = self.find_accounts_by_registration_number(registration)
+            duplicates = duplicates[duplicates["ACCOUNT_ID"] != aid]
+            if not duplicates.empty:
+                raise ValueError("Registration Number is already used by another Account.")
+        for field, label in (
+            ("PARENT_ACCOUNT_ID", "Parent Account"),
+            ("GRADING_STATION_ACCOUNT_ID", "Grading Station"),
+            ("PULLET_GROWER_ACCOUNT_ID", "Pullet Grower Account"),
+        ):
+            related_id = record.get(field)
+            if related_id == aid:
+                raise ValueError(f"Account cannot reference itself as {label}.")
+            if related_id and self.get_account(related_id) is None:
+                raise ValueError(f"{label} must reference an existing Account.")
         record["ACCOUNT_ID"] = aid
         record["UPDATED_AT"] = dt.datetime.now()
+        # Keep repositories already held by a Streamlit session compatible
+        # when provisional Account fields are added to the application.
+        for column in record:
+            if column not in self._accounts.columns:
+                self._accounts[column] = None
         idx = self._accounts[self._accounts["ACCOUNT_ID"] == aid].index
         if len(idx):
             for col in record:
-                if col in self._accounts.columns:
-                    self._accounts.loc[idx[0], col] = record[col]
+                self._accounts.loc[idx[0], col] = record[col]
         else:
             record.setdefault("CREATED_AT", dt.datetime.now())
             self._accounts = pd.concat(
@@ -109,8 +129,19 @@ class MockRepository(BaseRepository):
         return aid
 
     def delete_account(self, account_id: str) -> bool:
+        lookup_columns = (
+            "PARENT_ACCOUNT_ID",
+            "GRADING_STATION_ACCOUNT_ID",
+            "PULLET_GROWER_ACCOUNT_ID",
+        )
+        lookup_reference = any(
+            column in self._accounts.columns
+            and bool((self._accounts[column] == account_id).any())
+            for column in lookup_columns
+        )
         references = (
-            not self.get_facilities(account_id=account_id).empty
+            lookup_reference
+            or not self.get_facilities(account_id=account_id).empty
             or not self.get_flocks(account_id=account_id).empty
             or not self.get_quota_registrations(account_id=account_id).empty
             or not self.get_salmonella_tests(account_id=account_id).empty

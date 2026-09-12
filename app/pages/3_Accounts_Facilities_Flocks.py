@@ -1,275 +1,341 @@
-# ============================================================
-# EFNS Prototype — Accounts, Facilities, and Facility Details
-# ============================================================
-"""Account and facility workspace; flock writes live on the dedicated page."""
+"""Enterprise account list, record detail, new and edit workspace."""
 
+from __future__ import annotations
+
+import pandas as pd
 import streamlit as st
 
+from app.navigation import (
+    current_page_url,
+    format_timestamp,
+    list_command_bar,
+    module_url,
+    open_view,
+    read_record_view,
+    record_command_bar,
+    selected_row_index,
+)
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro
-from data.constants import ACCOUNT_STATUSES, FACILITY_STATUSES
+from data.constants import ACCOUNT_STATUSES
 from data.repositories import get_repository
+
 
 apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()
-
 repo = st.session_state.repo
+view = read_record_view()
 
-def choice_index(options, current):
-    return options.index(current) if current in options else 0
-
-page_header(
-    "Accounts & Facilities",
-    "Manage accounts, facilities, and facility details in focused work areas.",
-    "ACCOUNT & FACILITY",
+PROVINCES = ("NS", "NB", "PE", "NL", "QC", "ON", "MB", "SK", "AB", "BC", "YT", "NT", "NU", "Other")
+ROLE_FIELDS = (
+    ("BREEDER_ROLE", "Breeder"),
+    ("HATCHERY_ROLE", "Hatchery"),
+    ("PULLET_GROWER_ROLE", "Pullet Grower"),
+    ("PRODUCER_ROLE", "Producer"),
+    ("GRADER_ROLE", "Grader"),
+    ("PROCESSOR_BREAKER_ROLE", "Processor/Breaker"),
+    ("DISPOSAL_PLANT_ROLE", "Disposal Plant"),
+    ("UNREGULATED_ROLE", "Unregulated"),
+    ("PROV_BOARD_EFC_ROLE", "Prov Board/EFC"),
+    ("GOVERNMENT_ROLE", "Government"),
+    ("VENDOR_ROLE", "Vendor"),
+    ("RESEARCH_EXEMPT_ROLE", "Research Exempt"),
+    ("SHIPPER_ROLE", "Shipper"),
+    ("OTHER_ROLE", "Other"),
 )
-st.info("The entity names and relationships remain provisional pending Dataverse metadata.")
 
-tab1, tab2 = st.tabs(["Accounts", "Facilities"])
 
-# =====================================================================
-# ACCOUNTS
-# =====================================================================
-with tab1:
-    section_intro("Accounts / Producers", "Organizations, contacts, roles, and registration identifiers.")
-    accounts = repo.get_accounts()
+def option_index(options, value, default=0):
+    return options.index(value) if value in options else default
 
-    if not accounts.empty:
+
+def account_lookup(accounts: pd.DataFrame, current_id=None):
+    result = {"Not selected": None}
+    for row in accounts.itertuples():
+        if row.ACCOUNT_ID != current_id:
+            result[f"{row.ORGANIZATION_NAME} · {row.REGISTRATION_NUMBER or row.ACCOUNT_ID[:8]}"] = row.ACCOUNT_ID
+    return result
+
+
+def lookup_label(options, value):
+    return next((label for label, item_id in options.items() if item_id == value), "Not selected")
+
+
+accounts = repo.get_accounts()
+
+
+if view.name == "list":
+    page_header("Active Accounts", "Search and maintain organization, registration, contact, address and role records.", "ACCOUNT MANAGEMENT")
+
+    selected_index = selected_row_index("account_list_grid")
+    selected_id = None
+    prior_rows = st.session_state.get("account_list_row_ids", [])
+    if selected_index is not None and selected_index < len(prior_rows):
+        selected_id = prior_rows[selected_index]
+
+    action = list_command_bar("account_list", selected=bool(selected_id))
+    if action == "new":
+        open_view("new")
+    if action == "refresh":
+        clear_widget_prefix("account_filter_")
+        st.rerun()
+    if action == "delete" and selected_id:
+        st.session_state.account_delete_pending = selected_id
+
+    pending_delete = st.session_state.get("account_delete_pending")
+    if pending_delete:
+        pending = repo.get_account(pending_delete)
+        if pending:
+            with st.container(border=True):
+                st.warning(f"Delete Account “{pending.get('ORGANIZATION_NAME')}”? Referenced Accounts cannot be deleted.")
+                with st.container(horizontal=True):
+                    if st.button("Confirm delete", type="primary", icon=":material/delete:", key="account_confirm_delete"):
+                        try:
+                            repo.delete_account(pending_delete)
+                            st.session_state.pop("account_delete_pending", None)
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(str(exc))
+                    if st.button("Cancel", key="account_cancel_delete"):
+                        st.session_state.pop("account_delete_pending", None)
+                        st.rerun()
+
+    filter_columns = st.columns([2, 1, 1])
+    keyword = filter_columns[0].text_input("Filter by keyword", placeholder="Name, registration, city, phone or email", key="account_filter_keyword")
+    status_filter = filter_columns[1].selectbox("Status", ["All", *ACCOUNT_STATUSES], key="account_filter_status")
+    role_options = ["All", *[label for _, label in ROLE_FIELDS]]
+    role_filter = filter_columns[2].selectbox("Role", role_options, key="account_filter_role")
+
+    filtered = accounts.copy()
+    if keyword:
+        searchable = [column for column in ("ORGANIZATION_NAME", "REGISTRATION_NUMBER", "CITY", "CONTACT_PHONE", "CONTACT_EMAIL") if column in filtered]
+        mask = filtered[searchable].fillna("").astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)
+        filtered = filtered[mask]
+    if status_filter != "All":
+        filtered = filtered[filtered["STATUS"] == status_filter]
+    if role_filter != "All":
+        role_column = next(field for field, label in ROLE_FIELDS if label == role_filter)
+        if role_column in filtered:
+            filtered = filtered[filtered[role_column].fillna(False).astype(bool)]
+
+    if filtered.empty:
+        st.info("No Accounts match the current filters.")
+    else:
+        display = filtered.copy().reset_index(drop=True)
+        display["ACCOUNT_LINK"] = display.apply(lambda row: current_page_url(row["ACCOUNT_ID"], row["ORGANIZATION_NAME"]), axis=1)
+        st.session_state.account_list_row_ids = display["ACCOUNT_ID"].tolist()
+        st.caption(f"{len(display):,} Account(s) · Select a row to enable Delete, or open the blue Account Name.")
         st.dataframe(
-            accounts[[
-                "ACCOUNT_ID", "REGISTRATION_NUMBER", "ORGANIZATION_NAME",
-                "CITY", "PROVINCE", "CONTACT_NAME", "CONTACT_EMAIL",
-                "PRODUCER_ROLE", "BREEDER_ROLE", "HATCHERY_ROLE", "GRADER_ROLE",
-                "STATUS",
-            ]],
+            display[["ACCOUNT_LINK", "REGISTRATION_NUMBER", "CITY", "PROVINCE", "POSTAL_CODE", "CONTACT_PHONE", "CONTACT_EMAIL", "STATUS", "CREATED_AT"]],
             width="stretch",
-            height=410,
+            height=540,
             hide_index=True,
+            on_select="rerun",
+            selection_mode="single-row",
+            key="account_list_grid",
             column_config={
-                "ACCOUNT_ID": "Account ID",
-                "REGISTRATION_NUMBER": "Registration",
-                "ORGANIZATION_NAME": "Organization",
-                "CONTACT_NAME": "Contact",
+                "ACCOUNT_LINK": st.column_config.LinkColumn("Account Name", display_text=r".*#(.*)$", width="large"),
+                "REGISTRATION_NUMBER": "Registration Number",
+                "CONTACT_PHONE": "Main Phone",
                 "CONTACT_EMAIL": "Email",
-                "PRODUCER_ROLE": "Producer",
-                "BREEDER_ROLE": "Breeder",
-                "HATCHERY_ROLE": "Hatchery",
-                "GRADER_ROLE": "Grader",
+                "CREATED_AT": st.column_config.DatetimeColumn("Created On", format="YYYY-MM-DD HH:mm"),
             },
         )
-    else:
-        st.info("No accounts in the database.")
 
-    with st.expander("Add or update an account", expanded=False):
-        account_records = {
-            f"{row.ORGANIZATION_NAME} · {row.REGISTRATION_NUMBER}": row.ACCOUNT_ID
-            for row in accounts.itertuples()
-        }
-        account_record_label = st.selectbox(
-            "Record", ["Create new", *account_records], key="acc_record",
-            on_change=clear_widget_prefix, args=("acc_", ("acc_record",)),
-        )
-        current_account = (
-            repo.get_account(account_records[account_record_label])
-            if account_record_label != "Create new"
-            else {}
-        )
-        identity_col, contact_col = st.columns(2)
-        with identity_col:
-            st.text_input("Account ID", value=current_account.get("ACCOUNT_ID", "Assigned when saved"), disabled=True, key="acc_id")
-            org_name = st.text_input("Organization Name", value=str(current_account.get("ORGANIZATION_NAME") or ""), key="acc_name")
-            reg_num = st.text_input("Registration Number", value=str(current_account.get("REGISTRATION_NUMBER") or ""), key="acc_reg")
-            city = st.text_input("City", value=str(current_account.get("CITY") or ""), key="acc_city")
-            status = st.selectbox("Status", ACCOUNT_STATUSES, index=choice_index(ACCOUNT_STATUSES, current_account.get("STATUS")), key="acc_status")
-        with contact_col:
-            contact = st.text_input("Contact Name", value=str(current_account.get("CONTACT_NAME") or ""), key="acc_contact")
-            contact_email = st.text_input("Contact Email", value=str(current_account.get("CONTACT_EMAIL") or ""), key="acc_email")
-            st.markdown("**Operational roles**")
-            is_producer = st.checkbox("Producer Role", value=bool(current_account.get("PRODUCER_ROLE", True)), key="acc_prod")
-            is_breeder = st.checkbox("Breeder Role", value=bool(current_account.get("BREEDER_ROLE", False)), key="acc_breed")
-            is_hatchery = st.checkbox("Hatchery Role", value=bool(current_account.get("HATCHERY_ROLE", False)), key="acc_hatch")
-            is_grader = st.checkbox("Grader Role", value=bool(current_account.get("GRADER_ROLE", False)), key="acc_grad")
+else:
+    current = repo.get_account(view.record_id) if view.record_id else None
+    if view.name in {"detail", "edit"} and current is None:
+        st.error("The requested Account could not be found.")
+        if st.button("Back to Accounts", icon=":material/arrow_back:"):
+            open_view("list")
+        st.stop()
 
-        action_label = "Update Account" if current_account else "Create Account"
-        if st.button(action_label, key="acc_save", type="primary"):
-            if not org_name:
-                st.error("Organization name is required.")
-            else:
-                record = {
-                    "ORGANIZATION_NAME": org_name,
-                    "REGISTRATION_NUMBER": reg_num or None,
-                    "CITY": city or None,
-                    "PROVINCE": "NS",
-                    "CONTACT_NAME": contact or None,
-                    "CONTACT_EMAIL": contact_email or None,
-                    "STATUS": status,
-                    "PRODUCER_ROLE": is_producer,
-                    "BREEDER_ROLE": is_breeder,
-                    "HATCHERY_ROLE": is_hatchery,
-                    "GRADER_ROLE": is_grader,
-                }
-                if current_account:
-                    record["ACCOUNT_ID"] = current_account["ACCOUNT_ID"]
-                aid = repo.upsert_account(record)
-                st.success(f"Account saved: {aid}")
-                st.rerun()
+    is_form = view.name in {"new", "edit"}
+    title = "New Account" if view.name == "new" else current["ORGANIZATION_NAME"]
+    subtitle = "Create a complete Account record." if view.name == "new" else f"Registration {current.get('REGISTRATION_NUMBER') or 'not assigned'}"
+    page_header(title, subtitle, "ACCOUNT RECORD")
+    action = record_command_bar("account_record", view.name)
+    if action in {"back", "cancel"}:
+        open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
+    if action == "edit":
+        clear_widget_prefix("account_form_")
+        open_view("edit", view.record_id)
+    if action == "delete" and view.record_id:
+        st.session_state.account_record_delete_pending = True
 
-    if not accounts.empty:
-        relationship_labels = {
-            f"{row.ORGANIZATION_NAME} · {row.REGISTRATION_NUMBER}": row.ACCOUNT_ID
-            for row in accounts.itertuples()
-        }
-        with st.expander("Account relationships", expanded=False):
-            relationship_label = st.selectbox(
-                "Account record",
-                list(relationship_labels),
-                key="account_relationship_record",
-            )
-            relationship_account_id = relationship_labels[relationship_label]
-            facilities_tab, flocks_tab, quotas_tab, quota_tx_tab, tests_tab, production_tab = st.tabs(
-                ["Facilities", "Flocks", "Quota Registrations", "Quota Transactions", "Salmonella Tests", "Matched Production"]
-            )
-            related_sets = (
-                (facilities_tab, repo.get_facilities(account_id=relationship_account_id)),
-                (flocks_tab, repo.get_flocks(account_id=relationship_account_id)),
-                (quotas_tab, repo.get_quota_registrations(account_id=relationship_account_id)),
-                (quota_tx_tab, repo.get_quota_transactions(account_id=relationship_account_id)),
-                (tests_tab, repo.get_salmonella_tests(account_id=relationship_account_id)),
-            )
-            for related_tab, related_frame in related_sets:
-                with related_tab:
-                    if related_frame.empty:
-                        st.info("No related records.")
-                    else:
-                        st.dataframe(related_frame, width="stretch", height=300, hide_index=True)
-            with production_tab:
-                production = repo.get_production_records()
-                if "PRODUCER_ACCOUNT_ID" in production:
-                    production = production[production["PRODUCER_ACCOUNT_ID"] == relationship_account_id]
-                else:
-                    production = production.iloc[0:0]
-                if "MATCH_STATUS" in production:
-                    production = production[production["MATCH_STATUS"].fillna("") != "UNMATCHED"]
-                if production.empty:
-                    st.info("No production records are successfully linked to this account.")
-                else:
-                    st.dataframe(production, width="stretch", height=300, hide_index=True)
-
-# =====================================================================
-# FACILITIES
-# =====================================================================
-with tab2:
-    section_intro("Facilities", "Physical facilities associated with producer accounts.")
-    facilities = repo.get_facilities()
-
-    if not facilities.empty:
-        # Merge with account names for readability
-        acc = repo.get_accounts()
-        df_show = facilities.merge(
-            acc[["ACCOUNT_ID", "ORGANIZATION_NAME"]],
-            on="ACCOUNT_ID",
-            how="left",
-        )
-        st.dataframe(
-            df_show[[
-                "FACILITY_ID", "ORGANIZATION_NAME", "FACILITY_NAME",
-                "FACILITY_TYPE", "STATUS", "ACTIVATION_DATE", "CLOSURE_DATE",
-            ]],
-            width="stretch",
-            height=410,
-            hide_index=True,
-            column_config={
-                "FACILITY_ID": "Facility ID",
-                "ORGANIZATION_NAME": "Account",
-                "FACILITY_NAME": "Facility",
-                "FACILITY_TYPE": "Type",
-                "ACTIVATION_DATE": "Activated",
-                "CLOSURE_DATE": "Closed",
-            },
-        )
-    else:
-        st.info("No facilities in the database.")
-
-    with st.expander("Add or update a facility", expanded=False):
-        accounts_for_picker = repo.get_accounts()
-        acc_options = {
-            f"{row.ORGANIZATION_NAME} · {row.REGISTRATION_NUMBER or row.ACCOUNT_ID[:8]}": row.ACCOUNT_ID
-            for row in accounts_for_picker.itertuples()
-        }
-        facility_records = {
-            f"{row.FACILITY_NAME} · {row.FACILITY_ID[:8]}": row.FACILITY_ID
-            for row in facilities.itertuples()
-        }
-        facility_record_label = st.selectbox(
-            "Record", ["Create new", *facility_records], key="fac_record",
-            on_change=clear_widget_prefix, args=("fac_", ("fac_record",)),
-        )
-        current_facility = {}
-        if facility_record_label != "Create new":
-            facility_id = facility_records[facility_record_label]
-            current_facility = facilities[facilities["FACILITY_ID"] == facility_id].iloc[0].to_dict()
-        st.text_input("Facility ID", value=current_facility.get("FACILITY_ID", "Assigned when saved"), disabled=True, key="fac_id")
-        fac_name = st.text_input("Facility Name", value=str(current_facility.get("FACILITY_NAME") or ""), key="fac_name")
-        facility_types = ("Pullet", "Layer", "Other")
-        fac_type = st.selectbox("Facility Type", facility_types, index=choice_index(facility_types, current_facility.get("FACILITY_TYPE")), key="fac_type")
-        fac_status = st.selectbox("Facility Status", FACILITY_STATUSES, index=choice_index(FACILITY_STATUSES, current_facility.get("STATUS")), key="fac_status")
-        account_labels = list(acc_options)
-        account_index = next((index for index, label in enumerate(account_labels) if acc_options[label] == current_facility.get("ACCOUNT_ID")), 0)
-        selected_acc = st.selectbox(
-            "Account",
-            account_labels,
-            index=account_index,
-            key="fac_account",
-        )
-
-        action_label = "Update Facility" if current_facility else "Create Facility"
-        if st.button(action_label, key="fac_save", type="primary"):
-            if not fac_name:
-                st.error("Facility name and account are required.")
-            else:
-                record = {
-                    "FACILITY_NAME": fac_name,
-                    "FACILITY_TYPE": fac_type,
-                    "STATUS": fac_status,
-                    "ACCOUNT_ID": acc_options[selected_acc],
-                }
-                if current_facility:
-                    record["FACILITY_ID"] = current_facility["FACILITY_ID"]
-                fid = repo.upsert_facility(record)
-                st.success(f"Facility saved: {fid}")
-                st.rerun()
-
-    if not facilities.empty:
-        section_intro("Facility Details", "Provisional barn or house subdivisions linked by Facility ID.")
-        facility_detail_labels = {
-            f"{row.FACILITY_NAME} · {row.FACILITY_ID[:8]}": row.FACILITY_ID
-            for row in facilities.itertuples()
-        }
-        detail_facility_label = st.selectbox(
-            "Facility for details", list(facility_detail_labels), key="facility_detail_filter"
-        )
-        detail_facility_id = facility_detail_labels[detail_facility_label]
-        facility_details = repo.get_facility_details(facility_id=detail_facility_id)
-        if facility_details.empty:
-            st.info("No facility details are linked to this facility.")
-        else:
-            st.dataframe(facility_details, width="stretch", height=260, hide_index=True)
-        with st.expander("Add a Facility Detail", expanded=False):
-            detail_name = st.text_input("Detail Name *", key="facility_detail_name")
-            detail_type = st.text_input("Detail Type", value="Barn Area", key="facility_detail_type")
-            detail_comments = st.text_area("Detail Comments", key="facility_detail_comments")
-            if st.button("Save Facility Detail", type="primary", key="facility_detail_save"):
-                if not detail_name.strip():
-                    st.error("Detail Name is required.")
-                else:
-                    detail_id = repo.upsert_facility_detail(
-                        {
-                            "FACILITY_ID": detail_facility_id,
-                            "DETAIL_NAME": detail_name.strip(),
-                            "DETAIL_TYPE": detail_type or None,
-                            "STATUS": "Active",
-                            "COMMENTS": detail_comments or None,
-                        }
-                    )
-                    st.success(f"Facility Detail saved: {detail_id}")
+    if st.session_state.get("account_record_delete_pending"):
+        with st.container(border=True):
+            st.warning("This action permanently removes the Account when no related records reference it.")
+            with st.container(horizontal=True):
+                if st.button("Confirm delete", type="primary", icon=":material/delete:", key="account_record_confirm"):
+                    try:
+                        repo.delete_account(view.record_id)
+                        st.session_state.pop("account_record_delete_pending", None)
+                        open_view("list")
+                    except ValueError as exc:
+                        st.error(str(exc))
+                if st.button("Keep Account", key="account_record_keep"):
+                    st.session_state.pop("account_record_delete_pending", None)
                     st.rerun()
+
+    if not is_form:
+        audit_left, audit_right = st.columns(2)
+        audit_left.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))}")
+        audit_right.caption(f"Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
+        summary_tab, related_tab = st.tabs(["Summary", "Related Records"])
+        with summary_tab:
+            section_intro("Account Information")
+            with st.container(border=True):
+                left, middle, right = st.columns(3)
+                left.markdown(f"**Account Name**  \n{current.get('ORGANIZATION_NAME') or '—'}")
+                left.markdown(f"**Registration Number**  \n{current.get('REGISTRATION_NUMBER') or '—'}")
+                left.markdown(f"**Status**  \n{current.get('STATUS') or '—'}")
+                middle.markdown(f"**Email**  \n{current.get('CONTACT_EMAIL') or '—'}")
+                middle.markdown(f"**Phone**  \n{current.get('CONTACT_PHONE') or '—'}")
+                middle.markdown(f"**Website**  \n{current.get('WEBSITE') or '—'}")
+                right.markdown(f"**Province of Registration**  \n{current.get('PROVINCE_OF_REGISTRATION') or '—'}")
+                right.markdown(f"**Default on Reports**  \n{'Yes' if current.get('DEFAULT_ON_REPORTS') else 'No'}")
+                right.markdown(f"**No SVG**  \n{'Yes' if current.get('NO_SVG') else 'No'}")
+            section_intro("Address")
+            with st.container(border=True):
+                st.write(" · ".join(str(value) for value in (current.get("ADDRESS_LINE1"), current.get("ADDRESS_LINE2"), current.get("ADDRESS_LINE3"), current.get("CITY"), current.get("PROVINCE"), current.get("POSTAL_CODE"), current.get("COUNTRY_REGION")) if value) or "No address recorded")
+                st.caption(f"Latitude: {current.get('LATITUDE') or '—'} · Longitude: {current.get('LONGITUDE') or '—'}")
+            section_intro("Account Roles")
+            with st.container(border=True, horizontal=True):
+                active_roles = [label for field, label in ROLE_FIELDS if current.get(field)]
+                st.write(" · ".join(active_roles) if active_roles else "No roles selected")
+            if current.get("DESCRIPTION"):
+                section_intro("Description")
+                st.write(current["DESCRIPTION"])
+
+        with related_tab:
+            facilities = repo.get_facilities(account_id=view.record_id)
+            facility_ids = set(facilities.get("FACILITY_ID", []))
+            facility_details = repo.get_facility_details()
+            if not facility_details.empty:
+                facility_details = facility_details[facility_details["FACILITY_ID"].isin(facility_ids)]
+            flocks = repo.get_flocks(account_id=view.record_id)
+            flock_ids = set(flocks.get("FLOCK_ID", []))
+            flock_transactions = repo.get_flock_transactions()
+            if not flock_transactions.empty:
+                flock_transactions = flock_transactions[flock_transactions["FLOCK_ID"].isin(flock_ids)]
+            related = (
+                ("Facilities", facilities, "FACILITY_ID", "FACILITY_NAME", "Facilities"),
+                ("Facility Details", facility_details, "FACILITY_ID", "DETAIL_NAME", "Facilities"),
+                ("Flocks", flocks, "FLOCK_ID", "FLOCK_NUMBER", "Flocks"),
+                ("Flock Transactions", flock_transactions, "FLOCK_TRANSACTION_ID", "TRANSACTION_TYPE", "Flock_Transactions"),
+                ("Quota Registrations", repo.get_quota_registrations(account_id=view.record_id), "QUOTA_ID", "QUOTA_NAME", "Quota_Registrations"),
+                ("Quota Transactions", repo.get_quota_transactions(account_id=view.record_id), "QUOTA_TRANSACTION_ID", "TRANSACTION_TYPE", "Quota_Transactions"),
+                ("Salmonella Tests", repo.get_salmonella_tests(account_id=view.record_id), "SALMONELLA_TEST_ID", "PERMIT_NUMBER", "Salmonella_Tests"),
+            )
+            for heading, frame, id_column, label_column, slug in related:
+                section_intro(heading)
+                if frame.empty:
+                    st.info(f"No related {heading}.")
+                else:
+                    related_display = frame.copy()
+                    related_display["RECORD_LINK"] = related_display.apply(lambda row: module_url(slug, row[id_column], row.get(label_column) or row[id_column]), axis=1)
+                    columns = ["RECORD_LINK", *[column for column in frame.columns if column not in {id_column, "CREATED_AT", "UPDATED_AT"}][:5]]
+                    st.dataframe(related_display[columns], width="stretch", hide_index=True, column_config={"RECORD_LINK": st.column_config.LinkColumn("Record", display_text=r".*#(.*)$")})
+            production = repo.get_production_records()
+            if "PRODUCER_ACCOUNT_ID" in production:
+                production = production[production["PRODUCER_ACCOUNT_ID"] == view.record_id]
+            else:
+                production = production.iloc[0:0]
+            section_intro("Matched Production Records")
+            if production.empty:
+                st.info("No matched Production Records.")
+            else:
+                st.dataframe(production, width="stretch", hide_index=True)
+
+    else:
+        current = current or {}
+        lookup_options = account_lookup(accounts, view.record_id)
+        summary_tab, address_tab, roles_tab = st.tabs(["Account Information", "Address", "Account Roles"])
+        with summary_tab:
+            with st.container(border=True):
+                left, right = st.columns(2)
+                account_name = left.text_input("Account Name *", value=str(current.get("ORGANIZATION_NAME") or ""), key="account_form_name")
+                email = left.text_input("Email", value=str(current.get("CONTACT_EMAIL") or ""), key="account_form_email")
+                phone = left.text_input("Phone", value=str(current.get("CONTACT_PHONE") or ""), key="account_form_phone")
+                fax = left.text_input("Fax", value=str(current.get("FAX") or ""), key="account_form_fax")
+                website = left.text_input("Website", value=str(current.get("WEBSITE") or ""), placeholder="https://", key="account_form_website")
+                registration = left.text_input("Registration Number", value=str(current.get("REGISTRATION_NUMBER") or ""), key="account_form_registration")
+                province_registration = left.selectbox("Province of Registration", PROVINCES, index=option_index(list(PROVINCES), current.get("PROVINCE_OF_REGISTRATION") or "NS"), key="account_form_province_registration")
+                parent_label = right.selectbox("Parent Account", list(lookup_options), index=option_index(list(lookup_options), lookup_label(lookup_options, current.get("PARENT_ACCOUNT_ID"))), key="account_form_parent")
+                grading_label = right.selectbox("Grading Station", list(lookup_options), index=option_index(list(lookup_options), lookup_label(lookup_options, current.get("GRADING_STATION_ACCOUNT_ID"))), key="account_form_grading")
+                pullet_label = right.selectbox("Pullet Grower Account", list(lookup_options), index=option_index(list(lookup_options), lookup_label(lookup_options, current.get("PULLET_GROWER_ACCOUNT_ID"))), key="account_form_pullet")
+                spent_fowl_plans = right.text_area("Spent Fowl Plans", value=str(current.get("SPENT_FOWL_PLANS") or ""), key="account_form_spent_fowl")
+                default_reports = right.checkbox("Default on Reports", value=bool(current.get("DEFAULT_ON_REPORTS")), key="account_form_default_reports")
+                no_svg = right.checkbox("No SVG", value=bool(current.get("NO_SVG")), key="account_form_no_svg")
+                status = right.selectbox("Status", ACCOUNT_STATUSES, index=option_index(list(ACCOUNT_STATUSES), current.get("STATUS")), key="account_form_status")
+                description = right.text_area("Description", value=str(current.get("DESCRIPTION") or ""), key="account_form_description")
+        with address_tab:
+            with st.container(border=True):
+                left, right = st.columns(2)
+                street1 = left.text_input("Address 1: Street 1", value=str(current.get("ADDRESS_LINE1") or ""), key="account_form_street1")
+                street2 = left.text_input("Address 1: Street 2", value=str(current.get("ADDRESS_LINE2") or ""), key="account_form_street2")
+                street3 = left.text_input("Address 1: Street 3", value=str(current.get("ADDRESS_LINE3") or ""), key="account_form_street3")
+                city = left.text_input("Address 1: City", value=str(current.get("CITY") or ""), key="account_form_city")
+                province = right.selectbox("Address 1: State/Province", PROVINCES, index=option_index(list(PROVINCES), current.get("PROVINCE") or "NS"), key="account_form_province")
+                postal_code = right.text_input("Address 1: ZIP/Postal Code", value=str(current.get("POSTAL_CODE") or ""), key="account_form_postal")
+                country = right.text_input("Address 1: Country/Region", value=str(current.get("COUNTRY_REGION") or "Canada"), key="account_form_country")
+                latitude = right.number_input("Address 1: Latitude", min_value=-90.0, max_value=90.0, value=float(current.get("LATITUDE") or 0.0), format="%.7f", key="account_form_latitude")
+                longitude = right.number_input("Address 1: Longitude", min_value=-180.0, max_value=180.0, value=float(current.get("LONGITUDE") or 0.0), format="%.7f", key="account_form_longitude")
+        with roles_tab:
+            with st.container(border=True):
+                role_values = {}
+                columns = st.columns(3)
+                for index, (field, label) in enumerate(ROLE_FIELDS):
+                    role_values[field] = columns[index % 3].checkbox(label, value=bool(current.get(field)), key=f"account_form_role_{field.lower()}")
+
+        if action == "save":
+            errors = []
+            if not account_name.strip():
+                errors.append("Account Name is required.")
+            if registration.strip():
+                duplicates = repo.find_accounts_by_registration_number(registration.strip())
+                if view.record_id:
+                    duplicates = duplicates[duplicates["ACCOUNT_ID"] != view.record_id]
+                if not duplicates.empty:
+                    errors.append("Registration Number is already used by another Account.")
+            if errors:
+                for error in errors:
+                    st.error(error)
+            else:
+                record = {
+                    "ACCOUNT_ID": view.record_id,
+                    "ORGANIZATION_NAME": account_name.strip(),
+                    "CONTACT_EMAIL": email.strip() or None,
+                    "CONTACT_PHONE": phone.strip() or None,
+                    "FAX": fax.strip() or None,
+                    "WEBSITE": website.strip() or None,
+                    "REGISTRATION_NUMBER": registration.strip() or None,
+                    "PROVINCE_OF_REGISTRATION": province_registration,
+                    "PARENT_ACCOUNT_ID": lookup_options[parent_label],
+                    "GRADING_STATION_ACCOUNT_ID": lookup_options[grading_label],
+                    "PULLET_GROWER_ACCOUNT_ID": lookup_options[pullet_label],
+                    "SPENT_FOWL_PLANS": spent_fowl_plans.strip() or None,
+                    "DEFAULT_ON_REPORTS": default_reports,
+                    "NO_SVG": no_svg,
+                    "STATUS": status,
+                    "DESCRIPTION": description.strip() or None,
+                    "ADDRESS_LINE1": street1.strip() or None,
+                    "ADDRESS_LINE2": street2.strip() or None,
+                    "ADDRESS_LINE3": street3.strip() or None,
+                    "CITY": city.strip() or None,
+                    "PROVINCE": province,
+                    "POSTAL_CODE": postal_code.strip() or None,
+                    "COUNTRY_REGION": country.strip() or None,
+                    "LATITUDE": latitude if latitude else None,
+                    "LONGITUDE": longitude if longitude else None,
+                    **role_values,
+                }
+                if not view.record_id:
+                    record.pop("ACCOUNT_ID")
+                try:
+                    saved_id = repo.upsert_account(record)
+                    clear_widget_prefix("account_form_")
+                    open_view("detail", saved_id)
+                except ValueError as exc:
+                    st.error(str(exc))

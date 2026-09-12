@@ -175,7 +175,7 @@ account_label_by_id = {
 # Record detail from URL
 # ---------------------------------------------------------------------
 
-selected_quota_id = st.query_params.get("quota_id")
+selected_quota_id = st.query_params.get("id") or st.query_params.get("quota_id")
 
 if selected_quota_id:
     selected_quota = repo.get_quota_registration(str(selected_quota_id))
