@@ -2,11 +2,14 @@
 
 import streamlit as st
 
+from app.auth import require_page_permission
+from app.security import Permission
 from app.services.export import spreadsheet_safe
 from app.ui import apply_theme, page_header, section_intro
 from data.repositories import get_repository
 
 
+require_page_permission(Permission.VIEW_DATA)
 apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()

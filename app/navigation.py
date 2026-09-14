@@ -8,8 +8,31 @@ from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 import pandas as pd
 import streamlit as st
 
+from app.auth import can_current
+from app.security import Permission
+
 
 VALID_VIEWS = {"list", "new", "detail", "edit"}
+
+
+def _module_path(current_path: str, page_slug: str) -> str:
+    """Preserve Snowflake's /!/ multipage prefix when building record links."""
+    encoded = quote(page_slug, safe="_&-")
+    if "/!/" in current_path:
+        app_root = current_path.split("/!/", 1)[0]
+        return f"{app_root}/!/{encoded}"
+    return f"/{encoded}"
+
+
+def _url_query(current_path: str, values: dict[str, str]) -> str:
+    """Encode manual Snowflake links with its browser query-key prefix."""
+    prefix = "streamlit-" if "/!/" in current_path else ""
+    return urlencode({f"{prefix}{key}": value for key, value in values.items()})
+
+
+def _snowflake_fragment_route(parsed) -> str | None:
+    route = str(parsed.fragment or "").split("?", 1)[0].split("#", 1)[0]
+    return route if "/!/" in route else None
 
 
 @dataclass(frozen=True)
@@ -48,11 +71,17 @@ def back_to_list() -> None:
 def current_page_url(record_id: str, label: str, view: str = "detail") -> str:
     """Build an absolute link to a record on the current Streamlit page."""
     raw_url = str(getattr(st.context, "url", "") or "")
+    parsed = urlsplit(raw_url)
+    fragment_route = _snowflake_fragment_route(parsed)
+    display_label = str(label or record_id).replace("#", " ")
+    if fragment_route:
+        query = _url_query(fragment_route, {"view": view, "id": str(record_id)})
+        fragment = f"{fragment_route}?{query}#{display_label}"
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, fragment))
     base = raw_url.split("?", 1)[0].split("#", 1)[0]
     if not base or base.lower() == "none":
         base = "http://localhost:8501"
-    query = urlencode({"view": view, "id": str(record_id)})
-    display_label = str(label or record_id).replace("#", " ")
+    query = _url_query(urlsplit(base).path, {"view": view, "id": str(record_id)})
     return f"{base}?{query}#{display_label}"
 
 
@@ -62,9 +91,15 @@ def module_url(page_slug: str, record_id: str, label: str) -> str:
     parsed = urlsplit(raw_url)
     if not parsed.scheme or not parsed.netloc:
         parsed = urlsplit("http://localhost:8501")
-    path = f"/{quote(page_slug, safe='_&-')}"
-    query = urlencode({"view": "detail", "id": str(record_id)})
     display_label = str(label or record_id).replace("#", " ")
+    fragment_route = _snowflake_fragment_route(parsed)
+    if fragment_route:
+        path = _module_path(fragment_route, page_slug)
+        query = _url_query(fragment_route, {"view": "detail", "id": str(record_id)})
+        fragment = f"{path}?{query}#{display_label}"
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, fragment))
+    path = _module_path(parsed.path, page_slug)
+    query = _url_query(parsed.path, {"view": "detail", "id": str(record_id)})
     return urlunsplit((parsed.scheme, parsed.netloc, path, query, display_label))
 
 
@@ -78,7 +113,11 @@ def module_view_url(page_slug: str, view: str, record_id: str | None = None, **p
     if record_id:
         query["id"] = str(record_id)
     query.update({key: str(value) for key, value in parameters.items() if value is not None and value != ""})
-    return urlunsplit((parsed.scheme, parsed.netloc, f"/{quote(page_slug, safe='_&-')}", urlencode(query), ""))
+    fragment_route = _snowflake_fragment_route(parsed)
+    if fragment_route:
+        fragment = f"{_module_path(fragment_route, page_slug)}?{_url_query(fragment_route, query)}"
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, fragment))
+    return urlunsplit((parsed.scheme, parsed.netloc, _module_path(parsed.path, page_slug), _url_query(parsed.path, query), ""))
 
 
 def ensure_record_form_state(prefix: str, record_id: str | None) -> None:
@@ -109,9 +148,9 @@ def list_command_bar(prefix: str, selected: bool = False) -> str | None:
     """Render a Dynamics-like list command bar and return the chosen action."""
     action = None
     with st.container(border=True, horizontal=True, vertical_alignment="center"):
-        if st.button("New", icon=":material/add:", type="primary", key=f"{prefix}_new"):
+        if st.button("New", icon=":material/add:", type="primary", key=f"{prefix}_new", disabled=not can_current(Permission.CREATE_DATA)):
             action = "new"
-        if st.button("Delete", icon=":material/delete:", disabled=not selected, key=f"{prefix}_delete"):
+        if st.button("Delete", icon=":material/delete:", disabled=not selected or not can_current(Permission.DELETE_DATA), key=f"{prefix}_delete"):
             action = "delete"
         if st.button("Refresh", icon=":material/refresh:", key=f"{prefix}_refresh"):
             action = "refresh"
@@ -124,7 +163,7 @@ def record_command_bar(prefix: str, view: str, allow_delete: bool = True) -> str
     with st.container(border=True, horizontal=True, vertical_alignment="center"):
         if st.button("Back", icon=":material/arrow_back:", key=f"{prefix}_back"):
             action = "back"
-        if view == "detail" and st.button("Edit", icon=":material/edit:", type="primary", key=f"{prefix}_edit"):
+        if view == "detail" and st.button("Edit", icon=":material/edit:", type="primary", key=f"{prefix}_edit", disabled=not can_current(Permission.UPDATE_DATA)):
             action = "edit"
         if view == "detail" and st.button("Refresh", icon=":material/refresh:", key=f"{prefix}_refresh"):
             action = "refresh"
@@ -134,6 +173,6 @@ def record_command_bar(prefix: str, view: str, allow_delete: bool = True) -> str
             if st.button("Cancel", icon=":material/close:", key=f"{prefix}_cancel"):
                 action = "cancel"
         if view in {"detail", "edit"} and allow_delete:
-            if st.button("Delete", icon=":material/delete:", key=f"{prefix}_delete"):
+            if st.button("Delete", icon=":material/delete:", key=f"{prefix}_delete", disabled=not can_current(Permission.DELETE_DATA)):
                 action = "delete"
     return action

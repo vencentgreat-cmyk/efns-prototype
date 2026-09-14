@@ -6,6 +6,7 @@ import html
 
 import streamlit as st
 
+from app.security import AuthenticationError, AuthorizationError, UserValidationError
 from data.repositories.base import ConcurrencyError, RepositoryConfigurationError, RepositoryConnectionError, RepositoryError
 
 
@@ -20,6 +21,12 @@ def show_data_error(error: Exception) -> None:
     """Render repository failures without exposing SQL or connection details."""
     if isinstance(error, ConcurrencyError):
         st.warning("This record has changed. Reload the record before saving your changes again.")
+    elif isinstance(error, AuthenticationError):
+        st.error("Invalid email or password, or the account is inactive.")
+    elif isinstance(error, AuthorizationError):
+        st.error("You do not have permission to perform this action.")
+    elif isinstance(error, UserValidationError):
+        st.error(str(error))
     elif isinstance(error, RepositoryConfigurationError):
         st.error("Snowflake is not configured. Review System Status and the deployment settings.")
     elif isinstance(error, RepositoryConnectionError):

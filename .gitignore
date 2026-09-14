@@ -17,7 +17,6 @@ env/
 *.pem
 *.p8
 connections.toml
-snowflake.yml
 
 # IDE
 .vscode/
@@ -40,3 +39,4 @@ htmlcov/
 # Project
 *.log
 hermes-debug.log
+.local/

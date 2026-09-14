@@ -5,7 +5,13 @@
 
 import os
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # Streamlit in Snowflake does not require python-dotenv.
+    def load_dotenv() -> bool:
+        return False
+
+from app.runtime import RuntimeMode, current_runtime_mode
 from data.repositories.base import BaseRepository
 from data.repositories.base import RepositoryConfigurationError
 from data.repositories.mock import MockRepository
@@ -18,7 +24,8 @@ def get_repository() -> BaseRepository:
     
     Set REPOSITORY_MODE in .env to 'snowflake' for Snowflake, else defaults to mock.
     """
-    mode = os.getenv("REPOSITORY_MODE", "mock").strip().lower()
+    default_mode = "snowflake" if current_runtime_mode() == RuntimeMode.SNOWFLAKE else "mock"
+    mode = os.getenv("REPOSITORY_MODE", default_mode).strip().lower()
     if mode == "snowflake":
         # Lazy import so Snowflake connector is only required when used
         from data.repositories.snowflake import SnowflakeRepository

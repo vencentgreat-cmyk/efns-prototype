@@ -7,6 +7,7 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 
+from app.auth import require_operational_page
 from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import EGG_COLOURS, FLOCK_QUOTA_TYPES, FLOCK_STATUSES, UNASSIGNED_LABEL
@@ -15,6 +16,7 @@ from data.repositories.base import RepositoryError
 from data.validation import validate_flock
 
 
+require_operational_page()
 apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()

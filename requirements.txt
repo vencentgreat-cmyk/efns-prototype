@@ -1,8 +1,8 @@
 # EFNS Internal Data System Prototype v0.1
 # ==========================================
 
-# 1.63.0 is verified locally with st.context and horizontal containers.
-streamlit>=1.63.0,<2
+# 1.52.2 is the pinned Snowflake warehouse-runtime compatibility floor.
+streamlit>=1.52.2,<2
 pandas>=2.0.0
 numpy>=1.24.0
 snowflake-connector-python>=3.0.0

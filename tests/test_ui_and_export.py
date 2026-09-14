@@ -7,18 +7,19 @@ import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 from app.services.export import spreadsheet_safe
+from tests.auth_support import authenticated_app
 
 
-def test_home_page_renders_without_exception():
+def test_home_page_renders_without_exception(tmp_path, monkeypatch):
     entrypoint = Path(__file__).parents[1] / "app" / "Home.py"
-    app = AppTest.from_file(entrypoint, default_timeout=20).run()
+    app = authenticated_app(entrypoint, tmp_path, monkeypatch)
     assert list(app.exception) == []
     assert any("Operations Dashboard" in block.value for block in app.markdown)
 
 
-def test_all_navigation_pages_render_without_exception():
+def test_all_navigation_pages_render_without_exception(tmp_path, monkeypatch):
     entrypoint = Path(__file__).parents[1] / "app" / "Home.py"
-    app = AppTest.from_file(entrypoint, default_timeout=20).run()
+    app = authenticated_app(entrypoint, tmp_path, monkeypatch)
     for page in (
         "pages/1_Production_Import.py",
         "pages/2_Production_Data.py",
@@ -70,9 +71,9 @@ def test_native_light_theme_and_scoped_custom_css():
     assert "header[" not in ui_source
 
 
-def test_primary_workflows_expose_clear_controls():
+def test_primary_workflows_expose_clear_controls(tmp_path, monkeypatch):
     entrypoint = Path(__file__).parents[1] / "app" / "Home.py"
-    app = AppTest.from_file(entrypoint, default_timeout=20).run()
+    app = authenticated_app(entrypoint, tmp_path, monkeypatch)
 
     app.switch_page("pages/2_Production_Data.py").run()
     assert any(button.label == "Reset filters" for button in app.button)
