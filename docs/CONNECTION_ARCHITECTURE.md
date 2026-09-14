@@ -36,7 +36,7 @@ Preferred authentication is a named connection, SSO/external browser, or a priva
 
 ## Deployment modes
 
-- **Local Streamlit:** use a Streamlit Snowflake connection or connector settings. Start with `python -m streamlit run app/Home.py`.
+- **Local Streamlit:** use a Streamlit Snowflake connection or connector settings. Start with `python -m streamlit run streamlit_app.py`.
 - **Streamlit in Snowflake warehouse runtime:** the named Streamlit connection is attempted first; an active Snowpark session is the compatibility path.
 - **Container runtime:** use connector configuration supplied by the platform secret manager. Do not bake credentials or keys into the image.
 

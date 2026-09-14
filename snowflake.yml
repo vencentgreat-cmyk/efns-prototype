@@ -1,0 +1,37 @@
+definition_version: 2
+entities:
+  efns_dev:
+    type: streamlit
+    identifier:
+      name: EFNS_INTERNAL_APP
+      database: EFNS_DEV
+      schema: APP
+    title: EFNS Internal Data System
+    comment: EFNS development application; operational schema remains provisional.
+    stage: EFNS_DEV.APP.EFNS_STREAMLIT_STAGE
+    query_warehouse: EFNS_DEV_WH
+    runtime_name: SYSTEM$WAREHOUSE_RUNTIME
+    main_file: streamlit_app.py
+    pages_dir: app/pages/
+    artifacts:
+      - streamlit_app.py
+      - environment.yml
+      - src: app/*.py
+        dest: app/
+      - src: app/pages/*.py
+        dest: app/pages/
+      - src: app/services/*.py
+        dest: app/services/
+      - src: data/*.py
+        dest: data/
+      - src: data/repositories/*.py
+        dest: data/repositories/
+    grants:
+      - privilege: USAGE
+        role: EFNS_DEV_ADMIN
+      - privilege: USAGE
+        role: EFNS_DEV_EDITOR
+      - privilege: USAGE
+        role: EFNS_DEV_DEVELOPER
+      - privilege: USAGE
+        role: EFNS_DEV_VIEWER

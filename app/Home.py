@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import streamlit as st
+import os
 
 from app.auth import ensure_authorized_repository, render_user_sidebar, require_authenticated
 from app.security import Permission, has_permission
@@ -16,6 +17,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+
+def page_file(filename: str) -> str:
+    prefix = os.getenv("EFNS_PAGE_PREFIX", "pages").strip("/")
+    return f"{prefix}/{filename}"
 
 
 apply_theme()
@@ -122,7 +128,7 @@ def dashboard() -> None:
                 f'<div class="efns-next-step"><strong>{title}</strong><span>{copy}</span></div>',
                 unsafe_allow_html=True,
             )
-            st.page_link(f"pages/{page}", label=label)
+            st.page_link(page_file(page), label=label)
 
     with st.container(border=True):
         section_intro("Recent imports", "The ten most recent workbook or synthetic import batches.")
@@ -162,59 +168,59 @@ pages = {
         ],
         "Production": [
             st.Page(
-                "pages/2_Production_Data.py",
+                page_file("2_Production_Data.py"),
                 title="Production Data",
                 icon=":material/table_view:",
             ),
         ],
         "Account & Facility": [
             st.Page(
-                "pages/3_Accounts_Facilities_Flocks.py",
+                page_file("3_Accounts_Facilities_Flocks.py"),
                 title="Accounts & Facilities",
                 icon=":material/account_tree:",
             ),
             st.Page(
-                "pages/11_Facilities.py",
+                page_file("11_Facilities.py"),
                 title="Facilities",
                 icon=":material/domain:",
             ),
             st.Page(
-                "pages/13_Facility_Details.py",
+                page_file("13_Facility_Details.py"),
                 title="Facility Details",
                 icon=":material/home_work:",
             ),
         ],
         "Flock Management": [
-            st.Page("pages/5_Flocks.py", title="Flocks", icon=":material/egg:"),
-            st.Page("pages/6_Flock_Transactions.py", title="Flock Transactions", icon=":material/swap_horiz:"),
-            st.Page("pages/9_Salmonella_Tests.py", title="Salmonella Tests", icon=":material/science:"),
+            st.Page(page_file("5_Flocks.py"), title="Flocks", icon=":material/egg:"),
+            st.Page(page_file("6_Flock_Transactions.py"), title="Flock Transactions", icon=":material/swap_horiz:"),
+            st.Page(page_file("9_Salmonella_Tests.py"), title="Salmonella Tests", icon=":material/science:"),
         ],
         "Quota Management": [
-            st.Page("pages/7_Quota_Registrations.py", title="Quota Registrations", icon=":material/assignment:"),
-            st.Page("pages/8_Quota_Transactions.py", title="Quota Transactions", icon=":material/compare_arrows:"),
+            st.Page(page_file("7_Quota_Registrations.py"), title="Quota Registrations", icon=":material/assignment:"),
+            st.Page(page_file("8_Quota_Transactions.py"), title="Quota Transactions", icon=":material/compare_arrows:"),
         ],
         "Reporting": [
             st.Page(
-                "pages/4_Reports.py",
+                page_file("4_Reports.py"),
                 title="Custom Reports",
                 icon=":material/analytics:",
             ),
-            st.Page("pages/10_Salmonella_Report.py", title="Salmonella Test Report", icon=":material/lab_profile:"),
+            st.Page(page_file("10_Salmonella_Report.py"), title="Salmonella Test Report", icon=":material/lab_profile:"),
         ],
     }
 
 if has_permission(user, Permission.IMPORT_DATA):
-    pages["Production"].insert(0, st.Page("pages/1_Production_Import.py", title="Production Import", icon=":material/upload_file:"))
+    pages["Production"].insert(0, st.Page(page_file("1_Production_Import.py"), title="Production Import", icon=":material/upload_file:"))
 
 administration = []
 if has_permission(user, Permission.VIEW_DIAGNOSTICS):
-    administration.append(st.Page("pages/12_System_Status.py", title="System Status", icon=":material/settings:"))
+    administration.append(st.Page(page_file("12_System_Status.py"), title="System Status", icon=":material/settings:"))
 if has_permission(user, Permission.USE_PROFILER):
-    administration.append(st.Page("pages/14_Source_Data_Profiler.py", title="Source Data Profiler", icon=":material/find_in_page:"))
+    administration.append(st.Page(page_file("14_Source_Data_Profiler.py"), title="Source Data Profiler", icon=":material/find_in_page:"))
 if has_permission(user, Permission.VIEW_AUDIT):
-    administration.append(st.Page("pages/16_Audit_Log.py", title="Audit Log", icon=":material/history:"))
+    administration.append(st.Page(page_file("16_Audit_Log.py"), title="Audit Log", icon=":material/history:"))
 if has_permission(user, Permission.MANAGE_USERS):
-    administration.append(st.Page("pages/15_User_Management.py", title="User Management", icon=":material/manage_accounts:"))
+    administration.append(st.Page(page_file("15_User_Management.py"), title="User Management", icon=":material/manage_accounts:"))
 if administration:
     pages["Administration"] = administration
 

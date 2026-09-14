@@ -27,6 +27,13 @@ def test_snowflake_mode_never_renders_second_password_login(monkeypatch):
     assert not any(item.label == "Password" for item in app.text_input)
 
 
+def test_root_snowflake_entrypoint_preserves_local_login(monkeypatch, tmp_path):
+    monkeypatch.setenv("EFNS_RUNTIME_MODE", "local")
+    monkeypatch.setenv("EFNS_AUTH_DB", str(tmp_path / "root-entry.db"))
+    app = AppTest.from_file(ROOT / "streamlit_app.py", default_timeout=20).run()
+    assert list(app.exception) == []
+    assert any("Sign in to EFNS" in block.value for block in app.markdown)
+
 
 def test_valid_login_creates_session_and_requires_password_change(tmp_path, monkeypatch):
     password = generate_temporary_password()

@@ -11,16 +11,26 @@
 - A System Status page with repository/runtime/configuration state and an explicit read-only connection check.
 - A schema-agnostic Source Data Profiler for in-memory CSV/XLSX/XLSM inspection, heuristic key/relationship suggestions, and profile-only CSV/Excel exports.
 - Offline executor coverage for runtime selection, settings, transactions, affected-row parsing and validated Connector/Snowpark bulk writes.
-- Provisional DEV SQL for RAW, CORE and REPORTING standard tables/views.
+- Replaceable application authentication contract with local SQLite password
+  sessions and Snowflake viewer identity, both enforcing `@nsegg.ca` access.
+- Role-aware navigation, direct page guards, repository-level mutation authorization, Admin user management and an Admin/Developer audit log.
+- Provisional DEV SQL for RAW, CORE and REPORTING plus SECURITY/APP persistence,
+  role/grant scripts, X-Small warehouse and a reviewed resource-monitor default.
 - Automated pytest workflow for pushes and pull requests.
+- Dual local/Snowflake identity handling: SQLite sessions locally and trusted
+  `st.user.email` in Snowflake, backed by Snowflake application-user and audit tables.
+- Python 3.11/Streamlit 1.52.2 warehouse deployment bundle, root entry point,
+  credential-free Snowflake CLI project definition with an explicit warehouse
+  runtime, table-specific DEV grants, and a 10-credit monthly cost control.
 
 Mock mode remains the default. Connection/executor behavior is available for offline verification but has not been run against an EFNS Snowflake account. Dataverse logical names, choices and relationships remain provisional.
 
 ## Validation boundaries
 
-- **Completed in code:** executor abstraction, lazy runtime choice, parameter binding, transaction boundary, bulk insert strategy, sanitized errors, configuration templates and optimistic locking.
+- **Completed in code:** executor abstraction, lazy runtime choice, parameter binding, transaction boundary, bulk insert strategy, sanitized errors, configuration templates, optimistic locking, prototype authentication and application authorization.
 - **Offline verification:** syntax/import checks and executor/repository tests with fake connector and Snowpark sessions.
-- **Needs Snowflake DEV:** authentication, grants, DML affected-row shapes, transaction behavior, query result casing and bulk statement limits.
+- **Needs Snowflake DEV:** `st.user` email population, package resolution, grants,
+  DML affected-row shapes, transaction behavior, query result casing and bulk limits.
 - **Needs EIMS metadata:** final identifiers, types, required fields, relationships, choice values and business rules.
 
-Run: `.\.venv\Scripts\python.exe -m streamlit run app/Home.py`.
+Run: `.\.venv\Scripts\python.exe -m streamlit run streamlit_app.py`.
