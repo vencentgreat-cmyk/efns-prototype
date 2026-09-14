@@ -28,8 +28,10 @@ def check() -> list[str]:
             errors.append(f"Missing required deployment file: {name}")
 
     environment = (ROOT / "environment.yml").read_text(encoding="utf-8")
-    if "python=3.11" not in environment:
-        errors.append("environment.yml must pin Python 3.11.")
+    if re.search(r"(?mi)^\s*-\s*python\s*(?:[=<>!~].*)?$", environment):
+        errors.append(
+            "environment.yml must let the Snowflake warehouse runtime provide Python."
+        )
     if "streamlit=1.52.2" not in environment:
         errors.append("environment.yml must pin the reviewed warehouse Streamlit version.")
 
@@ -41,6 +43,33 @@ def check() -> list[str]:
     for forbidden in ("ROOT_LOCATION", ".env", ".local", "tests/", "secrets.toml"):
         if forbidden in project:
             errors.append(f"snowflake.yml must not deploy {forbidden}.")
+
+    post_deploy_path = ROOT / "sql" / "08_post_deploy_grants.sql"
+    if not post_deploy_path.is_file():
+        errors.append("Missing required post-deployment SQL: sql/08_post_deploy_grants.sql")
+    else:
+        post_deploy = " ".join(
+            post_deploy_path.read_text(encoding="utf-8").upper().split()
+        )
+        deployer_role = "USE ROLE EFNS_DEV_DEPLOYER;"
+        runtime_alter = (
+            "ALTER STREAMLIT EFNS_DEV.APP.EFNS_INTERNAL_APP "
+            "SET RUNTIME_NAME = 'SYSTEM$WAREHOUSE_RUNTIME';"
+        )
+        security_role = "USE ROLE SECURITYADMIN;"
+        if runtime_alter not in post_deploy:
+            errors.append(
+                "Post-deployment SQL must explicitly enforce SYSTEM$WAREHOUSE_RUNTIME."
+            )
+        elif not (
+            0 <= post_deploy.find(deployer_role)
+            < post_deploy.find(runtime_alter)
+            < post_deploy.find(security_role)
+        ):
+            errors.append(
+                "Post-deployment runtime enforcement must run as EFNS_DEV_DEPLOYER "
+                "before viewer grants."
+            )
 
     foundation = (ROOT / "sql" / "00_dev_foundation.sql").read_text(encoding="utf-8")
     if "WITH CREDIT_QUOTA = 10" not in foundation:

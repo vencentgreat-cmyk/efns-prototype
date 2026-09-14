@@ -1,6 +1,7 @@
 # Streamlit in Snowflake Compatibility Audit
 
-Audit target: Snowflake warehouse runtime, Python 3.11, Streamlit 1.52.2.
+Audit target: Snowflake warehouse runtime, its default Python 3.11 runtime, and
+Streamlit 1.52.2. This combination has deployed and started successfully in DEV.
 
 ## Compatible now
 
@@ -19,11 +20,14 @@ Audit target: Snowflake warehouse runtime, Python 3.11, Streamlit 1.52.2.
 - SQLite is optional at import time and instantiated for the local authentication
   backend only. Snowflake mode instantiates `SnowflakeAuthStore`; `.local` is
   absent from deployment artifacts.
-- Deployment dependencies use only the Snowflake Anaconda channel: Python,
-  Streamlit, pandas, NumPy, Snowpark, and openpyxl.
+- Deployment dependencies use only the Snowflake Anaconda channel: Streamlit,
+  pandas, NumPy, Snowpark, and openpyxl. `environment.yml` deliberately omits a
+  Python dependency so the warehouse runtime supplies its default Python 3.11.
 
 ## Snowflake-specific behavior
 
+- `snowflake.yml` requests `SYSTEM$WAREHOUSE_RUNTIME`, and the mandatory
+  post-deployment SQL sets it again after every deploy or replacement.
 - `page_title` and `page_icon` arguments to `st.set_page_config` are ignored by
   Snowflake; layout remains supported.
 - Snowflake adds `streamlit-` to browser query parameter names while the
@@ -39,6 +43,8 @@ Audit target: Snowflake warehouse runtime, Python 3.11, Streamlit 1.52.2.
 
 - Confirm that the account package channel resolves every version in
   `environment.yml`, particularly pandas, NumPy, openpyxl, and Streamlit 1.52.2.
+  Python should be the warehouse runtime default (currently Python 3.11), not an
+  explicit Conda dependency.
 - Confirm `st.user.email` is populated for every EFNS viewer and normalized to
   the expected corporate email.
 - Validate cross-page record links in the Snowsight `/!/` URL shell.

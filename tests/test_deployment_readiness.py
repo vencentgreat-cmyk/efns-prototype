@@ -76,9 +76,35 @@ def test_ordinary_account_roles_receive_no_data_object_privileges():
 
 def test_runtime_and_monitor_are_explicitly_bounded():
     project = (ROOT / "snowflake.yml").read_text(encoding="utf-8")
+    environment = (ROOT / "environment.yml").read_text(encoding="utf-8")
     foundation = (ROOT / "sql" / "00_dev_foundation.sql").read_text(encoding="utf-8")
+    post_deploy = " ".join(
+        (ROOT / "sql" / "08_post_deploy_grants.sql")
+        .read_text(encoding="utf-8")
+        .upper()
+        .split()
+    )
 
     assert "runtime_name: SYSTEM$WAREHOUSE_RUNTIME" in project
+    assert not re.search(r"(?mi)^\s*-\s*python\s*(?:[=<>!~].*)?$", environment)
+    assert "streamlit=1.52.2" in environment
+    for dependency in (
+        "pandas=2.*",
+        "numpy=2.*",
+        "snowflake-snowpark-python",
+        "openpyxl",
+    ):
+        assert dependency in environment
+
+    deployer_role = "USE ROLE EFNS_DEV_DEPLOYER;"
+    runtime_alter = (
+        "ALTER STREAMLIT EFNS_DEV.APP.EFNS_INTERNAL_APP "
+        "SET RUNTIME_NAME = 'SYSTEM$WAREHOUSE_RUNTIME';"
+    )
+    security_role = "USE ROLE SECURITYADMIN;"
+    assert 0 <= post_deploy.find(deployer_role) < post_deploy.find(runtime_alter)
+    assert post_deploy.find(runtime_alter) < post_deploy.find(security_role)
+
     assert "WITH CREDIT_QUOTA = 10" in foundation
     assert "ALTER RESOURCE MONITOR EFNS_DEV_MONTHLY_MONITOR SET CREDIT_QUOTA = 10" in foundation
     assert "ON 75 PERCENT DO NOTIFY" in foundation

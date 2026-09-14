@@ -135,8 +135,9 @@ Snowflake runtime selection is lazy and ordered: Streamlit named connection,
 active warehouse Snowpark session, then Python connector. See
 `docs/CONNECTION_ARCHITECTURE.md` for authentication and deployment details.
 
-The application floor and Snowflake warehouse pin are Streamlit `1.52.2` on
-Python 3.11. Newer compatible Streamlit versions remain usable in local mode.
+The application floor and Snowflake warehouse pin are Streamlit `1.52.2` on the
+warehouse runtime's default Python 3.11. `environment.yml` intentionally leaves
+Python unpinned. Newer compatible Streamlit versions remain usable in local mode.
 
 ### Source Data Profiler
 
