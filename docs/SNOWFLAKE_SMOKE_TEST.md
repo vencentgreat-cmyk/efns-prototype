@@ -2,6 +2,38 @@
 
 Use synthetic data only. Record the Snowflake query ID and UTC time for failures.
 
+## Load the reviewed synthetic fixture
+
+After the DEV tables and reporting views from `sql/02_core_tables.sql`,
+`sql/03_production_tables.sql`, and `sql/04_reporting_views.sql` exist, load the
+connected fixture with a CLI connection that can use `SYSADMIN`:
+
+```powershell
+snow sql --connection efns-dev --filename sql/09_dev_synthetic_seed.sql
+```
+
+The script inserts only deterministic `DEV_SYNTH` records and can be run more
+than once without duplicates. Review all three result sets at the end: actual
+counts must equal expected counts, and every broken-relationship and repository
+semantic-mismatch count must be zero.
+It creates 5 accounts, 8 facilities, 12 flocks, 20 flock transactions, 6 quota
+registrations, 10 quota transactions, 10 salmonella tests, one synthetic import
+batch, and 100 production records. It does not create application users, audit
+events, raw EIMS rows, or security objects.
+
+To remove only the fixture and other deliberately `DEV_SYNTH`-prefixed records,
+run the dependency-safe cleanup script:
+
+```powershell
+snow sql --connection efns-dev --filename sql/10_dev_synthetic_cleanup.sql
+```
+
+All cleanup verification counts must be zero. Both scripts use a transaction
+with an exception handler that rolls back on failure. Neither script changes a
+schema or uses `DROP` or `TRUNCATE`.
+
+## Checks
+
 1. **Deployment runtime:** immediately after deployment, run
    `sql/08_post_deploy_grants.sql`. Inspect the Streamlit object and confirm
    `RUNTIME_NAME` is `SYSTEM$WAREHOUSE_RUNTIME`, the application starts, the
