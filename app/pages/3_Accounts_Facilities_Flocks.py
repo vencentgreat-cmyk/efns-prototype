@@ -15,6 +15,7 @@ from app.navigation import (
     read_record_view,
     record_command_bar,
     selected_row_index,
+    timestamp_column,
 )
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import ACCOUNT_STATUSES
@@ -141,7 +142,7 @@ if view.name == "list":
                 "REGISTRATION_NUMBER": "Registration Number",
                 "CONTACT_PHONE": "Main Phone",
                 "CONTACT_EMAIL": "Email",
-                "CREATED_AT": st.column_config.DatetimeColumn("Created On", format="YYYY-MM-DD HH:mm"),
+                "CREATED_AT": timestamp_column("Created On"),
             },
         )
 

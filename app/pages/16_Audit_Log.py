@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import get_auth_store, require_page_permission
+from app.navigation import timestamp_column
 from app.security import Permission
 from app.ui import apply_theme, page_header, section_intro
 
@@ -56,7 +57,7 @@ else:
         hide_index=True,
         height=600,
         column_config={
-            "OCCURRED_AT": st.column_config.DatetimeColumn("Timestamp", format="YYYY-MM-DD HH:mm:ss"),
+            "OCCURRED_AT": timestamp_column("Timestamp"),
             "USER": st.column_config.TextColumn("User"),
             "ACTION": st.column_config.TextColumn("Action"),
             "ENTITY_TYPE": st.column_config.TextColumn("Entity"),

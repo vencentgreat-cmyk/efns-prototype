@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
+from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import EGG_COLOURS, FLOCK_QUOTA_TYPES, FLOCK_STATUSES, UNASSIGNED_LABEL
 from data.repositories import get_repository
@@ -78,7 +78,7 @@ if view.name == "list":
         display["ACCOUNT_LINK"] = display.apply(lambda row: module_url("Accounts_&_Facilities", row["ACCOUNT_ID"], account_names.get(row["ACCOUNT_ID"], "Unknown")), axis=1)
         display["FACILITY_LINK"] = display.apply(lambda row: module_url("Facilities", row["FACILITY_ID"], facility_names.get(row["FACILITY_ID"], UNASSIGNED_LABEL)), axis=1)
         st.session_state.flock_list_row_ids = display["FLOCK_ID"].tolist()
-        st.dataframe(display[["FLOCK_LINK", "ACCOUNT_LINK", "FACILITY_LINK", "PERMIT_NUMBER", "BIRD_COUNT", "HATCH_DATE", "EGG_COLOUR", "STATUS", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_list_grid", column_config={"FLOCK_LINK": st.column_config.LinkColumn("Flock Number", display_text=r".*#(.*)$"), "ACCOUNT_LINK": st.column_config.LinkColumn("Account", display_text=r".*#(.*)$"), "FACILITY_LINK": st.column_config.LinkColumn("Facility", display_text=r".*#(.*)$"), "CREATED_AT": st.column_config.DatetimeColumn("Created On", format="YYYY-MM-DD HH:mm")})
+        st.dataframe(display[["FLOCK_LINK", "ACCOUNT_LINK", "FACILITY_LINK", "PERMIT_NUMBER", "BIRD_COUNT", "HATCH_DATE", "EGG_COLOUR", "STATUS", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_list_grid", column_config={"FLOCK_LINK": st.column_config.LinkColumn("Flock Number", display_text=r".*#(.*)$"), "ACCOUNT_LINK": st.column_config.LinkColumn("Account", display_text=r".*#(.*)$"), "FACILITY_LINK": st.column_config.LinkColumn("Facility", display_text=r".*#(.*)$"), "CREATED_AT": timestamp_column("Created On")})
 else:
     current = repo.get_flock(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:

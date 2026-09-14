@@ -69,9 +69,9 @@ class MockRepository(BaseRepository):
             "SOURCE": "Synthetic Generator",
             "REPORTING_YEAR": dt.date.today().year,
             "REPORTING_WEEK": 1,
-            "UPLOAD_TIMESTAMP": dt.datetime.now(),
-            "CREATED_AT": dt.datetime.now(),
-            "UPDATED_AT": dt.datetime.now(),
+            "UPLOAD_TIMESTAMP": dt.datetime.now(dt.timezone.utc),
+            "CREATED_AT": dt.datetime.now(dt.timezone.utc),
+            "UPDATED_AT": dt.datetime.now(dt.timezone.utc),
             "STATUS": "Committed",
             "ROW_COUNT": len(self._production),
             "ERROR_COUNT": 0,
@@ -97,13 +97,13 @@ class MockRepository(BaseRepository):
                 raise ConcurrencyError(
                     "This record changed after it was opened. Reload it before saving again."
                 )
-            values["UPDATED_AT"] = dt.datetime.now()
+            values["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
             for column, value in values.items():
                 frame.loc[index, column] = value
         else:
             if expected is not None:
                 raise ConcurrencyError("This record no longer exists. Return to the list and reload.")
-            now = dt.datetime.now()
+            now = dt.datetime.now(dt.timezone.utc)
             values.setdefault("CREATED_AT", now)
             values["UPDATED_AT"] = now
             frame = pd.concat([frame, pd.DataFrame([values])], ignore_index=True)
@@ -481,9 +481,9 @@ class MockRepository(BaseRepository):
         """Create an import batch record. Returns import_id."""
         import_id = record.get("IMPORT_ID", str(uuid.uuid4()))
         record["IMPORT_ID"] = import_id
-        record.setdefault("UPLOAD_TIMESTAMP", dt.datetime.now())
-        record.setdefault("CREATED_AT", dt.datetime.now())
-        record.setdefault("UPDATED_AT", dt.datetime.now())
+        record.setdefault("UPLOAD_TIMESTAMP", dt.datetime.now(dt.timezone.utc))
+        record.setdefault("CREATED_AT", dt.datetime.now(dt.timezone.utc))
+        record.setdefault("UPDATED_AT", dt.datetime.now(dt.timezone.utc))
         record.setdefault("STATUS", "Uploaded")
         record.setdefault("ROW_COUNT", 0)
         record.setdefault("ERROR_COUNT", 0)
@@ -542,7 +542,7 @@ class MockRepository(BaseRepository):
         """Insert production records. Returns count inserted."""
         records = records.copy()
         records["IMPORT_ID"] = import_id
-        now = dt.datetime.now()
+        now = dt.datetime.now(dt.timezone.utc)
         if "CREATED_AT" not in records.columns:
             records["CREATED_AT"] = now
         else:

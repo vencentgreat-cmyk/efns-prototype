@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import current_page_url, ensure_record_form_state, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
+from app.navigation import current_page_url, ensure_record_form_state, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import QUOTA_LEASE_TYPES, QUOTA_TRANSACTION_TYPES, QUOTA_TYPES, UNASSIGNED_LABEL
 from data.repositories import get_repository
@@ -123,7 +123,7 @@ if view.name == "list":
         display["OWNER_LINK"] = display.apply(lambda row: module_url("Accounts_&_Facilities", row["OWNER_ACCOUNT_ID"], row["OWNER_NAME"] or "Unknown"), axis=1)
         display["RELATED_ACCOUNT_LINK"] = display.apply(lambda row: module_url("Accounts_&_Facilities", row["RELATED_ACCOUNT_ID"], row["RELATED_NAME"] or "Unknown") if row.get("RELATED_ACCOUNT_ID") else None, axis=1)
         st.session_state.quota_tx_list_row_ids = display["QUOTA_TRANSACTION_ID"].tolist()
-        st.dataframe(display[["TRANSACTION_LINK", "QUOTA_LINK", "OWNER_LINK", "RELATED_ACCOUNT_LINK", "TRANSACTION_TYPE", "EFFECTIVE_DATE", "QUOTA_COUNT", "PRICE", "CREATED_AT"]], width="stretch", height=520, hide_index=True, on_select="rerun", selection_mode="single-row", key="quota_tx_list_grid", column_config={"TRANSACTION_LINK": st.column_config.LinkColumn("Quota Transaction", display_text=r".*#(.*)$"), "QUOTA_LINK": st.column_config.LinkColumn("Quota Registration", display_text=r".*#(.*)$"), "OWNER_LINK": st.column_config.LinkColumn("Owner Account", display_text=r".*#(.*)$"), "RELATED_ACCOUNT_LINK": st.column_config.LinkColumn("Related Account", display_text=r".*#(.*)$"), "EFFECTIVE_DATE": st.column_config.DateColumn("Effective Date", format="YYYY-MM-DD"), "QUOTA_COUNT": st.column_config.NumberColumn("Quota Count", format="%.0f"), "PRICE": st.column_config.NumberColumn("Price", format="$%.2f"), "CREATED_AT": st.column_config.DatetimeColumn("Created On", format="YYYY-MM-DD HH:mm")})
+        st.dataframe(display[["TRANSACTION_LINK", "QUOTA_LINK", "OWNER_LINK", "RELATED_ACCOUNT_LINK", "TRANSACTION_TYPE", "EFFECTIVE_DATE", "QUOTA_COUNT", "PRICE", "CREATED_AT"]], width="stretch", height=520, hide_index=True, on_select="rerun", selection_mode="single-row", key="quota_tx_list_grid", column_config={"TRANSACTION_LINK": st.column_config.LinkColumn("Quota Transaction", display_text=r".*#(.*)$"), "QUOTA_LINK": st.column_config.LinkColumn("Quota Registration", display_text=r".*#(.*)$"), "OWNER_LINK": st.column_config.LinkColumn("Owner Account", display_text=r".*#(.*)$"), "RELATED_ACCOUNT_LINK": st.column_config.LinkColumn("Related Account", display_text=r".*#(.*)$"), "EFFECTIVE_DATE": st.column_config.DateColumn("Effective Date", format="YYYY-MM-DD"), "QUOTA_COUNT": st.column_config.NumberColumn("Quota Count", format="%.0f"), "PRICE": st.column_config.NumberColumn("Price", format="$%.2f"), "CREATED_AT": timestamp_column("Created On")})
 else:
     current = repo.get_quota_transaction(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:

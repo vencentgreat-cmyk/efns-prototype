@@ -6,6 +6,7 @@ import streamlit as st
 import os
 
 from app.auth import ensure_authorized_repository, render_user_sidebar, require_authenticated
+from app.navigation import timestamp_column
 from app.security import Permission, has_permission
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.connection import LazySqlExecutor
@@ -153,6 +154,7 @@ def dashboard() -> None:
                 imports.sort_values("UPLOAD_TIMESTAMP", ascending=False)[columns].head(10),
                 width="stretch",
                 hide_index=True,
+                column_config={"UPLOAD_TIMESTAMP": timestamp_column("Uploaded On")},
             )
 
 

@@ -22,6 +22,44 @@ class RepositoryConnectionError(RepositoryError):
     """Raised when a configured data service cannot be reached safely."""
 
 
+class RepositoryOperationError(RepositoryError):
+    """Safe, correlatable Snowflake operation failure.
+
+    Bound values and raw server messages are deliberately excluded. Snowflake's
+    query ID, error code, and SQLSTATE are safe operational references that an
+    administrator can correlate with query history.
+    """
+
+    def __init__(
+        self,
+        operation: str,
+        entity: str,
+        *,
+        query_id: str | None = None,
+        error_code: str | None = None,
+        sql_state: str | None = None,
+        error_type: str | None = None,
+    ) -> None:
+        self.operation = str(operation or "SQL").upper()
+        self.entity = str(entity or "Snowflake object").upper()
+        self.query_id = query_id
+        self.error_code = error_code
+        self.sql_state = sql_state
+        self.error_type = error_type
+        references = []
+        if query_id:
+            references.append(f"query ID {query_id}")
+        if error_code:
+            references.append(f"code {error_code}")
+        if sql_state:
+            references.append(f"SQLSTATE {sql_state}")
+        suffix = f" Reference: {', '.join(references)}." if references else ""
+        super().__init__(
+            f"Snowflake {self.operation} failed for {self.entity}.{suffix} "
+            "Ask an administrator to correlate this reference with Snowflake query history."
+        )
+
+
 class ConcurrencyError(RepositoryError):
     """Raised when a record changed since the editor last loaded it.
 

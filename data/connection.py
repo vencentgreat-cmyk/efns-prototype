@@ -17,11 +17,76 @@ from typing import Callable, Iterable, Iterator, Sequence
 
 import pandas as pd
 
-from data.repositories.base import RepositoryConfigurationError, RepositoryConnectionError, RepositoryError
+from data.repositories.base import (
+    RepositoryConfigurationError,
+    RepositoryConnectionError,
+    RepositoryError,
+    RepositoryOperationError,
+)
 
 
 Params = Sequence[object] | None
 ParamRows = Iterable[Sequence[object]]
+
+
+_SQL_OPERATION = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|MERGE|BEGIN|COMMIT|ROLLBACK)\b", re.IGNORECASE)
+_SQL_ENTITY = re.compile(
+    r"\b(?:FROM|INTO|UPDATE|MERGE\s+INTO)\s+([A-Za-z_][A-Za-z0-9_$.]*)",
+    re.IGNORECASE,
+)
+_SAFE_REFERENCE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def _safe_reference(value) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if _SAFE_REFERENCE.fullmatch(text) else None
+
+
+def _operation_context(sql: str) -> tuple[str, str]:
+    operation_match = _SQL_OPERATION.search(sql or "")
+    entity_match = _SQL_ENTITY.search(sql or "")
+    operation = operation_match.group(1).upper() if operation_match else "SQL"
+    entity = entity_match.group(1).split(".")[-1].upper() if entity_match else "TRANSACTION"
+    return operation, entity
+
+
+def _operation_error(exc: Exception, sql: str, cursor=None) -> RepositoryOperationError:
+    operation, entity = _operation_context(sql)
+    query_id = next(
+        (
+            _safe_reference(getattr(source, attribute, None))
+            for source in (exc, cursor)
+            for attribute in ("query_id", "sfqid")
+            if _safe_reference(getattr(source, attribute, None))
+        ),
+        None,
+    )
+    error_code = next(
+        (
+            _safe_reference(getattr(exc, attribute, None))
+            for attribute in ("errno", "sql_error_code")
+            if _safe_reference(getattr(exc, attribute, None))
+        ),
+        None,
+    )
+    sql_state = next(
+        (
+            _safe_reference(getattr(exc, attribute, None))
+            for attribute in ("sqlstate", "sql_state")
+            if _safe_reference(getattr(exc, attribute, None))
+        ),
+        None,
+    )
+    return RepositoryOperationError(
+        operation,
+        entity,
+        query_id=query_id,
+        error_code=error_code,
+        sql_state=sql_state,
+        error_type=type(exc).__name__,
+    )
 
 
 def _rewrite_placeholders(sql: str, source: str, target: str | None = None) -> tuple[str, int]:
@@ -198,8 +263,8 @@ class ConnectorExecutor(SqlExecutor):
         except RepositoryError:
             raise
         except Exception as exc:
-            raise RepositoryError(
-                "Snowflake operation failed. Check SQL compatibility and assigned privileges."
+            raise RepositoryConnectionError(
+                "Snowflake could not open a SQL cursor for this operation."
             ) from exc
         finally:
             if cursor is not None:
@@ -207,7 +272,12 @@ class ConnectorExecutor(SqlExecutor):
 
     def query(self, sql: str, params: Params = None) -> pd.DataFrame:
         with self._cursor() as cursor:
-            cursor.execute(sql, tuple(params or ()))
+            try:
+                cursor.execute(sql, tuple(params or ()))
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql, cursor) from exc
             rows = cursor.fetchall()
             columns = [column[0] for column in (cursor.description or [])]
             # Some lightweight offline cursor doubles expose only fetchone.
@@ -220,7 +290,12 @@ class ConnectorExecutor(SqlExecutor):
 
     def execute(self, sql: str, params: Params = None) -> int:
         with self._cursor() as cursor:
-            cursor.execute(sql, tuple(params or ()))
+            try:
+                cursor.execute(sql, tuple(params or ()))
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql, cursor) from exc
             return int(cursor.rowcount if cursor.rowcount is not None else -1)
 
     def executemany(self, sql: str, rows: ParamRows, *, batch_size: int = 500) -> int:
@@ -229,7 +304,12 @@ class ConnectorExecutor(SqlExecutor):
         if not values:
             return 0
         with self._cursor() as cursor:
-            cursor.executemany(sql, values)
+            try:
+                cursor.executemany(sql, values)
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql, cursor) from exc
             rowcount = cursor.rowcount
             return len(values) if rowcount is None or rowcount < 0 else int(rowcount)
 
@@ -273,8 +353,9 @@ def _affected_rows(rows: list[object]) -> int:
     total = 0
     found = False
     for key, value in values.items():
-        normalized = str(key).lower().replace("_", " ")
-        if "number of rows" in normalized and any(word in normalized for word in ("insert", "update", "delete", "merge")):
+        normalized = str(key).lower().replace("_", " ").replace('"', "")
+        row_count_label = "number of rows" in normalized or "rows affected" in normalized
+        if row_count_label and any(word in normalized for word in ("insert", "update", "delete", "merge", "affect")):
             total += int(value or 0)
             found = True
     return total if found else -1
@@ -295,9 +376,7 @@ class SnowparkExecutor(SqlExecutor):
         except RepositoryError:
             raise
         except Exception as exc:
-            raise RepositoryError(
-                "Snowflake operation failed. Check SQL compatibility and assigned privileges."
-            ) from exc
+            raise _operation_error(exc, sql) from exc
 
     def query(self, sql: str, params: Params = None) -> pd.DataFrame:
         try:
@@ -307,9 +386,7 @@ class SnowparkExecutor(SqlExecutor):
         except RepositoryError:
             raise
         except Exception as exc:
-            raise RepositoryError(
-                "Snowflake operation failed. Check SQL compatibility and assigned privileges."
-            ) from exc
+            raise _operation_error(exc, sql) from exc
         if not rows:
             return pd.DataFrame(columns=columns)
         dictionaries = [row.as_dict() if hasattr(row, "as_dict") else dict(row) for row in rows]

@@ -72,10 +72,12 @@ def repository_with_connection(connection):
 def test_upsert_binds_values_and_commits():
     connection = FakeConnection()
     repo = repository_with_connection(connection)
-    repo.upsert_account({"ACCOUNT_ID": "a1", "ORGANIZATION_NAME": "O'Reilly"})
-    sql, params = connection.cursor_instance.calls[0]
+    result = repo.upsert_account({"ORGANIZATION_NAME": "O'Reilly"})
+    sql, params = connection.cursor_instance.calls[-1]
     assert "O'Reilly" not in sql
-    assert params == ("O'Reilly", "a1")
+    assert sql.startswith("INSERT INTO EFNS_DEV.CORE.ACCOUNT")
+    assert params[0] == result
+    assert params[1:] == ("O'Reilly",)
     assert connection.commits == 1
 
 

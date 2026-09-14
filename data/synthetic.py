@@ -130,7 +130,7 @@ def generate_accounts(n: int = 12, seed: int = 42) -> pd.DataFrame:
             }
         )
     df = pd.DataFrame(rows)
-    now = dt.datetime.now()
+    now = dt.datetime.now(dt.timezone.utc)
     df["CREATED_AT"] = now
     df["UPDATED_AT"] = now
     return df
@@ -165,7 +165,7 @@ def generate_facilities(accounts: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
                 }
             )
     df = pd.DataFrame(rows)
-    now = dt.datetime.now()
+    now = dt.datetime.now(dt.timezone.utc)
     df["CREATED_AT"] = now
     df["UPDATED_AT"] = now
     return df
@@ -188,8 +188,8 @@ def generate_facility_details(facilities: pd.DataFrame, seed: int = 42) -> pd.Da
                 }
             )
     frame = pd.DataFrame(rows)
-    frame["CREATED_AT"] = dt.datetime.now()
-    frame["UPDATED_AT"] = dt.datetime.now()
+    frame["CREATED_AT"] = dt.datetime.now(dt.timezone.utc)
+    frame["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
     return frame
 
 
@@ -212,8 +212,8 @@ def generate_quota_registrations(accounts: pd.DataFrame, seed: int = 42) -> pd.D
                 }
             )
     frame = pd.DataFrame(rows)
-    frame["CREATED_AT"] = dt.datetime.now()
-    frame["UPDATED_AT"] = dt.datetime.now()
+    frame["CREATED_AT"] = dt.datetime.now(dt.timezone.utc)
+    frame["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
     return frame
 
 def generate_flocks(
@@ -293,7 +293,7 @@ def generate_flocks(
             )
             flock_counter += 1
     df = pd.DataFrame(rows)
-    now = dt.datetime.now()
+    now = dt.datetime.now(dt.timezone.utc)
     df["CREATED_AT"] = now
     df["UPDATED_AT"] = now
     return df
@@ -319,7 +319,9 @@ def generate_flock_transactions(flocks: pd.DataFrame, seed: int = 42) -> pd.Data
                 }
             )
     df = pd.DataFrame(rows)
-    df["CREATED_AT"] = dt.datetime.now()
+    now = dt.datetime.now(dt.timezone.utc)
+    df["CREATED_AT"] = now
+    df["UPDATED_AT"] = now
     return df
 
 
@@ -351,8 +353,8 @@ def generate_quota_transactions(
             }
         )
     frame = pd.DataFrame(rows)
-    frame["CREATED_AT"] = dt.datetime.now()
-    frame["UPDATED_AT"] = dt.datetime.now()
+    frame["CREATED_AT"] = dt.datetime.now(dt.timezone.utc)
+    frame["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
     return frame
 
 
@@ -381,8 +383,8 @@ def generate_salmonella_tests(flocks: pd.DataFrame, seed: int = 42) -> pd.DataFr
             }
         )
     frame = pd.DataFrame(rows)
-    frame["CREATED_AT"] = dt.datetime.now()
-    frame["UPDATED_AT"] = dt.datetime.now()
+    frame["CREATED_AT"] = dt.datetime.now(dt.timezone.utc)
+    frame["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
     return frame
 
 
@@ -465,7 +467,7 @@ def generate_production(
             }
         )
     df = pd.DataFrame(rows)
-    now = dt.datetime.now()
+    now = dt.datetime.now(dt.timezone.utc)
     df["CREATED_AT"] = now
     df["UPDATED_AT"] = now
     return df
