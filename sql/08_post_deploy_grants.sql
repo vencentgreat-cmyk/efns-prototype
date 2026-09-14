@@ -2,6 +2,13 @@
 -- Application roles remain authoritative in SECURITY.APP_USER; these account
 -- roles only allow a signed-in Snowflake user to open the Streamlit object.
 
+-- The CLI project definition selects warehouse runtime during creation, and
+-- this post-deploy guard makes the choice explicit after every replacement.
+USE ROLE EFNS_DEV_DEPLOYER;
+
+ALTER STREAMLIT EFNS_DEV.APP.EFNS_INTERNAL_APP
+    SET RUNTIME_NAME = 'SYSTEM$WAREHOUSE_RUNTIME';
+
 USE ROLE SECURITYADMIN;
 
 GRANT USAGE ON DATABASE EFNS_DEV TO ROLE EFNS_DEV_ADMIN;

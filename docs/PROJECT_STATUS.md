@@ -19,7 +19,7 @@
 - Automated pytest workflow for pushes and pull requests.
 - Dual local/Snowflake identity handling: SQLite sessions locally and trusted
   `st.user.email` in Snowflake, backed by Snowflake application-user and audit tables.
-- Python 3.11/Streamlit 1.52.2 warehouse deployment bundle, root entry point,
+- Snowflake-default Python 3.11/Streamlit 1.52.2 warehouse deployment bundle,
   credential-free Snowflake CLI project definition with an explicit warehouse
   runtime, table-specific DEV grants, and a 10-credit monthly cost control.
 
