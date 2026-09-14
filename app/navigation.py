@@ -15,6 +15,26 @@ from app.security import Permission
 VALID_VIEWS = {"list", "new", "detail", "edit"}
 
 
+def _module_path(current_path: str, page_slug: str) -> str:
+    """Preserve Snowflake's /!/ multipage prefix when building record links."""
+    encoded = quote(page_slug, safe="_&-")
+    if "/!/" in current_path:
+        app_root = current_path.split("/!/", 1)[0]
+        return f"{app_root}/!/{encoded}"
+    return f"/{encoded}"
+
+
+def _url_query(current_path: str, values: dict[str, str]) -> str:
+    """Encode manual Snowflake links with its browser query-key prefix."""
+    prefix = "streamlit-" if "/!/" in current_path else ""
+    return urlencode({f"{prefix}{key}": value for key, value in values.items()})
+
+
+def _snowflake_fragment_route(parsed) -> str | None:
+    route = str(parsed.fragment or "").split("?", 1)[0].split("#", 1)[0]
+    return route if "/!/" in route else None
+
+
 @dataclass(frozen=True)
 class RecordView:
     name: str
@@ -51,11 +71,17 @@ def back_to_list() -> None:
 def current_page_url(record_id: str, label: str, view: str = "detail") -> str:
     """Build an absolute link to a record on the current Streamlit page."""
     raw_url = str(getattr(st.context, "url", "") or "")
+    parsed = urlsplit(raw_url)
+    fragment_route = _snowflake_fragment_route(parsed)
+    display_label = str(label or record_id).replace("#", " ")
+    if fragment_route:
+        query = _url_query(fragment_route, {"view": view, "id": str(record_id)})
+        fragment = f"{fragment_route}?{query}#{display_label}"
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, fragment))
     base = raw_url.split("?", 1)[0].split("#", 1)[0]
     if not base or base.lower() == "none":
         base = "http://localhost:8501"
-    query = urlencode({"view": view, "id": str(record_id)})
-    display_label = str(label or record_id).replace("#", " ")
+    query = _url_query(urlsplit(base).path, {"view": view, "id": str(record_id)})
     return f"{base}?{query}#{display_label}"
 
 
@@ -65,9 +91,15 @@ def module_url(page_slug: str, record_id: str, label: str) -> str:
     parsed = urlsplit(raw_url)
     if not parsed.scheme or not parsed.netloc:
         parsed = urlsplit("http://localhost:8501")
-    path = f"/{quote(page_slug, safe='_&-')}"
-    query = urlencode({"view": "detail", "id": str(record_id)})
     display_label = str(label or record_id).replace("#", " ")
+    fragment_route = _snowflake_fragment_route(parsed)
+    if fragment_route:
+        path = _module_path(fragment_route, page_slug)
+        query = _url_query(fragment_route, {"view": "detail", "id": str(record_id)})
+        fragment = f"{path}?{query}#{display_label}"
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, fragment))
+    path = _module_path(parsed.path, page_slug)
+    query = _url_query(parsed.path, {"view": "detail", "id": str(record_id)})
     return urlunsplit((parsed.scheme, parsed.netloc, path, query, display_label))
 
 
@@ -81,7 +113,11 @@ def module_view_url(page_slug: str, view: str, record_id: str | None = None, **p
     if record_id:
         query["id"] = str(record_id)
     query.update({key: str(value) for key, value in parameters.items() if value is not None and value != ""})
-    return urlunsplit((parsed.scheme, parsed.netloc, f"/{quote(page_slug, safe='_&-')}", urlencode(query), ""))
+    fragment_route = _snowflake_fragment_route(parsed)
+    if fragment_route:
+        fragment = f"{_module_path(fragment_route, page_slug)}?{_url_query(fragment_route, query)}"
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, fragment))
+    return urlunsplit((parsed.scheme, parsed.netloc, _module_path(parsed.path, page_slug), _url_query(parsed.path, query), ""))
 
 
 def ensure_record_form_state(prefix: str, record_id: str | None) -> None:

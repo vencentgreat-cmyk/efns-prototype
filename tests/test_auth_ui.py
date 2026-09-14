@@ -19,6 +19,13 @@ def test_home_requires_login(tmp_path, monkeypatch):
     assert not any("Operations Dashboard" in block.value for block in app.markdown)
 
 
+def test_snowflake_mode_never_renders_second_password_login(monkeypatch):
+    monkeypatch.setenv("EFNS_RUNTIME_MODE", "snowflake")
+    app = AppTest.from_file(ROOT / "app" / "Home.py", default_timeout=20).run()
+    assert list(app.exception) == []
+    assert any("Access not provisioned" in block.value for block in app.markdown)
+    assert not any(item.label == "Password" for item in app.text_input)
+
 
 
 def test_valid_login_creates_session_and_requires_password_change(tmp_path, monkeypatch):

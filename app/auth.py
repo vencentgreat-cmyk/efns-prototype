@@ -18,6 +18,7 @@ from app.security import (
     has_permission,
     require_permission as enforce_permission,
 )
+from app.runtime import RuntimeMode, current_runtime_mode, snowflake_viewer_email
 from app.services.authorized_repository import AuthorizedRepository
 
 
@@ -35,10 +36,21 @@ def _cached_auth_store(database_path: str) -> SQLiteAuthStore:
 
 
 def get_auth_store() -> AuthStore:
+    if current_runtime_mode() == RuntimeMode.SNOWFLAKE:
+        from app.snowflake_security import SnowflakeAuthStore
+
+        store = st.session_state.get("_snowflake_auth_store")
+        if not isinstance(store, SnowflakeAuthStore):
+            store = SnowflakeAuthStore()
+            st.session_state["_snowflake_auth_store"] = store
+        return store
     return _cached_auth_store(_default_database_path())
 
 
 def current_user() -> User | None:
+    if current_runtime_mode() == RuntimeMode.SNOWFLAKE:
+        email = snowflake_viewer_email()
+        return get_auth_store().resolve_identity(email) if email else None
     token = st.session_state.get(SESSION_TOKEN_KEY)
     user = get_auth_store().resolve_session(token)
     if token and user is None:
@@ -49,6 +61,8 @@ def current_user() -> User | None:
 
 
 def _logout() -> None:
+    if current_runtime_mode() == RuntimeMode.SNOWFLAKE:
+        return
     token = st.session_state.pop(SESSION_TOKEN_KEY, None)
     get_auth_store().logout(token)
     st.session_state.pop("repo", None)
@@ -84,6 +98,24 @@ def render_login() -> None:
     st.caption("Prototype authentication is local to this deployment and will be replaced by an organizational identity provider.")
 
 
+def render_snowflake_access_denied() -> None:
+    from app.ui import apply_theme, page_header
+
+    apply_theme()
+    page_header(
+        "Access not provisioned",
+        "EFNS uses your authenticated Snowflake viewer identity in this environment.",
+        "SECURE ACCESS",
+    )
+    email = snowflake_viewer_email()
+    if not email:
+        st.error("Snowflake did not provide a viewer email. Ask an administrator to verify the Snowflake user profile.")
+    elif not email.endswith("@nsegg.ca"):
+        st.error("Only authenticated @nsegg.ca viewers may use EFNS.")
+    else:
+        st.error("Your EFNS application account is missing or inactive. Ask an EFNS Admin to provision access.")
+    st.caption("Password sign-in is disabled inside Streamlit in Snowflake.")
+
 
 def _render_required_password_change(user: User) -> None:
     from app.ui import apply_theme, page_header
@@ -118,9 +150,27 @@ def _render_required_password_change(user: User) -> None:
 
 
 def require_authenticated() -> User:
-    user = current_user()
+    try:
+        user = current_user()
+    except Exception as exc:
+        if current_runtime_mode() != RuntimeMode.SNOWFLAKE:
+            raise
+        from app.ui import apply_theme, page_header
+
+        apply_theme()
+        page_header(
+            "Authorization unavailable",
+            "EFNS could not verify your application access in Snowflake.",
+            "SECURE ACCESS",
+        )
+        st.error("Ask an EFNS administrator to verify the SECURITY and APP schema setup and application-owner grants.")
+        st.caption(f"Reference: {type(exc).__name__}")
+        st.stop()
     if user is None:
-        render_login()
+        if current_runtime_mode() == RuntimeMode.SNOWFLAKE:
+            render_snowflake_access_denied()
+        else:
+            render_login()
         st.stop()
     if user.must_change_password and get_auth_store().supports_passwords:
         _render_required_password_change(user)

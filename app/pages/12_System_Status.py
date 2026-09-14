@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import streamlit as st
 
-from app.auth import require_page_permission
+from app.auth import get_auth_store, require_page_permission
+from app.runtime import RuntimeMode, current_runtime_mode, snowflake_viewer_email
 from app.security import Permission
-
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.connection import LazySqlExecutor, SnowflakeSettings, streamlit_connection_configured
 from data.repositories import get_repository
@@ -32,16 +32,21 @@ runtime = getattr(executor, "runtime_name", None) or ("Local Streamlit" if not i
 if is_snowflake and isinstance(executor, LazySqlExecutor) and not executor.is_resolved:
     runtime = "Auto-detect on first use"
 
-status_columns = st.columns(3)
+status_columns = st.columns(4)
 status_columns[0].metric("Repository", repository_name)
 status_columns[1].metric("Runtime", runtime)
 if not is_snowflake:
     config_status = "Not required"
-elif settings.configured or streamlit_connection_configured():
+elif current_runtime_mode() == RuntimeMode.SNOWFLAKE or settings.configured or streamlit_connection_configured():
     config_status = "Ready"
 else:
     config_status = "Not configured"
 status_columns[2].metric("Snowflake configuration", config_status)
+auth_mode = get_auth_store().authentication_mode
+status_columns[3].metric("Authentication", auth_mode)
+
+if current_runtime_mode() == RuntimeMode.SNOWFLAKE:
+    st.caption(f"Viewer identity: {snowflake_viewer_email() or 'Not available'}")
 
 if not is_snowflake:
     st.warning("Mock data is held in the current Streamlit session and resets when the session is replaced.")
