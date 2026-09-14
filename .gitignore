@@ -40,3 +40,5 @@ htmlcov/
 # Project
 *.log
 hermes-debug.log
+
+.local/

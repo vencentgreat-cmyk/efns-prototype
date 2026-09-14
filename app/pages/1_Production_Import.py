@@ -7,6 +7,8 @@ import io
 
 import streamlit as st
 
+from app.auth import require_page_permission
+from app.security import Permission
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.repositories.base import RepositoryError
 from data.constants import EIMS_WORKSHEET_NAME
@@ -19,6 +21,7 @@ from data.importing import (
 from data.repositories import get_repository
 
 
+require_page_permission(Permission.IMPORT_DATA)
 apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()

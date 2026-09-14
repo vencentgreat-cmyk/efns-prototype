@@ -5,6 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from app.auth import require_operational_page
 from app.navigation import (
     current_page_url,
     format_timestamp,
@@ -21,6 +22,7 @@ from data.repositories import get_repository
 from data.repositories.base import RepositoryError
 
 
+require_operational_page()
 apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()

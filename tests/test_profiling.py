@@ -11,6 +11,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.services.profiling_export import profile_csv, profiles_excel, safe_worksheet_names
+from app.security import Role
 from data.profiling import (
     ProfilingError,
     candidate_primary_keys,
@@ -18,6 +19,7 @@ from data.profiling import (
     profile_dataframe,
     read_tabular,
 )
+from tests.auth_support import authenticated_app
 
 
 def test_read_csv_preserves_leading_zero_values_and_stream_position():
@@ -155,12 +157,12 @@ def test_safe_worksheet_names_resolve_invalid_names_and_collisions():
     assert reserved["Workbook Summary"] == "Workbook Summary_2"
 
 
-def test_profiler_page_smoke_without_upload_or_repository():
+def test_profiler_page_smoke_without_upload_or_repository(tmp_path, monkeypatch):
     entrypoint = Path(__file__).parents[1] / "app" / "pages" / "14_Source_Data_Profiler.py"
     source = entrypoint.read_text(encoding="utf-8")
     assert "data.repositories" not in source
     assert "Snowflake" not in source.replace("sent to Snowflake", "")
-    app = AppTest.from_file(entrypoint, default_timeout=20).run()
+    app = authenticated_app(entrypoint, tmp_path, monkeypatch, Role.DEVELOPER)
     assert list(app.exception) == []
-    assert len(app.file_uploader) == 1
+    assert len(app.get("file_uploader")) == 1
     assert any("No source selected" in block.value for block in app.markdown)

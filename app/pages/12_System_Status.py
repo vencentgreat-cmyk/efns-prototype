@@ -4,16 +4,20 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app.auth import require_page_permission
+from app.security import Permission
+
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.connection import LazySqlExecutor, SnowflakeSettings, streamlit_connection_configured
 from data.repositories import get_repository
 
 
+require_page_permission(Permission.VIEW_DIAGNOSTICS)
 apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()
 repo = st.session_state.repo
-repository_name = type(repo).__name__.replace("Repository", "")
+repository_name = getattr(repo, "repository_name", type(repo).__name__.replace("Repository", ""))
 is_snowflake = repository_name == "Snowflake"
 
 page_header(

@@ -6,6 +6,8 @@ from pathlib import Path
 
 import streamlit as st
 
+from app.auth import require_page_permission
+from app.security import Permission
 from app.services.profiling_export import profile_csv, profiles_excel
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.profiling import (
@@ -17,6 +19,7 @@ from data.profiling import (
 )
 
 
+require_page_permission(Permission.USE_PROFILER)
 apply_theme()
 page_header(
     "Source Data Profiler",

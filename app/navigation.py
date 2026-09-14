@@ -8,6 +8,9 @@ from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 import pandas as pd
 import streamlit as st
 
+from app.auth import can_current
+from app.security import Permission
+
 
 VALID_VIEWS = {"list", "new", "detail", "edit"}
 
@@ -109,9 +112,9 @@ def list_command_bar(prefix: str, selected: bool = False) -> str | None:
     """Render a Dynamics-like list command bar and return the chosen action."""
     action = None
     with st.container(border=True, horizontal=True, vertical_alignment="center"):
-        if st.button("New", icon=":material/add:", type="primary", key=f"{prefix}_new"):
+        if st.button("New", icon=":material/add:", type="primary", key=f"{prefix}_new", disabled=not can_current(Permission.CREATE_DATA)):
             action = "new"
-        if st.button("Delete", icon=":material/delete:", disabled=not selected, key=f"{prefix}_delete"):
+        if st.button("Delete", icon=":material/delete:", disabled=not selected or not can_current(Permission.DELETE_DATA), key=f"{prefix}_delete"):
             action = "delete"
         if st.button("Refresh", icon=":material/refresh:", key=f"{prefix}_refresh"):
             action = "refresh"
@@ -124,7 +127,7 @@ def record_command_bar(prefix: str, view: str, allow_delete: bool = True) -> str
     with st.container(border=True, horizontal=True, vertical_alignment="center"):
         if st.button("Back", icon=":material/arrow_back:", key=f"{prefix}_back"):
             action = "back"
-        if view == "detail" and st.button("Edit", icon=":material/edit:", type="primary", key=f"{prefix}_edit"):
+        if view == "detail" and st.button("Edit", icon=":material/edit:", type="primary", key=f"{prefix}_edit", disabled=not can_current(Permission.UPDATE_DATA)):
             action = "edit"
         if view == "detail" and st.button("Refresh", icon=":material/refresh:", key=f"{prefix}_refresh"):
             action = "refresh"
@@ -134,6 +137,6 @@ def record_command_bar(prefix: str, view: str, allow_delete: bool = True) -> str
             if st.button("Cancel", icon=":material/close:", key=f"{prefix}_cancel"):
                 action = "cancel"
         if view in {"detail", "edit"} and allow_delete:
-            if st.button("Delete", icon=":material/delete:", key=f"{prefix}_delete"):
+            if st.button("Delete", icon=":material/delete:", key=f"{prefix}_delete", disabled=not can_current(Permission.DELETE_DATA)):
                 action = "delete"
     return action

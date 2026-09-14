@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app.auth import ensure_authorized_repository, render_user_sidebar, require_authenticated
+from app.security import Permission, has_permission
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.connection import LazySqlExecutor
-from data.repositories import get_repository
 
 
 st.set_page_config(
@@ -15,10 +16,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-apply_theme()
 
-if "repo" not in st.session_state:
-    st.session_state.repo = get_repository()
+
+apply_theme()
+user = require_authenticated()
+repo = ensure_authorized_repository(user)
 
 
 def dashboard() -> None:
@@ -30,7 +32,7 @@ def dashboard() -> None:
         "OVERVIEW",
     )
 
-    repository_name = type(repo).__name__.replace("Repository", "")
+    repository_name = getattr(repo, "repository_name", type(repo).__name__.replace("Repository", ""))
     st.markdown(
         f'<div class="efns-repository">Active repository: <strong>{repository_name}</strong></div>',
         unsafe_allow_html=True,
@@ -84,34 +86,43 @@ def dashboard() -> None:
     )
 
     section_intro("Next actions", "Continue with the most common operational tasks.")
-    next_columns = st.columns(3)
-    next_actions = (
-        (
+    next_actions = []
+    if has_permission(user, Permission.IMPORT_DATA):
+        next_actions.append((
             "Validate a workbook",
             "Review the source, validation results, and normalized records before import.",
-            "pages/1_Production_Import.py",
+            "1_Production_Import.py",
             "Open Production Import",
-        ),
+        ))
+    elif has_permission(user, Permission.USE_PROFILER):
+        next_actions.append((
+            "Profile source data",
+            "Inspect CSV and Excel structure without saving or connecting to Snowflake.",
+            "14_Source_Data_Profiler.py",
+            "Open Source Data Profiler",
+        ))
+    next_actions.extend((
         (
             "Review production data",
             "Filter the current production records and export the visible result.",
-            "pages/2_Production_Data.py",
+            "2_Production_Data.py",
             "Open Production Data",
         ),
         (
             "Build a report",
             "Choose fields from the provisional account, flock, facility, and production model.",
-            "pages/4_Reports.py",
+            "4_Reports.py",
             "Open Custom Reports",
         ),
-    )
+    ))
+    next_columns = st.columns(len(next_actions))
     for column, (title, copy, page, label) in zip(next_columns, next_actions):
         with column:
             st.markdown(
                 f'<div class="efns-next-step"><strong>{title}</strong><span>{copy}</span></div>',
                 unsafe_allow_html=True,
             )
-            st.page_link(page, label=label)
+            st.page_link(f"pages/{page}", label=label)
 
     with st.container(border=True):
         section_intro("Recent imports", "The ten most recent workbook or synthetic import batches.")
@@ -145,17 +156,11 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-navigation = st.navigation(
-    {
+pages = {
         "Overview": [
             st.Page(dashboard, title="Dashboard", icon=":material/dashboard:"),
         ],
         "Production": [
-            st.Page(
-                "pages/1_Production_Import.py",
-                title="Production Import",
-                icon=":material/upload_file:",
-            ),
             st.Page(
                 "pages/2_Production_Data.py",
                 title="Production Data",
@@ -196,15 +201,29 @@ navigation = st.navigation(
             ),
             st.Page("pages/10_Salmonella_Report.py", title="Salmonella Test Report", icon=":material/lab_profile:"),
         ],
-        "Administration": [
-            st.Page("pages/12_System_Status.py", title="System Status", icon=":material/settings:"),
-            st.Page("pages/14_Source_Data_Profiler.py", title="Source Data Profiler", icon=":material/find_in_page:"),
-        ],
     }
-)
+
+if has_permission(user, Permission.IMPORT_DATA):
+    pages["Production"].insert(0, st.Page("pages/1_Production_Import.py", title="Production Import", icon=":material/upload_file:"))
+
+administration = []
+if has_permission(user, Permission.VIEW_DIAGNOSTICS):
+    administration.append(st.Page("pages/12_System_Status.py", title="System Status", icon=":material/settings:"))
+if has_permission(user, Permission.USE_PROFILER):
+    administration.append(st.Page("pages/14_Source_Data_Profiler.py", title="Source Data Profiler", icon=":material/find_in_page:"))
+if has_permission(user, Permission.VIEW_AUDIT):
+    administration.append(st.Page("pages/16_Audit_Log.py", title="Audit Log", icon=":material/history:"))
+if has_permission(user, Permission.MANAGE_USERS):
+    administration.append(st.Page("pages/15_User_Management.py", title="User Management", icon=":material/manage_accounts:"))
+if administration:
+    pages["Administration"] = administration
+
+navigation = st.navigation(pages)
 
 with st.sidebar:
-    repository_name = type(st.session_state.repo).__name__.replace("Repository", "")
+    render_user_sidebar(user)
+    st.divider()
+    repository_name = getattr(st.session_state.repo, "repository_name", type(st.session_state.repo).__name__.replace("Repository", ""))
     st.markdown(
         f'<div class="efns-repository">Repository: <strong>{repository_name}</strong></div>',
         unsafe_allow_html=True,

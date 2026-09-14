@@ -7,6 +7,7 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 
+from app.auth import require_operational_page
 from app.navigation import (
     current_page_url,
     ensure_record_form_state,
@@ -26,6 +27,7 @@ from data.repositories.base import RepositoryError
 from data.validation import validate_quota_registration
 
 
+require_operational_page()
 apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()
