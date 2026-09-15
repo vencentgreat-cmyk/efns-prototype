@@ -134,7 +134,7 @@ if view.name == "list":
     else:
         display = filtered.copy().reset_index(drop=True)
         st.session_state.account_list_row_ids = display["ACCOUNT_ID"].tolist()
-        st.caption(f"{len(display):,} Account(s) · Select a row, then choose View, Edit, or Delete.")
+        st.caption(f"{len(display):,} Account(s)")
         st.dataframe(
             display[["ORGANIZATION_NAME", "REGISTRATION_NUMBER", "CITY", "PROVINCE", "POSTAL_CODE", "CONTACT_PHONE", "CONTACT_EMAIL", "STATUS", "CREATED_AT"]],
             width="stretch",

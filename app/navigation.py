@@ -169,6 +169,7 @@ def selected_row_index(key: str) -> int | None:
 
 def list_command_bar(prefix: str, selected: bool = False) -> str | None:
     """Render a Dynamics-like list command bar and return the chosen action."""
+    st.caption("Select a record to view its details.")
     action = None
     with st.container(border=True, horizontal=True, vertical_alignment="center"):
         if st.button("New", icon=":material/add:", type="primary", key=f"{prefix}_new", disabled=not can_current(Permission.CREATE_DATA)):
