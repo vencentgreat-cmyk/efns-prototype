@@ -109,7 +109,8 @@ else:
                 right.markdown(f"**Egg Colour**  \n{current.get('EGG_COLOUR') or '—'}")
                 right.markdown(f"**Status**  \n{current.get('STATUS')}")
         with details:
-            st.dataframe(pd.DataFrame({"Field": [key.replace("_", " ").title() for key in current], "Value": [str(value) if value is not None else "—" for value in current.values()]}), width="stretch", hide_index=True)
+            detail_fields = [key for key in current if key not in {"CREATED_AT", "UPDATED_AT"}]
+            st.dataframe(pd.DataFrame({"Field": [key.replace("_", " ").title() for key in detail_fields], "Value": [str(current[key]) if current[key] is not None else "—" for key in detail_fields]}), width="stretch", hide_index=True)
         with related:
             for heading, frame, key, label, slug in (
                 ("Flock Transactions", repo.get_flock_transactions(view.record_id), "FLOCK_TRANSACTION_ID", "TRANSACTION_TYPE", "Flock_Transactions"),

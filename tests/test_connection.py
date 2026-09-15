@@ -316,6 +316,24 @@ def test_snowpark_executemany_batches_nested_values():
     assert session.calls[1][1] == [3, '{"a":3}']
 
 
+def test_snowpark_executemany_batches_insert_select_for_variant_values():
+    def respond(sql, params):
+        count = sql.count("SELECT ?, PARSE_JSON(?)")
+        return FakeStatement([FakeRow(**{"number of rows inserted": count})], [])
+
+    session = FakeSession(respond)
+    executor = connection.SnowparkExecutor(session)
+    rows = [(1, '{"a":1}'), (2, '{"a":2}'), (3, '{"a":3}')]
+    result = executor.executemany(
+        "INSERT INTO T (ID, RAW) SELECT %s, PARSE_JSON(%s)",
+        rows,
+        batch_size=2,
+    )
+    assert result == 3
+    assert "SELECT ?, PARSE_JSON(?) UNION ALL SELECT ?, PARSE_JSON(?)" in session.calls[0][0]
+    assert session.calls[0][1] == [1, '{"a":1}', 2, '{"a":2}']
+
+
 def test_snowpark_executemany_rejects_invalid_input_without_execution():
     session = FakeSession()
     executor = connection.SnowparkExecutor(session)

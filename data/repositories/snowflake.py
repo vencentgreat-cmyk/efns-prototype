@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import datetime as dt
 from typing import Optional
 import uuid
 
@@ -30,6 +31,41 @@ IMPORT_BATCH_COLUMNS = "FILENAME SOURCE FILE_HASH FILE_SIZE_BYTES WORKSHEET_NAME
 RAW_ROW_COLUMNS = "RAW_ROW_ID IMPORT_ID SOURCE_ROW_NUMBER RAW_DATA VALIDATION_STATUS MATCH_STATUS VALIDATION_MESSAGES".split()
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
 UTC_NOW_NTZ = "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ"
+DATE_FIELDS = {
+    "FACILITY": frozenset({"ACTIVATION_DATE", "CONSTRUCTION_DATE", "CLOSURE_DATE", "DESTRUCTION_DATE", "INACTIVE_DATE"}),
+    "FLOCK": frozenset({"PERMIT_DATE", "HATCH_DATE", "DATE_ORDERED", "PLACEMENT_DATE", "EST_DISPOSAL", "DISPOSAL_DATE"}),
+    "FLOCK_TRANSACTION": frozenset({"TRANSACTION_DATE"}),
+    "QUOTA_REGISTRATION": frozenset({"EFFECTIVE_DATE", "END_DATE"}),
+    "QUOTA_TRANSACTION": frozenset({"EFFECTIVE_DATE", "END_DATE"}),
+    "SALMONELLA_TEST": frozenset({"TESTING_DATE", "DATE_RESULT_SENT", "DATE_RECEIVED", "INVOICE_DATE"}),
+}
+_NULL_DATE_TEXT = frozenset({"", "none", "nat", "null"})
+
+
+def normalize_date_bind(value, field: str = "Date") -> dt.date | None:
+    """Return a Snowflake DATE-compatible value without stringifying nulls."""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if text.lower() in _NULL_DATE_TEXT:
+            return None
+        try:
+            # Existing repository callers may supply ISO strings. Convert them
+            # to a typed date so Connector and Snowpark bind the same value.
+            return dt.date.fromisoformat(text)
+        except ValueError as exc:
+            raise RepositoryError(f"{field.replace('_', ' ').title()} must be a valid ISO date.") from exc
+    raise RepositoryError(f"{field.replace('_', ' ').title()} must be a date value.")
 
 
 class _LegacyCursorExecutor(SqlExecutor):
@@ -125,7 +161,16 @@ class SnowflakeRepository(BaseRepository):
         frame = self._query(f"SELECT * FROM {self._table(table, schema)} WHERE {column} = %s", (value,))
         return frame.iloc[0].to_dict() if not frame.empty else None
 
+    @staticmethod
+    def _normalize_date_fields(table: str, record: dict) -> dict:
+        normalized = dict(record)
+        for field in DATE_FIELDS.get(table, ()):
+            if field in normalized:
+                normalized[field] = normalize_date_bind(normalized[field], field)
+        return normalized
+
     def _upsert(self, table: str, record: dict) -> str:
+        record = self._normalize_date_fields(table, record)
         key, allowed_text = MODEL[table]
         expected = record.get("EXPECTED_UPDATED_AT")
         supplied_id = record.get(key)
@@ -236,13 +281,18 @@ class SnowflakeRepository(BaseRepository):
     def get_flocks(self, account_id=None, facility_id=None): return self._filtered("FLOCK", (("ACCOUNT_ID", account_id), ("FACILITY_ID", facility_id)))
     def get_flock(self, flock_id): return self._one("FLOCK", "FLOCK_ID", flock_id)
     def upsert_flock(self, record):
+        record = self._normalize_date_fields("FLOCK", record)
         errors = validate_flock(self, record)
         if errors: raise RepositoryError(" ".join(errors))
         return self._upsert("FLOCK", record)
     def delete_flock(self, value): return self._delete("FLOCK", "FLOCK_ID", value, (("FLOCK_TRANSACTION", "FLOCK_ID"), ("SALMONELLA_TEST", "FLOCK_ID"), ("PRODUCTION_RECORD", "FLOCK_ID")))
 
     def get_flock_transactions(self, flock_id=None): return self._filtered("FLOCK_TRANSACTION", (("FLOCK_ID", flock_id),))
-    def upsert_flock_transaction(self, record): return self._upsert("FLOCK_TRANSACTION", record)
+    def upsert_flock_transaction(self, record):
+        record = self._normalize_date_fields("FLOCK_TRANSACTION", record)
+        if record.get("TRANSACTION_DATE") is None:
+            raise RepositoryError("Transaction Date is required.")
+        return self._upsert("FLOCK_TRANSACTION", record)
     def delete_flock_transaction(self, value): return self._delete("FLOCK_TRANSACTION", "FLOCK_TRANSACTION_ID", value)
 
     def get_quota_registrations(self, account_id=None, status=None, quota_type=None, active_only=False):
@@ -254,6 +304,7 @@ class SnowflakeRepository(BaseRepository):
         return self._query(f"SELECT * FROM {self._table('QUOTA_REGISTRATION')} WHERE " + " AND ".join(conditions), tuple(params))
     def get_quota_registration(self, value): return self._one("QUOTA_REGISTRATION", "QUOTA_ID", value)
     def upsert_quota_registration(self, record):
+        record = self._normalize_date_fields("QUOTA_REGISTRATION", record)
         errors = validate_quota_registration(self, record)
         if errors: raise RepositoryError(" ".join(errors))
         return self._upsert("QUOTA_REGISTRATION", record)
@@ -269,6 +320,9 @@ class SnowflakeRepository(BaseRepository):
         if conditions: sql += " WHERE " + " AND ".join(conditions)
         return self._query(sql, tuple(params) if params else None)
     def upsert_quota_transaction(self, record):
+        record = self._normalize_date_fields("QUOTA_TRANSACTION", record)
+        if record.get("EFFECTIVE_DATE") is None:
+            raise RepositoryError("Effective Date is required.")
         errors = validate_quota_transaction(self, record)
         if errors: raise RepositoryError(" ".join(errors))
         stored = dict(record); stored["OWNER_ACCOUNT_ID"] = self.get_quota_registration(record["QUOTA_ID"])["ACCOUNT_ID"]
@@ -288,6 +342,7 @@ class SnowflakeRepository(BaseRepository):
         return self._query(sql, tuple(params) if params else None)
     def get_salmonella_test(self, value): return self._one("SALMONELLA_TEST", "SALMONELLA_TEST_ID", value)
     def upsert_salmonella_test(self, record):
+        record = self._normalize_date_fields("SALMONELLA_TEST", record)
         errors = validate_salmonella_test(self, record)
         if errors: raise RepositoryError(" ".join(errors))
         return self._upsert("SALMONELLA_TEST", record)
@@ -309,7 +364,7 @@ class SnowflakeRepository(BaseRepository):
     def find_import_by_hash(self, file_hash): return self._one("IMPORT_BATCH", "FILE_HASH", file_hash, self.schema_raw) if file_hash else None
 
     def _insert_raw(self, executor, import_id, rows):
-        sql = f"INSERT INTO {self._table('IMPORT_RAW_ROW', self.schema_raw)} (RAW_ROW_ID, IMPORT_ID, SOURCE_ROW_NUMBER, RAW_DATA, VALIDATION_STATUS, MATCH_STATUS, VALIDATION_MESSAGES, CREATED_AT, UPDATED_AT) VALUES (%s, %s, %s, PARSE_JSON(%s), %s, %s, PARSE_JSON(%s), {UTC_NOW_NTZ}, {UTC_NOW_NTZ})"
+        sql = f"INSERT INTO {self._table('IMPORT_RAW_ROW', self.schema_raw)} (RAW_ROW_ID, IMPORT_ID, SOURCE_ROW_NUMBER, RAW_DATA, VALIDATION_STATUS, MATCH_STATUS, VALIDATION_MESSAGES, CREATED_AT, UPDATED_AT) SELECT %s, %s, %s, PARSE_JSON(%s), %s, %s, PARSE_JSON(%s), {UTC_NOW_NTZ}, {UTC_NOW_NTZ}"
         params = [(row.get("RAW_ROW_ID") or str(uuid.uuid4()), import_id, row.get("SOURCE_ROW_NUMBER", index), json.dumps(row.get("RAW_DATA", row.get("ROW_DATA", row)), default=str), row.get("VALIDATION_STATUS", "PENDING"), row.get("MATCH_STATUS", "UNMATCHED"), json.dumps(row.get("VALIDATION_MESSAGES", row.get("MESSAGES", [])), default=str)) for index, row in enumerate(rows, 1)]
         return executor.executemany(sql, params) if params else 0
     def insert_raw_rows(self, import_id, rows):

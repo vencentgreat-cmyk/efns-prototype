@@ -364,6 +364,10 @@ def _affected_rows(rows: list[object]) -> int:
 class SnowparkExecutor(SqlExecutor):
     runtime_name = "Warehouse Session"
     _VALUES = re.compile(r"^(.*?\bVALUES\s*)(\(.*\))(\s*;?\s*)$", re.IGNORECASE | re.DOTALL)
+    _SELECT = re.compile(
+        r"^(\s*INSERT\s+INTO\s+.+?\))\s+(SELECT\s+.+?)(\s*;?\s*)$",
+        re.IGNORECASE | re.DOTALL,
+    )
 
     def __init__(self, session, runtime_name: str | None = None):
         self.session = session
@@ -402,16 +406,18 @@ class SnowparkExecutor(SqlExecutor):
         values = _validated_rows(qmark_sql, rows, "?")
         if not values:
             return 0
-        match = self._VALUES.match(qmark_sql.strip())
-        if not match:
+        values_match = self._VALUES.match(qmark_sql.strip())
+        select_match = self._SELECT.match(qmark_sql.strip())
+        if not values_match and not select_match:
             raise RepositoryError(
-                "Snowpark bulk writes require an INSERT statement with a VALUES clause; row-by-row fallback is disabled."
+                "Snowpark bulk writes require an INSERT statement with a VALUES or SELECT clause; row-by-row fallback is disabled."
             )
-        prefix, group, suffix = match.groups()
+        prefix, group, suffix = (values_match or select_match).groups()
         total = 0
         for start in range(0, len(values), batch_size):
             batch = values[start : start + batch_size]
-            statement = prefix + ", ".join([group] * len(batch)) + suffix
+            separator = ", " if values_match else " UNION ALL "
+            statement = prefix + ("" if values_match else " ") + separator.join([group] * len(batch)) + suffix
             parameters = [value for row in batch for value in row]
             affected = self.execute(statement, parameters)
             total += len(batch) if affected < 0 else affected

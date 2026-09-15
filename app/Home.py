@@ -1,7 +1,7 @@
 """EFNS application entry point and grouped navigation."""
 
 from __future__ import annotations
-
+from pathlib import Path
 import streamlit as st
 import os
 
@@ -21,8 +21,7 @@ st.set_page_config(
 
 
 def page_file(filename: str) -> str:
-    prefix = os.getenv("EFNS_PAGE_PREFIX", "pages").strip("/")
-    return f"{prefix}/{filename}"
+    return str(Path(__file__).resolve().parent / "pages" / filename)
 
 
 apply_theme()

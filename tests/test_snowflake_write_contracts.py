@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import datetime as dt
 from pathlib import Path
 import re
 
@@ -10,15 +11,20 @@ import pandas as pd
 import pytest
 
 from app.navigation import format_timestamp
+from app.security import Role, User
+from app.services.authorized_repository import AuthorizedRepository
 from data.repositories.base import RepositoryError
 from data.repositories.snowflake import (
     IMPORT_BATCH_COLUMNS,
+    DATE_FIELDS,
     MODEL,
     PRODUCTION_COLUMNS,
     RAW_ROW_COLUMNS,
     SnowflakeRepository,
     UTC_NOW_NTZ,
+    normalize_date_bind,
 )
+from data.repositories.mock import MockRepository
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -116,6 +122,18 @@ def test_core_model_columns_exactly_match_repository_order():
         ]
 
 
+def test_every_core_date_column_is_normalized_at_repository_boundary():
+    ddl = (ROOT / "sql/02_core_tables.sql").read_text(encoding="utf-8")
+    for table in MODEL:
+        match = re.search(
+            rf"CREATE TABLE IF NOT EXISTS EFNS_DEV\.CORE\.{table}\s*\((.*?)\)\s*(?:COMMENT\s*=|;)",
+            ddl,
+            flags=re.DOTALL,
+        )
+        ddl_dates = set(re.findall(r"^\s+([A-Z_]+)\s+DATE\b", match.group(1), flags=re.MULTILINE))
+        assert ddl_dates == set(DATE_FIELDS.get(table, ())), table
+
+
 def test_import_and_production_insert_columns_align_with_ddl():
     assert _ddl_columns("sql/03_production_tables.sql", "IMPORT_BATCH") == [
         "IMPORT_ID", *IMPORT_BATCH_COLUMNS, "UPLOAD_TIMESTAMP", "CREATED_AT", "UPDATED_AT"
@@ -201,6 +219,62 @@ def test_failed_write_rolls_back_without_returning_an_id():
     assert executor.commits == 0 and executor.rollbacks == 1
 
 
+@pytest.mark.parametrize("table", list(MODEL))
+def test_every_entity_delete_binds_id_and_commits(table):
+    executor = RecordingExecutor()
+    repo = _repo(executor)
+    key = MODEL[table][0]
+    assert repo._delete(table, key, "record-1") is True
+    _, sql, params = next(call for call in executor.calls if call[0] == "execute")
+    assert sql == f"DELETE FROM EFNS_DEV.CORE.{table} WHERE {key} = %s"
+    assert params == ("record-1",)
+    assert executor.commits == 1 and executor.rollbacks == 0
+
+
+def test_import_write_parameter_order_and_server_timestamps():
+    executor = RecordingExecutor()
+    repo = _repo(executor)
+    import_id = repo.create_import_batch({
+        "STATUS": "Uploaded",
+        "FILENAME": "synthetic.xlsx",
+        "REPORTING_WEEK": 5,
+    })
+    _, sql, params = next(call for call in executor.calls if call[0] == "execute")
+    assert "(IMPORT_ID, FILENAME, REPORTING_WEEK, STATUS, UPLOAD_TIMESTAMP, CREATED_AT, UPDATED_AT)" in sql
+    assert params == (import_id, "synthetic.xlsx", 5, "Uploaded")
+    assert sql.count(UTC_NOW_NTZ) == 3
+    assert len(params) == sql.count("%s")
+
+    executor.calls.clear()
+    assert repo.insert_raw_rows(import_id, [{
+        "SOURCE_ROW_NUMBER": 7,
+        "RAW_DATA": {"optional": None},
+        "VALIDATION_MESSAGES": [],
+    }]) == 1
+    _, raw_sql, raw_params = next(call for call in executor.calls if call[0] == "executemany")
+    assert len(raw_params[0]) == raw_sql.count("%s") == 7
+    assert raw_params[0][1] == import_id
+    assert raw_params[0][2] == 7
+    assert raw_params[0][3] == '{"optional": null}'
+    assert raw_params[0][4:7] == ("PENDING", "UNMATCHED", "[]")
+
+    executor.calls.clear()
+    assert repo.insert_production_records([{
+        "SOURCE_TYPE": "EIMS_IMPORT",
+        "REPORTING_YEAR": 2026,
+        "REPORTING_WEEK": 5,
+    }], import_id) == 1
+    _, production_sql, production_params = next(
+        call for call in executor.calls if call[0] == "executemany"
+    )
+    assert len(production_params[0]) == production_sql.count("%s")
+    assert production_params[0][1] == import_id
+    values = dict(zip(PRODUCTION_COLUMNS, production_params[0][2:]))
+    assert values["SOURCE_TYPE"] == "EIMS_IMPORT"
+    assert values["MATCH_STATUS"] == "UNMATCHED"
+    assert values["REPORTING_WEEK"] == 5
+
+
 def test_persisted_ddl_and_seed_use_server_generated_utc_timestamps():
     for path in ("sql/02_core_tables.sql", "sql/03_production_tables.sql"):
         text = (ROOT / path).read_text(encoding="utf-8")
@@ -219,3 +293,111 @@ def test_timestamp_display_converts_utc_to_halifax_with_timezone_label():
     assert format_timestamp("2026-07-15T12:00:00Z") == (
         "2026-07-15 09:00 ADT (America/Halifax)"
     )
+
+
+@pytest.mark.parametrize("value", [None, pd.NaT, "", "  ", "None", "NaT", "null", " NULL "])
+def test_optional_date_sentinels_bind_as_python_none(value):
+    normalized = normalize_date_bind(value, "EST_DISPOSAL")
+    assert normalized is None
+    assert normalized not in {"None", "NaT", "null"}
+
+
+def test_date_and_datetime_values_bind_as_dates():
+    expected = dt.date(2026, 9, 14)
+    assert normalize_date_bind(expected) == expected
+    assert normalize_date_bind(dt.datetime(2026, 9, 14, 15, 30)) == expected
+    assert normalize_date_bind(pd.Timestamp("2026-09-14T15:30:00Z")) == expected
+    assert normalize_date_bind("2026-09-14") == expected
+    with pytest.raises(RepositoryError, match="valid ISO date"):
+        normalize_date_bind("September someday", "HATCH_DATE")
+
+
+def test_flock_create_binds_unset_optional_dates_as_sql_null():
+    executor = RecordingExecutor()
+    repo = _repo(executor)
+    repo.get_facilities = lambda account_id=None: pd.DataFrame([
+        {"ACCOUNT_ID": "account-1", "FACILITY_ID": "facility-1"}
+    ])
+    repo.get_facility_details = lambda facility_id=None: pd.DataFrame()
+    repo.get_quota_registrations = lambda **kwargs: pd.DataFrame()
+    class AuditStore:
+        def __init__(self):
+            self.events = []
+
+        def record_action(self, *event):
+            self.events.append(event)
+
+    store = AuditStore()
+    actor = User(
+        "editor-1", "editor@nsegg.ca", "Editor", Role.DATA_EDITOR, True,
+        False, "2026-01-01", "2026-01-01", None,
+    )
+    authorized = AuthorizedRepository(repo, store, actor)
+    result = authorized.upsert_flock({
+        "FLOCK_NUMBER": "DEV-FLOCK-1",
+        "ACCOUNT_ID": "account-1",
+        "FACILITY_ID": "facility-1",
+        "PERMIT_NUMBER": "DEV-PERMIT-1",
+        "HATCH_DATE": dt.datetime(2026, 9, 14, 8, 0),
+        "BIRD_COUNT": 100,
+        "PERMIT_DATE": "",
+        "DATE_ORDERED": "None",
+        "PLACEMENT_DATE": pd.NaT,
+        "EST_DISPOSAL": "None",
+        "DISPOSAL_DATE": None,
+    })
+    _, sql, params = next(call for call in executor.calls if call[0] == "execute")
+    fields = re.search(r"FLOCK \((.*?)\) VALUES", sql).group(1).split(", ")[:-2]
+    bound = dict(zip(fields, params))
+    assert bound["FLOCK_ID"] == result
+    assert bound["HATCH_DATE"] == dt.date(2026, 9, 14)
+    for field in ("PERMIT_DATE", "DATE_ORDERED", "PLACEMENT_DATE", "EST_DISPOSAL", "DISPOSAL_DATE"):
+        assert bound[field] is None
+    assert len(params) == sql.count("%s")
+    assert store.events[0][1:4] == ("CREATE", "FLOCK", result)
+
+
+@pytest.mark.parametrize("table,field", [
+    (table, field) for table, fields in DATE_FIELDS.items() for field in fields
+])
+def test_all_snowflake_date_fields_share_the_same_null_normalizer(table, field):
+    normalized = SnowflakeRepository._normalize_date_fields(table, {field: "NaT"})
+    assert normalized[field] is None
+
+
+def test_required_flock_date_validation_remains_enforced():
+    executor = RecordingExecutor()
+    repo = _repo(executor)
+    repo.get_facilities = lambda account_id=None: pd.DataFrame([
+        {"ACCOUNT_ID": "account-1", "FACILITY_ID": "facility-1"}
+    ])
+    repo.get_facility_details = lambda facility_id=None: pd.DataFrame()
+    repo.get_quota_registrations = lambda **kwargs: pd.DataFrame()
+    with pytest.raises(RepositoryError, match="Hatch Date is required"):
+        repo.upsert_flock({
+            "FLOCK_NUMBER": "DEV-FLOCK-2",
+            "ACCOUNT_ID": "account-1",
+            "FACILITY_ID": "facility-1",
+            "PERMIT_NUMBER": "DEV-PERMIT-2",
+            "HATCH_DATE": "None",
+            "BIRD_COUNT": 100,
+        })
+    assert not any(call[0] == "execute" for call in executor.calls)
+
+
+def test_mock_repository_accepts_typed_and_unset_flock_dates():
+    repo = MockRepository(seed=17)
+    account = repo.get_accounts().iloc[0]
+    facility = repo.get_facilities(account_id=account["ACCOUNT_ID"]).iloc[0]
+    result = repo.upsert_flock({
+        "FLOCK_NUMBER": "MOCK-DATE-COMPAT",
+        "ACCOUNT_ID": account["ACCOUNT_ID"],
+        "FACILITY_ID": facility["FACILITY_ID"],
+        "PERMIT_NUMBER": "MOCK-PERMIT",
+        "HATCH_DATE": dt.date(2026, 9, 14),
+        "EST_DISPOSAL": None,
+        "BIRD_COUNT": 25,
+    })
+    saved = repo.get_flock(result)
+    assert saved["HATCH_DATE"] == dt.date(2026, 9, 14)
+    assert saved["EST_DISPOSAL"] is None

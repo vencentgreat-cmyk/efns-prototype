@@ -236,8 +236,8 @@ class SnowflakeAuthStore(AuthStore):
         affected = executor.execute(
             f"INSERT INTO {self.audit_table} "
             "(AUDIT_ID, ACTOR_USER_ID, ACTOR_EMAIL, ACTION, ENTITY_TYPE, ENTITY_ID, DETAILS, OCCURRED_AT) "
-            "VALUES (%s, %s, %s, %s, %s, %s, PARSE_JSON(%s), "
-            "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()))",
+            "SELECT %s, %s, %s, %s, %s, %s, PARSE_JSON(%s), "
+            "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())",
             (
                 audit_id, actor.user_id, actor.email, str(action), str(entity_type),
                 entity_id, details_json,

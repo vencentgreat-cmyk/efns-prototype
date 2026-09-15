@@ -155,6 +155,17 @@ def timestamp_column(label: str):
     )
 
 
+def timestamp_columns(columns) -> dict:
+    """Build explicit Halifax display configuration for timestamp fields."""
+    configured = {}
+    for column in columns:
+        name = str(column)
+        if name.endswith(("_AT", "_ON", " At", " On")) or name == "UPLOAD_TIMESTAMP":
+            label = name.replace("_", " ").title()
+            configured[name] = timestamp_column(label)
+    return configured
+
+
 def selected_row_index(key: str) -> int | None:
     """Return the prior rerun's single selected dataframe row."""
     state = st.session_state.get(key)
