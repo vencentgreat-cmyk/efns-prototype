@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 import os
 import re
+import tempfile
 from typing import Callable, Iterable, Iterator, Sequence
 
 import pandas as pd
@@ -33,6 +34,10 @@ _SQL_OPERATION = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|MERGE|BEGIN|COMMI
 _SQL_ENTITY = re.compile(
     r"\b(?:FROM|INTO|UPDATE|MERGE\s+INTO)\s+([A-Za-z_][A-Za-z0-9_$.]*)",
     re.IGNORECASE,
+)
+_BULK_INSERT_SELECT = re.compile(
+    r"^(\s*INSERT\s+INTO\s+.+?\))\s+(SELECT\s+.+?)(\s*;?\s*)$",
+    re.IGNORECASE | re.DOTALL,
 )
 _SAFE_REFERENCE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 
@@ -234,6 +239,11 @@ class SqlExecutor(ABC):
     def check_connection(self) -> None:
         self.query("SELECT CURRENT_VERSION() AS VERSION")
 
+    def put_stream(self, stream, stage_path: str) -> None:
+        raise RepositoryConfigurationError(
+            "The active Snowflake runtime does not support migration stage uploads."
+        )
+
 
 class ConnectorExecutor(SqlExecutor):
     runtime_name = "Connector"
@@ -299,12 +309,25 @@ class ConnectorExecutor(SqlExecutor):
             return int(cursor.rowcount if cursor.rowcount is not None else -1)
 
     def executemany(self, sql: str, rows: ParamRows, *, batch_size: int = 500) -> int:
-        del batch_size
         values = _validated_rows(sql, rows, "%s")
         if not values:
             return 0
+        select_match = _BULK_INSERT_SELECT.match(sql.strip())
         with self._cursor() as cursor:
             try:
+                if select_match:
+                    if batch_size < 1:
+                        raise RepositoryError("Connector bulk-write batch size must be at least one.")
+                    prefix, select_group, suffix = select_match.groups()
+                    total = 0
+                    for start in range(0, len(values), batch_size):
+                        batch = values[start : start + batch_size]
+                        statement = prefix + " " + " UNION ALL ".join([select_group] * len(batch)) + suffix
+                        parameters = tuple(value for row in batch for value in row)
+                        cursor.execute(statement, parameters)
+                        affected = cursor.rowcount
+                        total += len(batch) if affected is None or affected < 0 else int(affected)
+                    return total
                 cursor.executemany(sql, values)
             except RepositoryError:
                 raise
@@ -328,6 +351,23 @@ class ConnectorExecutor(SqlExecutor):
             raise
         except Exception as exc:
             raise RepositoryError("Snowflake could not roll back the transaction.") from exc
+
+    def put_stream(self, stream, stage_path: str) -> None:
+        try:
+            stage_directory, filename = stage_path.rsplit("/", 1)
+            with tempfile.TemporaryDirectory(prefix="efns-migration-") as directory:
+                temporary_path = os.path.join(directory, filename)
+                with open(temporary_path, "wb") as temporary:
+                    temporary.write(stream.read())
+                escaped = temporary_path.replace("\\", "/").replace("'", "''")
+                with self._cursor() as cursor:
+                    cursor.execute(
+                        f"PUT 'file://{escaped}' {stage_directory}/ AUTO_COMPRESS=FALSE OVERWRITE=FALSE"
+                    )
+        except RepositoryError:
+            raise
+        except Exception as exc:
+            raise _operation_error(exc, "PUT_STREAM EIMS_MIGRATION_FILE") from exc
 
     @contextmanager
     def transaction(self) -> Iterator["ConnectorExecutor"]:
@@ -489,6 +529,12 @@ class SnowparkExecutor(SqlExecutor):
     def rollback(self) -> None:
         self._collect("ROLLBACK")
 
+    def put_stream(self, stream, stage_path: str) -> None:
+        try:
+            self.session.file.put_stream(stream, stage_path, auto_compress=False, overwrite=False)
+        except Exception as exc:
+            raise _operation_error(exc, "PUT_STREAM EIMS_MIGRATION_FILE") from exc
+
     @contextmanager
     def transaction(self) -> Iterator["SnowparkExecutor"]:
         self._collect("BEGIN")
@@ -587,6 +633,7 @@ class LazySqlExecutor(SqlExecutor):
     def executemany(self, sql, rows, *, batch_size=500): return self.resolved.executemany(sql, rows, batch_size=batch_size)
     def commit(self): self.resolved.commit()
     def rollback(self): self.resolved.rollback()
+    def put_stream(self, stream, stage_path): return self.resolved.put_stream(stream, stage_path)
 
     @contextmanager
     def transaction(self):

@@ -212,6 +212,9 @@ pages = {
 
 if has_permission(user, Permission.IMPORT_DATA):
     pages["Production"].insert(0, st.Page(page_file("1_Production_Import.py"), title="Production Import", icon=":material/upload_file:"))
+    pages["Migration"] = [
+        st.Page(page_file("17_Migration_Import.py"), title="Migration Import", icon=":material/move_to_inbox:")
+    ]
 
 administration = []
 if has_permission(user, Permission.VIEW_DIAGNOSTICS):

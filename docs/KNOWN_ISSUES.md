@@ -35,3 +35,5 @@
   every current repository path supplies the server-side UTC expression.
 - Warehouse runtime limits individual frontend messages to 32 MB and uploads to
   200 MB. Current pages are not paginated for very large result sets.
+- Historical migration mappings, natural keys, choices and relationship rules are provisional. The generated package is safe synthetic test data; it does not prove compatibility with the pending EIMS metadata or export layouts.
+- Connector and warehouse-runtime uploads to the named migration stage, large-batch SQL size, deployed reconciliation, and batch-scoped cleanup still require EFNS DEV smoke testing.

@@ -92,3 +92,18 @@ inside a transaction and always rolls them back, run:
 ```powershell
 .\.venv\Scripts\python.exe scripts/verify_snowpark_null_binding.py --confirm-dev-dml
 ```
+
+## Historical EIMS migration workflow
+
+Generate the fully fictional package locally and verify its manifest before upload:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/generate_fake_eims_export.py --output sample_data/fake_eims_export
+snow sql --connection efns-dev --filename sql/11_eims_migration_foundation.sql
+snow streamlit deploy efns_dev --connection efns-dev --replace --prune
+snow sql --connection efns-dev --filename sql/08_post_deploy_grants.sql
+```
+
+As an application Admin or Data Editor, open **Historical EIMS Migration**, upload every file under `sample_data/fake_eims_export/clean`, validate, stage, prepare, review reconciliation, and explicitly commit. Confirm counts of 50 Accounts, 100 Facilities, 150 Facility Details, 100 Quota Registrations, 500 Flocks, 2,000 Flock Transactions, 300 Quota Transactions, 250 Salmonella Tests, and 5,000 Production Records. Re-upload must be rejected by package hash; retrying an already committed batch must not duplicate CORE rows.
+
+Upload `edge_cases` separately and confirm rejected rows name the source file, row and field rule without exposing the value. Confirm invalid rows never reach CORE. To finish the DEV exercise, an Admin selects that exact `DEV_MIGRATION_` batch in the page cleanup control and verifies only its mapped rows and migration history are removed in dependency-safe order.

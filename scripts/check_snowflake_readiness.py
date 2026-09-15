@@ -22,7 +22,10 @@ def runtime_python_files():
 
 def check() -> list[str]:
     errors: list[str] = []
-    required = ("snowflake.yml", "environment.yml", "streamlit_app.py")
+    required = (
+        "snowflake.yml", "environment.yml", "streamlit_app.py",
+        "config/eims_migration_mapping.json", "sql/11_eims_migration_foundation.sql",
+    )
     for name in required:
         if not (ROOT / name).is_file():
             errors.append(f"Missing required deployment file: {name}")
@@ -43,6 +46,28 @@ def check() -> list[str]:
     for forbidden in ("ROOT_LOCATION", ".env", ".local", "tests/", "secrets.toml"):
         if forbidden in project:
             errors.append(f"snowflake.yml must not deploy {forbidden}.")
+    if "config/eims_migration_mapping.json" not in project:
+        errors.append("The provisional EIMS mapping must be included in the application artifact.")
+    if "sample_data/" in project or "fake_eims_export" in project:
+        errors.append("Generated EIMS sample packages must not be deployed with Streamlit.")
+
+    migration_sql = (ROOT / "sql" / "11_eims_migration_foundation.sql").read_text(encoding="utf-8").upper()
+    if "CREATE STAGE IF NOT EXISTS EFNS_DEV.RAW.EIMS_MIGRATION_FILES" not in migration_sql:
+        errors.append("The named internal EIMS migration stage is missing.")
+    if "SNOWFLAKE_SSE" not in migration_sql:
+        errors.append("The EIMS migration stage must declare server-side encryption.")
+    if "FUTURE" in migration_sql or "ALL TABLES" in migration_sql:
+        errors.append("Migration SQL must not grant broad or future object privileges.")
+    if "GRANT READ, WRITE ON STAGE EFNS_DEV.RAW.EIMS_MIGRATION_FILES TO ROLE EFNS_DEV_APP_OWNER" not in migration_sql:
+        errors.append("Only the app owner must receive required migration-stage privileges.")
+    if "USE ROLE SYSADMIN" not in migration_sql or "USE ROLE SECURITYADMIN" not in migration_sql:
+        errors.append("Migration object creation and exact grants must use their owning administrative roles.")
+    if "CREATE OR REPLACE PROCEDURE EFNS_DEV.RAW.CLEANUP_SYNTHETIC_MIGRATION" not in migration_sql:
+        errors.append("Synthetic cleanup must use its batch-restricted owner-rights procedure.")
+    if "GRANT USAGE ON PROCEDURE EFNS_DEV.RAW.CLEANUP_SYNTHETIC_MIGRATION(VARCHAR)" not in migration_sql:
+        errors.append("The app owner needs only USAGE on the guarded cleanup procedure.")
+    if re.search(r"GRANT\s+DELETE\s+ON\s+TABLE\s+EFNS_DEV\.(?:CORE\.PRODUCTION_RECORD|RAW\.IMPORT_BATCH)\s+TO\s+ROLE\s+EFNS_DEV_APP_OWNER", migration_sql):
+        errors.append("The app owner must not receive broad direct DELETE for migration cleanup.")
 
     post_deploy_path = ROOT / "sql" / "08_post_deploy_grants.sql"
     if not post_deploy_path.is_file():

@@ -26,6 +26,8 @@ entities:
         dest: data/
       - src: data/repositories/*.py
         dest: data/repositories/
+      - src: config/eims_migration_mapping.json
+        dest: config/eims_migration_mapping.json
     grants:
       - privilege: USAGE
         role: EFNS_DEV_ADMIN

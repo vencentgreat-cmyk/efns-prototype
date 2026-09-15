@@ -295,6 +295,36 @@ class BaseRepository(ABC):
         """Return source rows stored for one import batch."""
         ...
 
+    # Historical EIMS migration (provisional metadata contract)
+
+    @abstractmethod
+    def find_migration_by_hash(self, package_hash: str) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    def get_migration_batches(self) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def get_migration_raw_rows(self, batch_id: str) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:
+        ...
+
+    @abstractmethod
+    def prepare_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:
+        ...
+
+    @abstractmethod
+    def commit_migration_batch(self, batch_id: str) -> dict:
+        ...
+
+    @abstractmethod
+    def cleanup_synthetic_migration(self, batch_id: str) -> bool:
+        ...
+
     @abstractmethod
     def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:
         """Insert production records. Returns count inserted."""
