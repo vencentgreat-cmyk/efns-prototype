@@ -24,7 +24,8 @@ def check() -> list[str]:
     errors: list[str] = []
     required = (
         "snowflake.yml", "environment.yml", "streamlit_app.py",
-        "config/eims_migration_mapping.json", "sql/11_eims_migration_foundation.sql",
+        "config/eims_migration_mapping.json", "config/eims_migration_mapping_v1.json",
+        "sql/11_eims_migration_foundation.sql",
     )
     for name in required:
         if not (ROOT / name).is_file():
@@ -48,6 +49,8 @@ def check() -> list[str]:
             errors.append(f"snowflake.yml must not deploy {forbidden}.")
     if "config/eims_migration_mapping.json" not in project:
         errors.append("The provisional EIMS mapping must be included in the application artifact.")
+    if "config/eims_migration_mapping_v1.json" not in project:
+        errors.append("The explicit version-1 EIMS mapping must remain available for nine-file packages.")
     if "sample_data/" in project or "fake_eims_export" in project:
         errors.append("Generated EIMS sample packages must not be deployed with Streamlit.")
 
@@ -119,6 +122,8 @@ def check() -> list[str]:
     }
     if audit_privileges != {"SELECT", "INSERT"}:
         errors.append("APP.AUDIT_EVENT must grant only SELECT and INSERT to the app owner.")
+    if "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE EFNS_DEV.CORE.FARM_LOCATION TO ROLE EFNS_DEV_APP_OWNER;" not in normalized_grants:
+        errors.append("Farm Location must have one exact operational CRUD grant for the app owner.")
 
     utc_ntz = "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ"
     for ddl_name in ("02_core_tables.sql", "03_production_tables.sql"):
@@ -161,7 +166,8 @@ def check() -> list[str]:
     operational_pages = (
         "3_Accounts_Facilities_Flocks.py", "5_Flocks.py", "6_Flock_Transactions.py",
         "7_Quota_Registrations.py", "8_Quota_Transactions.py", "9_Salmonella_Tests.py",
-        "11_Facilities.py", "13_Facility_Details.py",
+        "11_Facilities.py", "13_Facility_Details.py", "18_Farm_Locations.py",
+        "4_Reports.py",
     )
     page_source = "\n".join(
         (ROOT / "app" / "pages" / name).read_text(encoding="utf-8")
@@ -172,6 +178,18 @@ def check() -> list[str]:
         "snowflake.app", "href=",
     )):
         errors.append("Operational record pages must use registered-page session navigation, not browser links.")
+
+    report_center = (ROOT / "app" / "services" / "report_center.py").read_text(encoding="utf-8")
+    for required_report in (
+        "Quota Summary Report", "Flock Age Report", "Flock Current Report",
+        "Flock Current Report by Producer", "EIMS Salmonella Testing Form",
+        "EIMS Salmonella Testing Letter", "EIMS License Application Form",
+        "Flock Permit Form",
+    ):
+        if required_report not in report_center:
+            errors.append(f"Report Center is missing the confirmed catalog entry: {required_report}")
+    if "CUSTOM_DATASETS" not in report_center or "require_permission" not in report_center:
+        errors.append("Report Center must use allowlisted datasets and service-level permissions.")
 
     for path in runtime_python_files():
         try:

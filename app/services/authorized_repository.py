@@ -10,6 +10,7 @@ from data.repositories.base import RepositoryError
 
 UPSERT_METHODS = {
     "upsert_account": ("ACCOUNT", "ACCOUNT_ID"),
+    "upsert_farm_location": ("FARM_LOCATION", "FARM_LOCATION_ID"),
     "upsert_facility": ("FACILITY", "FACILITY_ID"),
     "upsert_facility_detail": ("FACILITY_DETAIL", "FACILITY_DETAIL_ID"),
     "upsert_flock": ("FLOCK", "FLOCK_ID"),
@@ -21,6 +22,7 @@ UPSERT_METHODS = {
 
 DELETE_METHODS = {
     "delete_account": "ACCOUNT",
+    "delete_farm_location": "FARM_LOCATION",
     "delete_facility": "FACILITY",
     "delete_facility_detail": "FACILITY_DETAIL",
     "delete_flock": "FLOCK",

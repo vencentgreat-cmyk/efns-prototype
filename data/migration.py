@@ -21,6 +21,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping.json"
+V1_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping_v1.json"
 SYNTHETIC_PREFIXES = ("DEV_MIGRATION_", "DEV_SYNTH_")
 WORKFLOW_STATUSES = (
     "UPLOADED", "PARSED", "VALIDATED", "READY", "COMMITTED",
@@ -58,6 +59,17 @@ class MigrationAnalysis:
 
 def load_mapping(path: Path = DEFAULT_MAPPING_PATH) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_mapping_for_version(schema_version: str | None) -> dict:
+    """Resolve the explicit migration contract without ambiguous file sets."""
+    current = load_mapping()
+    if schema_version == current["schema_version"]:
+        return current
+    legacy = load_mapping(V1_MAPPING_PATH)
+    if schema_version == legacy["schema_version"]:
+        return legacy
+    raise ValueError("The migration package schema version is not supported.")
 
 
 def expected_filenames(mapping: dict | None = None) -> list[str]:
@@ -176,8 +188,16 @@ def _rule_error(field: str, value, rule: dict) -> str | None:
 
 
 def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> MigrationAnalysis:
-    contract = mapping or load_mapping()
     sources = [_source_file(value) for value in files]
+    if mapping is None:
+        current = load_mapping()
+        supplied = {source.name for source in sources}
+        if supplied == set(expected_filenames(load_mapping(V1_MAPPING_PATH))):
+            contract = load_mapping(V1_MAPPING_PATH)
+        else:
+            contract = current
+    else:
+        contract = mapping
     by_name = {safe_stage_component(source.name): source for source in sources}
     if len(by_name) != len(sources):
         raise ValueError("Duplicate migration filenames are not allowed.")

@@ -7,6 +7,21 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from data.constants import FARM_LOCATION_STATUSES
+
+
+def validate_farm_location(repo, record: dict) -> list[str]:
+    """Validate the provisional Account-owned Farm Location contract."""
+    errors = []
+    account_id = record.get("ACCOUNT_ID")
+    if not account_id or repo.get_account(account_id) is None:
+        errors.append("Farm Location requires an existing Account.")
+    if not str(record.get("LOCATION_NAME") or "").strip():
+        errors.append("Location Name is required.")
+    if record.get("STATUS") not in FARM_LOCATION_STATUSES:
+        errors.append("Status must be Active or Inactive.")
+    return errors
+
 from data.constants import QUOTA_TRANSACTION_TYPES, QUOTA_TYPES, SALMONELLA_RESULTS
 
 if TYPE_CHECKING:

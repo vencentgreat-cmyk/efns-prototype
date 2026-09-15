@@ -11,6 +11,14 @@
    observation. Dataverse may use different relationship names, cardinalities, or
    intermediary entities.
 
+1a. **ACCOUNT 1:N FARM_LOCATION** — Dynamics shows “Other Addresses” and an
+   “Active Farm Locations” view. The prototype therefore models an Account-owned
+   postal, physical, or operational address separately from regulated Facility
+   and Facility Detail records. The canonical internal name is `FARM_LOCATION`;
+   the navigation label is “Farm Locations.” Cardinality, exact fields, the
+   Dynamics table name, and any Facility relationship require stakeholder and
+   EIMS metadata confirmation.
+
 2. **FLOCK 1:N FLOCK_TRANSACTION** — Inferred. Actual EIMS may use a different
    transaction model or embed transaction data directly.
 
@@ -49,6 +57,12 @@
     Facility, Flock, and Production areas. These groupings are logical and may
     not reflect the actual EIMS form/page structure.
 
+11. **Report Center rules** — Quota Summary currently uses Quota Registration as
+    its row grain and applies its as-of date only to that record's effective/end
+    dates. It prefers an Active Farm Location and then the lowest stable location
+    ID. Issuance, mortality and historical Flock-current semantics are not yet
+    defined. See `REPORT_CENTER.md` for the exact stakeholder questions.
+
 ## Known Gaps
 
 | # | Gap | Impact | Resolution |
@@ -74,7 +88,11 @@
 3. **PRODUCTION-to-FLOCK provisional link** — Fabricated random assignment for report demo.
 4. **Prototype identity** — Local SQLite and Snowflake viewer identity are implemented; organizational identity lifecycle remains pending.
 5. **Historical migration contract** — `config/eims_migration_mapping.json` is a replaceable intake contract for synthetic workflow testing. Its filenames, requiredness, choices, natural keys and relationships must be reconciled with the incoming EIMS metadata before real migration use.
-6. **Snowflake migration verification pending** — the stage, RAW control tables and transactional writer are offline-tested but still need EFNS DEV stage/upload/rollback validation.
+6. **Snowflake migration V1 verification completed, V2 pending** — batch `DEV_MIGRATION_6202ef6e6b1c03f4600b74` was manually verified with 8,450 RAW rows and matching counts for all nine V1 CORE entities, then removed with restricted cleanup. The V2 package adds Farm Location and still requires a DEV smoke test.
+
+7. **Transaction list semantics** — Flock and Quota Transactions are historical
+   events and have no lifecycle status in the current DDL. Their pages retain
+   parent/type/date filters rather than artificial Active/Inactive views.
 
 ## Mapping authority
 

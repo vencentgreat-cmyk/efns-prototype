@@ -1,87 +1,528 @@
 {
-  "schema_version": "EFNS-EIMS-PROVISIONAL-1",
+  "schema_version": "EFNS-EIMS-PROVISIONAL-2",
   "status": "provisional_pending_eims_metadata",
   "entity_order": [
-    "ACCOUNT", "FACILITY", "FACILITY_DETAIL", "QUOTA_REGISTRATION",
-    "FLOCK", "FLOCK_TRANSACTION", "QUOTA_TRANSACTION",
-    "SALMONELLA_TEST", "PRODUCTION_RECORD"
+    "ACCOUNT",
+    "FARM_LOCATION",
+    "FACILITY",
+    "FACILITY_DETAIL",
+    "QUOTA_REGISTRATION",
+    "FLOCK",
+    "FLOCK_TRANSACTION",
+    "QUOTA_TRANSACTION",
+    "SALMONELLA_TEST",
+    "PRODUCTION_RECORD"
   ],
   "entities": {
     "ACCOUNT": {
-      "filename": "accounts.csv", "id_field": "ACCOUNT_ID",
-      "required": ["ACCOUNT_ID", "ORGANIZATION_NAME"],
-      "natural_key": ["REGISTRATION_NUMBER"],
-      "fields": {"ACCOUNT_ID":"string","REGISTRATION_NUMBER":"string","ORGANIZATION_NAME":"string","CITY":"string","PROVINCE":"string","CONTACT_EMAIL":"string","PRODUCER_ROLE":"boolean","STATUS":"choice"},
-      "choices": {"STATUS":["Active","Inactive"]}, "foreign_keys": {}
+      "filename": "accounts.csv",
+      "id_field": "ACCOUNT_ID",
+      "required": [
+        "ACCOUNT_ID",
+        "ORGANIZATION_NAME"
+      ],
+      "natural_key": [
+        "REGISTRATION_NUMBER"
+      ],
+      "fields": {
+        "ACCOUNT_ID": "string",
+        "REGISTRATION_NUMBER": "string",
+        "ORGANIZATION_NAME": "string",
+        "CITY": "string",
+        "PROVINCE": "string",
+        "CONTACT_EMAIL": "string",
+        "PRODUCER_ROLE": "boolean",
+        "STATUS": "choice"
+      },
+      "choices": {
+        "STATUS": [
+          "Active",
+          "Inactive"
+        ]
+      },
+      "foreign_keys": {}
     },
     "FACILITY": {
-      "filename":"facilities.csv", "id_field":"FACILITY_ID",
-      "required":["FACILITY_ID","ACCOUNT_ID","FACILITY_NAME"],
-      "natural_key":["ACCOUNT_ID","FACILITY_NAME"],
-      "fields":{"FACILITY_ID":"string","ACCOUNT_ID":"string","FACILITY_NAME":"string","FACILITY_TYPE":"string","STATUS":"choice","ACTIVATION_DATE":"date"},
-      "choices":{"STATUS":["Active","Inactive","Closed"]},
-      "foreign_keys":{"ACCOUNT_ID":["ACCOUNT","ACCOUNT_ID"]}
+      "filename": "facilities.csv",
+      "id_field": "FACILITY_ID",
+      "required": [
+        "FACILITY_ID",
+        "ACCOUNT_ID",
+        "FACILITY_NAME"
+      ],
+      "natural_key": [
+        "ACCOUNT_ID",
+        "FACILITY_NAME"
+      ],
+      "fields": {
+        "FACILITY_ID": "string",
+        "ACCOUNT_ID": "string",
+        "FACILITY_NAME": "string",
+        "FACILITY_TYPE": "string",
+        "STATUS": "choice",
+        "ACTIVATION_DATE": "date"
+      },
+      "choices": {
+        "STATUS": [
+          "Active",
+          "Inactive",
+          "Closed"
+        ]
+      },
+      "foreign_keys": {
+        "ACCOUNT_ID": [
+          "ACCOUNT",
+          "ACCOUNT_ID"
+        ]
+      }
     },
     "FACILITY_DETAIL": {
-      "filename":"facility_details.csv", "id_field":"FACILITY_DETAIL_ID",
-      "required":["FACILITY_DETAIL_ID","FACILITY_ID","DETAIL_NAME"],
-      "natural_key":["FACILITY_ID","DETAIL_NAME"],
-      "fields":{"FACILITY_DETAIL_ID":"string","FACILITY_ID":"string","DETAIL_NAME":"string","DETAIL_TYPE":"string","STATUS":"choice","COMMENTS":"string"},
-      "choices":{"STATUS":["Active","Inactive"]},
-      "foreign_keys":{"FACILITY_ID":["FACILITY","FACILITY_ID"]}
+      "filename": "facility_details.csv",
+      "id_field": "FACILITY_DETAIL_ID",
+      "required": [
+        "FACILITY_DETAIL_ID",
+        "FACILITY_ID",
+        "DETAIL_NAME"
+      ],
+      "natural_key": [
+        "FACILITY_ID",
+        "DETAIL_NAME"
+      ],
+      "fields": {
+        "FACILITY_DETAIL_ID": "string",
+        "FACILITY_ID": "string",
+        "DETAIL_NAME": "string",
+        "DETAIL_TYPE": "string",
+        "STATUS": "choice",
+        "COMMENTS": "string"
+      },
+      "choices": {
+        "STATUS": [
+          "Active",
+          "Inactive"
+        ]
+      },
+      "foreign_keys": {
+        "FACILITY_ID": [
+          "FACILITY",
+          "FACILITY_ID"
+        ]
+      }
     },
     "QUOTA_REGISTRATION": {
-      "filename":"quota_registrations.csv", "id_field":"QUOTA_ID",
-      "required":["QUOTA_ID","REGISTRATION_NUMBER","ACCOUNT_ID","QUOTA_TYPE"],
-      "natural_key":["REGISTRATION_NUMBER"],
-      "fields":{"QUOTA_ID":"string","REGISTRATION_NUMBER":"string","ACCOUNT_ID":"string","QUOTA_NAME":"string","QUOTA_TYPE":"choice","STATUS":"choice","EFFECTIVE_DATE":"date","END_DATE":"date","COMMENTS":"string"},
-      "choices":{"QUOTA_TYPE":["Egg Production","Non-Commercial Pullet","Commercial Pullet"],"STATUS":["Active","Inactive","Expired"]},
-      "foreign_keys":{"ACCOUNT_ID":["ACCOUNT","ACCOUNT_ID"]}
+      "filename": "quota_registrations.csv",
+      "id_field": "QUOTA_ID",
+      "required": [
+        "QUOTA_ID",
+        "REGISTRATION_NUMBER",
+        "ACCOUNT_ID",
+        "QUOTA_TYPE"
+      ],
+      "natural_key": [
+        "REGISTRATION_NUMBER"
+      ],
+      "fields": {
+        "QUOTA_ID": "string",
+        "REGISTRATION_NUMBER": "string",
+        "ACCOUNT_ID": "string",
+        "QUOTA_NAME": "string",
+        "QUOTA_TYPE": "choice",
+        "STATUS": "choice",
+        "EFFECTIVE_DATE": "date",
+        "END_DATE": "date",
+        "COMMENTS": "string"
+      },
+      "choices": {
+        "QUOTA_TYPE": [
+          "Egg Production",
+          "Non-Commercial Pullet",
+          "Commercial Pullet"
+        ],
+        "STATUS": [
+          "Active",
+          "Inactive",
+          "Expired"
+        ]
+      },
+      "foreign_keys": {
+        "ACCOUNT_ID": [
+          "ACCOUNT",
+          "ACCOUNT_ID"
+        ]
+      }
     },
     "FLOCK": {
-      "filename":"flocks.csv", "id_field":"FLOCK_ID",
-      "required":["FLOCK_ID","FLOCK_NUMBER","ACCOUNT_ID","FACILITY_ID","PERMIT_NUMBER","HATCH_DATE","BIRD_COUNT"],
-      "natural_key":["FLOCK_NUMBER"],
-      "fields":{"FLOCK_ID":"string","FLOCK_NUMBER":"string","ACCOUNT_ID":"string","FACILITY_ID":"string","FACILITY_DETAIL_ID":"string","QUOTA_ID":"string","FLOCK_QUOTA_TYPE":"choice","STATUS":"choice","PERMIT_NUMBER":"string","PERMIT_DATE":"date","HATCH_DATE":"date","DATE_ORDERED":"date","BIRD_COUNT":"integer","EGG_COLOUR":"choice","PLACEMENT_DATE":"date","EST_DISPOSAL":"date","DISPOSAL_DATE":"date","BIRDS_DISPOSED":"integer","COMMENTS":"string"},
-      "choices":{"FLOCK_QUOTA_TYPE":["Egg Production","Non-Commercial Pullet","Commercial Pullet"],"STATUS":["Planned","Active","Depopulated"],"EGG_COLOUR":["White","Brown","Mostly White","Mostly Brown"]},
-      "numeric_rules":{"BIRD_COUNT":{"min":0,"max":1000000},"BIRDS_DISPOSED":{"min":0,"max":1000000}},
-      "foreign_keys":{"ACCOUNT_ID":["ACCOUNT","ACCOUNT_ID"],"FACILITY_ID":["FACILITY","FACILITY_ID"],"FACILITY_DETAIL_ID":["FACILITY_DETAIL","FACILITY_DETAIL_ID"],"QUOTA_ID":["QUOTA_REGISTRATION","QUOTA_ID"]}
+      "filename": "flocks.csv",
+      "id_field": "FLOCK_ID",
+      "required": [
+        "FLOCK_ID",
+        "FLOCK_NUMBER",
+        "ACCOUNT_ID",
+        "FACILITY_ID",
+        "PERMIT_NUMBER",
+        "HATCH_DATE",
+        "BIRD_COUNT"
+      ],
+      "natural_key": [
+        "FLOCK_NUMBER"
+      ],
+      "fields": {
+        "FLOCK_ID": "string",
+        "FLOCK_NUMBER": "string",
+        "ACCOUNT_ID": "string",
+        "FACILITY_ID": "string",
+        "FACILITY_DETAIL_ID": "string",
+        "QUOTA_ID": "string",
+        "FLOCK_QUOTA_TYPE": "choice",
+        "STATUS": "choice",
+        "PERMIT_NUMBER": "string",
+        "PERMIT_DATE": "date",
+        "HATCH_DATE": "date",
+        "DATE_ORDERED": "date",
+        "BIRD_COUNT": "integer",
+        "EGG_COLOUR": "choice",
+        "PLACEMENT_DATE": "date",
+        "EST_DISPOSAL": "date",
+        "DISPOSAL_DATE": "date",
+        "BIRDS_DISPOSED": "integer",
+        "COMMENTS": "string"
+      },
+      "choices": {
+        "FLOCK_QUOTA_TYPE": [
+          "Egg Production",
+          "Non-Commercial Pullet",
+          "Commercial Pullet"
+        ],
+        "STATUS": [
+          "Planned",
+          "Active",
+          "Depopulated"
+        ],
+        "EGG_COLOUR": [
+          "White",
+          "Brown",
+          "Mostly White",
+          "Mostly Brown"
+        ]
+      },
+      "numeric_rules": {
+        "BIRD_COUNT": {
+          "min": 0,
+          "max": 1000000
+        },
+        "BIRDS_DISPOSED": {
+          "min": 0,
+          "max": 1000000
+        }
+      },
+      "foreign_keys": {
+        "ACCOUNT_ID": [
+          "ACCOUNT",
+          "ACCOUNT_ID"
+        ],
+        "FACILITY_ID": [
+          "FACILITY",
+          "FACILITY_ID"
+        ],
+        "FACILITY_DETAIL_ID": [
+          "FACILITY_DETAIL",
+          "FACILITY_DETAIL_ID"
+        ],
+        "QUOTA_ID": [
+          "QUOTA_REGISTRATION",
+          "QUOTA_ID"
+        ]
+      }
     },
     "FLOCK_TRANSACTION": {
-      "filename":"flock_transactions.csv", "id_field":"FLOCK_TRANSACTION_ID",
-      "required":["FLOCK_TRANSACTION_ID","FLOCK_ID","TRANSACTION_TYPE","QUANTITY","TRANSACTION_DATE"],
-      "natural_key":["FLOCK_TRANSACTION_ID"],
-      "fields":{"FLOCK_TRANSACTION_ID":"string","FLOCK_ID":"string","TRANSACTION_TYPE":"choice","QUANTITY":"decimal","TRANSACTION_DATE":"date","NOTES":"string"},
-      "choices":{"TRANSACTION_TYPE":["Count","Delivery","Removal","Sale"]},
-      "numeric_rules":{"QUANTITY":{"min_exclusive":0,"max":1000000}},
-      "foreign_keys":{"FLOCK_ID":["FLOCK","FLOCK_ID"]}
+      "filename": "flock_transactions.csv",
+      "id_field": "FLOCK_TRANSACTION_ID",
+      "required": [
+        "FLOCK_TRANSACTION_ID",
+        "FLOCK_ID",
+        "TRANSACTION_TYPE",
+        "QUANTITY",
+        "TRANSACTION_DATE"
+      ],
+      "natural_key": [
+        "FLOCK_TRANSACTION_ID"
+      ],
+      "fields": {
+        "FLOCK_TRANSACTION_ID": "string",
+        "FLOCK_ID": "string",
+        "TRANSACTION_TYPE": "choice",
+        "QUANTITY": "decimal",
+        "TRANSACTION_DATE": "date",
+        "NOTES": "string"
+      },
+      "choices": {
+        "TRANSACTION_TYPE": [
+          "Count",
+          "Delivery",
+          "Removal",
+          "Sale"
+        ]
+      },
+      "numeric_rules": {
+        "QUANTITY": {
+          "min_exclusive": 0,
+          "max": 1000000
+        }
+      },
+      "foreign_keys": {
+        "FLOCK_ID": [
+          "FLOCK",
+          "FLOCK_ID"
+        ]
+      }
     },
     "QUOTA_TRANSACTION": {
-      "filename":"quota_transactions.csv", "id_field":"QUOTA_TRANSACTION_ID",
-      "required":["QUOTA_TRANSACTION_ID","TRANSACTION_TYPE","QUOTA_ID","EFFECTIVE_DATE","QUOTA_COUNT","OWNER_ACCOUNT_ID","RELATED_ACCOUNT_ID"],
-      "natural_key":["QUOTA_TRANSACTION_ID"],
-      "fields":{"QUOTA_TRANSACTION_ID":"string","TRANSACTION_TYPE":"choice","QUOTA_ID":"string","EFFECTIVE_DATE":"date","END_DATE":"date","QUOTA_COUNT":"decimal","OWNER_ACCOUNT_ID":"string","RELATED_ACCOUNT_ID":"string","RELATED_QUOTA_ID":"string","RELATED_TRANSACTION_ID":"string","PRICE":"decimal","QUOTA_LEASE_TYPE":"choice","COMMENTS":"string"},
-      "choices":{"TRANSACTION_TYPE":["Purchase","Sale","Lease In","Lease Out"],"QUOTA_LEASE_TYPE":["Fixed Term","Open Ended","Seasonal"]},
-      "numeric_rules":{"QUOTA_COUNT":{"min_exclusive":0},"PRICE":{"min":0}},
-      "foreign_keys":{"QUOTA_ID":["QUOTA_REGISTRATION","QUOTA_ID"],"OWNER_ACCOUNT_ID":["ACCOUNT","ACCOUNT_ID"],"RELATED_ACCOUNT_ID":["ACCOUNT","ACCOUNT_ID"],"RELATED_QUOTA_ID":["QUOTA_REGISTRATION","QUOTA_ID"],"RELATED_TRANSACTION_ID":["QUOTA_TRANSACTION","QUOTA_TRANSACTION_ID"]}
+      "filename": "quota_transactions.csv",
+      "id_field": "QUOTA_TRANSACTION_ID",
+      "required": [
+        "QUOTA_TRANSACTION_ID",
+        "TRANSACTION_TYPE",
+        "QUOTA_ID",
+        "EFFECTIVE_DATE",
+        "QUOTA_COUNT",
+        "OWNER_ACCOUNT_ID",
+        "RELATED_ACCOUNT_ID"
+      ],
+      "natural_key": [
+        "QUOTA_TRANSACTION_ID"
+      ],
+      "fields": {
+        "QUOTA_TRANSACTION_ID": "string",
+        "TRANSACTION_TYPE": "choice",
+        "QUOTA_ID": "string",
+        "EFFECTIVE_DATE": "date",
+        "END_DATE": "date",
+        "QUOTA_COUNT": "decimal",
+        "OWNER_ACCOUNT_ID": "string",
+        "RELATED_ACCOUNT_ID": "string",
+        "RELATED_QUOTA_ID": "string",
+        "RELATED_TRANSACTION_ID": "string",
+        "PRICE": "decimal",
+        "QUOTA_LEASE_TYPE": "choice",
+        "COMMENTS": "string"
+      },
+      "choices": {
+        "TRANSACTION_TYPE": [
+          "Purchase",
+          "Sale",
+          "Lease In",
+          "Lease Out"
+        ],
+        "QUOTA_LEASE_TYPE": [
+          "Fixed Term",
+          "Open Ended",
+          "Seasonal"
+        ]
+      },
+      "numeric_rules": {
+        "QUOTA_COUNT": {
+          "min_exclusive": 0
+        },
+        "PRICE": {
+          "min": 0
+        }
+      },
+      "foreign_keys": {
+        "QUOTA_ID": [
+          "QUOTA_REGISTRATION",
+          "QUOTA_ID"
+        ],
+        "OWNER_ACCOUNT_ID": [
+          "ACCOUNT",
+          "ACCOUNT_ID"
+        ],
+        "RELATED_ACCOUNT_ID": [
+          "ACCOUNT",
+          "ACCOUNT_ID"
+        ],
+        "RELATED_QUOTA_ID": [
+          "QUOTA_REGISTRATION",
+          "QUOTA_ID"
+        ],
+        "RELATED_TRANSACTION_ID": [
+          "QUOTA_TRANSACTION",
+          "QUOTA_TRANSACTION_ID"
+        ]
+      }
     },
     "SALMONELLA_TEST": {
-      "filename":"salmonella_tests.csv", "id_field":"SALMONELLA_TEST_ID",
-      "required":["SALMONELLA_TEST_ID","FLOCK_ID","ACCOUNT_ID","PERMIT_NUMBER","TESTING_DATE","NUMBER_OF_SAMPLES","TEST_RESULT"],
-      "natural_key":["SALMONELLA_TEST_ID"],
-      "fields":{"SALMONELLA_TEST_ID":"string","FLOCK_ID":"string","ACCOUNT_ID":"string","PERMIT_NUMBER":"string","TESTING_DATE":"date","INSPECTOR":"string","NUMBER_OF_SAMPLES":"integer","TEST_RESULT":"choice","DATE_RESULT_SENT":"date","DATE_RECEIVED":"date","CASE_FILE_NUMBER":"string","COMMENTS":"string"},
-      "choices":{"TEST_RESULT":["Pending","Negative","Positive","Inconclusive"]},
-      "numeric_rules":{"NUMBER_OF_SAMPLES":{"min_exclusive":0,"max":10000}},
-      "foreign_keys":{"FLOCK_ID":["FLOCK","FLOCK_ID"],"ACCOUNT_ID":["ACCOUNT","ACCOUNT_ID"]}
+      "filename": "salmonella_tests.csv",
+      "id_field": "SALMONELLA_TEST_ID",
+      "required": [
+        "SALMONELLA_TEST_ID",
+        "FLOCK_ID",
+        "ACCOUNT_ID",
+        "PERMIT_NUMBER",
+        "TESTING_DATE",
+        "NUMBER_OF_SAMPLES",
+        "TEST_RESULT"
+      ],
+      "natural_key": [
+        "SALMONELLA_TEST_ID"
+      ],
+      "fields": {
+        "SALMONELLA_TEST_ID": "string",
+        "FLOCK_ID": "string",
+        "ACCOUNT_ID": "string",
+        "PERMIT_NUMBER": "string",
+        "TESTING_DATE": "date",
+        "INSPECTOR": "string",
+        "NUMBER_OF_SAMPLES": "integer",
+        "TEST_RESULT": "choice",
+        "DATE_RESULT_SENT": "date",
+        "DATE_RECEIVED": "date",
+        "CASE_FILE_NUMBER": "string",
+        "COMMENTS": "string"
+      },
+      "choices": {
+        "TEST_RESULT": [
+          "Pending",
+          "Negative",
+          "Positive",
+          "Inconclusive"
+        ]
+      },
+      "numeric_rules": {
+        "NUMBER_OF_SAMPLES": {
+          "min_exclusive": 0,
+          "max": 10000
+        }
+      },
+      "foreign_keys": {
+        "FLOCK_ID": [
+          "FLOCK",
+          "FLOCK_ID"
+        ],
+        "ACCOUNT_ID": [
+          "ACCOUNT",
+          "ACCOUNT_ID"
+        ]
+      }
     },
     "PRODUCTION_RECORD": {
-      "filename":"production.xlsx", "worksheet":"production", "id_field":"PRODUCTION_ID",
-      "required":["PRODUCTION_ID","SOURCE_TYPE","MATCH_STATUS","SOURCE_ROW_NUMBER"],
-      "natural_key":["PRODUCTION_ID"],
-      "fields":{"PRODUCTION_ID":"string","PRODUCER_ACCOUNT_ID":"string","GRADER_ACCOUNT_ID":"string","FACILITY_ID":"string","FLOCK_ID":"string","REPORTING_YEAR":"integer","REPORTING_WEEK":"integer","FLOCK_AGE":"integer","TOTAL":"decimal","TOTAL_RECEIVED":"decimal","TOTAL_ACCEPTED":"decimal","SOURCE_TYPE":"string","MATCH_STATUS":"choice","SOURCE_ROW_NUMBER":"integer"},
-      "choices":{"MATCH_STATUS":["UNMATCHED","UNIQUE_CANDIDATE","NO_CANDIDATE","MULTIPLE_CANDIDATES","CONFIRMED"]},
-      "numeric_rules":{"REPORTING_YEAR":{"min":2000,"max":2100},"REPORTING_WEEK":{"min":1,"max":53},"FLOCK_AGE":{"min":0,"max":200},"TOTAL":{"min":0},"TOTAL_RECEIVED":{"min":0},"TOTAL_ACCEPTED":{"min":0},"SOURCE_ROW_NUMBER":{"min":1}},
-      "foreign_keys":{"PRODUCER_ACCOUNT_ID":["ACCOUNT","ACCOUNT_ID"],"GRADER_ACCOUNT_ID":["ACCOUNT","ACCOUNT_ID"],"FACILITY_ID":["FACILITY","FACILITY_ID"],"FLOCK_ID":["FLOCK","FLOCK_ID"]}
+      "filename": "production.xlsx",
+      "worksheet": "production",
+      "id_field": "PRODUCTION_ID",
+      "required": [
+        "PRODUCTION_ID",
+        "SOURCE_TYPE",
+        "MATCH_STATUS",
+        "SOURCE_ROW_NUMBER"
+      ],
+      "natural_key": [
+        "PRODUCTION_ID"
+      ],
+      "fields": {
+        "PRODUCTION_ID": "string",
+        "PRODUCER_ACCOUNT_ID": "string",
+        "GRADER_ACCOUNT_ID": "string",
+        "FACILITY_ID": "string",
+        "FLOCK_ID": "string",
+        "REPORTING_YEAR": "integer",
+        "REPORTING_WEEK": "integer",
+        "FLOCK_AGE": "integer",
+        "TOTAL": "decimal",
+        "TOTAL_RECEIVED": "decimal",
+        "TOTAL_ACCEPTED": "decimal",
+        "SOURCE_TYPE": "string",
+        "MATCH_STATUS": "choice",
+        "SOURCE_ROW_NUMBER": "integer"
+      },
+      "choices": {
+        "MATCH_STATUS": [
+          "UNMATCHED",
+          "UNIQUE_CANDIDATE",
+          "NO_CANDIDATE",
+          "MULTIPLE_CANDIDATES",
+          "CONFIRMED"
+        ]
+      },
+      "numeric_rules": {
+        "REPORTING_YEAR": {
+          "min": 2000,
+          "max": 2100
+        },
+        "REPORTING_WEEK": {
+          "min": 1,
+          "max": 53
+        },
+        "FLOCK_AGE": {
+          "min": 0,
+          "max": 200
+        },
+        "TOTAL": {
+          "min": 0
+        },
+        "TOTAL_RECEIVED": {
+          "min": 0
+        },
+        "TOTAL_ACCEPTED": {
+          "min": 0
+        },
+        "SOURCE_ROW_NUMBER": {
+          "min": 1
+        }
+      },
+      "foreign_keys": {
+        "PRODUCER_ACCOUNT_ID": [
+          "ACCOUNT",
+          "ACCOUNT_ID"
+        ],
+        "GRADER_ACCOUNT_ID": [
+          "ACCOUNT",
+          "ACCOUNT_ID"
+        ],
+        "FACILITY_ID": [
+          "FACILITY",
+          "FACILITY_ID"
+        ],
+        "FLOCK_ID": [
+          "FLOCK",
+          "FLOCK_ID"
+        ]
+      }
+    },
+    "FARM_LOCATION": {
+      "filename": "farm_locations.csv",
+      "id_field": "FARM_LOCATION_ID",
+      "required": [
+        "FARM_LOCATION_ID",
+        "ACCOUNT_ID",
+        "LOCATION_NAME"
+      ],
+      "natural_key": [
+        "ACCOUNT_ID",
+        "LOCATION_NAME"
+      ],
+      "fields": {
+        "FARM_LOCATION_ID": "string",
+        "ACCOUNT_ID": "string",
+        "LOCATION_NAME": "string",
+        "ADDRESS_1": "string",
+        "ADDRESS_2": "string",
+        "CITY": "string",
+        "PROVINCE": "string",
+        "POSTAL_CODE": "string",
+        "PHONE": "string",
+        "STATUS": "choice"
+      },
+      "choices": {
+        "STATUS": [
+          "Active",
+          "Inactive"
+        ]
+      },
+      "foreign_keys": {
+        "ACCOUNT_ID": [
+          "ACCOUNT",
+          "ACCOUNT_ID"
+        ]
+      }
     }
   }
 }

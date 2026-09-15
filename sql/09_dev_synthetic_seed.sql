@@ -2,7 +2,7 @@
 --
 -- This seed contains no real producer, employee, facility, or EIMS records.
 -- Every owned identifier and descriptive marker begins with DEV_SYNTH.
--- Expected connected rows: 5 accounts, 8 facilities, 12 flocks,
+-- Expected connected rows: 5 accounts, 10 farm locations, 8 facilities, 12 flocks,
 -- 20 flock transactions, 6 quota registrations, 10 quota transactions,
 -- 10 salmonella tests, 1 import batch, and 100 production records.
 --
@@ -52,6 +52,33 @@ BEGIN
         source.CONTACT_EMAIL, source.LICENCE_NUMBER, source.DESCRIPTION,
         source.PRODUCER_ROLE, source.GRADER_ROLE, source.STATUS,
         source.CREATED_AT, source.UPDATED_AT
+    );
+
+    MERGE INTO EFNS_DEV.CORE.FARM_LOCATION AS target
+    USING (
+        SELECT
+            'DEV_SYNTH_LOCATION_' || LPAD(TO_VARCHAR(n), 3, '0') AS FARM_LOCATION_ID,
+            'DEV_SYNTH_ACCOUNT_' || LPAD(TO_VARCHAR(CEIL(n / 2)), 3, '0') AS ACCOUNT_ID,
+            'DEV_SYNTH Fictional Farm Location ' || TO_VARCHAR(n) AS LOCATION_NAME,
+            TO_VARCHAR(100 + n) || ' Synthetic Farm Road' AS ADDRESS_1,
+            IFF(MOD(n, 3) = 0, NULL, 'Fictional Site ' || TO_VARCHAR(n)) AS ADDRESS_2,
+            'Synthetic City ' || TO_VARCHAR(CEIL(n / 2)) AS CITY,
+            'NS' AS PROVINCE,
+            'B0B 1A' || TO_VARCHAR(MOD(n, 10)) AS POSTAL_CODE,
+            '(902) 555-' || LPAD(TO_VARCHAR(n), 4, '0') AS PHONE,
+            IFF(MOD(n, 5) = 0, 'Inactive', 'Active') AS STATUS,
+            CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ AS CREATED_AT,
+            CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ AS UPDATED_AT
+        FROM (SELECT ROW_NUMBER() OVER (ORDER BY SEQ4()) AS n FROM TABLE(GENERATOR(ROWCOUNT => 10)))
+    ) AS source ON target.FARM_LOCATION_ID = source.FARM_LOCATION_ID
+    WHEN NOT MATCHED THEN INSERT (
+        FARM_LOCATION_ID, ACCOUNT_ID, LOCATION_NAME, ADDRESS_1, ADDRESS_2,
+        CITY, PROVINCE, POSTAL_CODE, PHONE, STATUS, CREATED_AT, UPDATED_AT
+    ) VALUES (
+        source.FARM_LOCATION_ID, source.ACCOUNT_ID, source.LOCATION_NAME,
+        source.ADDRESS_1, source.ADDRESS_2, source.CITY, source.PROVINCE,
+        source.POSTAL_CODE, source.PHONE, source.STATUS, source.CREATED_AT,
+        source.UPDATED_AT
     );
 
     MERGE INTO EFNS_DEV.CORE.FACILITY AS target
@@ -403,6 +430,8 @@ $$;
 SELECT 'ACCOUNT' AS ENTITY, 5 AS EXPECTED_COUNT, COUNT(*) AS ACTUAL_COUNT
 FROM EFNS_DEV.CORE.ACCOUNT WHERE STARTSWITH(ACCOUNT_ID, 'DEV_SYNTH_')
 UNION ALL
+SELECT 'FARM_LOCATION', 10, COUNT(*) FROM EFNS_DEV.CORE.FARM_LOCATION WHERE STARTSWITH(FARM_LOCATION_ID, 'DEV_SYNTH_')
+UNION ALL
 SELECT 'FACILITY', 8, COUNT(*) FROM EFNS_DEV.CORE.FACILITY WHERE STARTSWITH(FACILITY_ID, 'DEV_SYNTH_')
 UNION ALL
 SELECT 'FLOCK', 12, COUNT(*) FROM EFNS_DEV.CORE.FLOCK WHERE STARTSWITH(FLOCK_ID, 'DEV_SYNTH_')
@@ -427,6 +456,8 @@ SELECT 'FACILITY -> ACCOUNT' AS RELATIONSHIP, COUNT(*) AS BROKEN_RELATIONSHIP_CO
 FROM EFNS_DEV.CORE.FACILITY child
 LEFT JOIN EFNS_DEV.CORE.ACCOUNT parent ON parent.ACCOUNT_ID = child.ACCOUNT_ID
 WHERE STARTSWITH(child.FACILITY_ID, 'DEV_SYNTH_') AND parent.ACCOUNT_ID IS NULL
+UNION ALL
+SELECT 'FARM_LOCATION -> ACCOUNT', COUNT(*) FROM EFNS_DEV.CORE.FARM_LOCATION child LEFT JOIN EFNS_DEV.CORE.ACCOUNT parent ON parent.ACCOUNT_ID = child.ACCOUNT_ID WHERE STARTSWITH(child.FARM_LOCATION_ID, 'DEV_SYNTH_') AND parent.ACCOUNT_ID IS NULL
 UNION ALL
 SELECT 'FLOCK -> ACCOUNT', COUNT(*) FROM EFNS_DEV.CORE.FLOCK child LEFT JOIN EFNS_DEV.CORE.ACCOUNT parent ON parent.ACCOUNT_ID = child.ACCOUNT_ID WHERE STARTSWITH(child.FLOCK_ID, 'DEV_SYNTH_') AND parent.ACCOUNT_ID IS NULL
 UNION ALL

@@ -21,12 +21,45 @@ _PAGE_FILES = {
     "Accounts_&_Facilities": "3_Accounts_Facilities_Flocks.py",
     "Facilities": "11_Facilities.py",
     "Facility_Details": "13_Facility_Details.py",
+    "Farm_Locations": "18_Farm_Locations.py",
     "Flocks": "5_Flocks.py",
     "Flock_Transactions": "6_Flock_Transactions.py",
     "Quota_Registrations": "7_Quota_Registrations.py",
     "Quota_Transactions": "8_Quota_Transactions.py",
     "Salmonella_Tests": "9_Salmonella_Tests.py",
 }
+
+
+def saved_view_selector(
+    entity: str,
+    plural_label: str,
+    *,
+    key: str,
+    role_views=(),
+    selection_keys=(),
+) -> tuple[tuple[str, ...] | None, str | None]:
+    """Render one reusable Active/Inactive/All selector.
+
+    Returns the selected status tuple and optional Account role field.  A view
+    change clears page-provided row-selection keys before the table is read.
+    """
+    from data.constants import SAVED_VIEW_STATUS_GROUPS
+
+    groups = SAVED_VIEW_STATUS_GROUPS[entity]
+    options = [f"Active {plural_label}", f"Inactive {plural_label}", f"All {plural_label}"]
+    role_by_label = {f"Active {label}": field for field, label in role_views}
+    options.extend(role_by_label)
+    selected = st.selectbox("View", options, key=key)
+    marker = f"{key}_applied"
+    if st.session_state.get(marker) != selected:
+        for state_key in selection_keys:
+            st.session_state.pop(state_key, None)
+        st.session_state[marker] = selected
+    if selected == f"All {plural_label}":
+        return None, None
+    if selected == f"Inactive {plural_label}":
+        return tuple(groups["inactive"]), None
+    return tuple(groups["active"]), role_by_label.get(selected)
 
 
 def _caller_scope() -> str:
@@ -165,6 +198,35 @@ def selected_row_index(key: str) -> int | None:
     selection = getattr(state, "selection", None)
     rows = getattr(selection, "rows", []) if selection is not None else []
     return int(rows[0]) if rows else None
+
+
+def related_records_table(
+    title: str,
+    frame: pd.DataFrame,
+    *,
+    id_column: str,
+    label_column: str,
+    page_slug: str,
+    key: str,
+) -> None:
+    """Show a deduplicated related table with registered-page navigation."""
+    st.markdown(f"**{title} ({len(frame.drop_duplicates(id_column)) if id_column in frame else 0})**")
+    if frame.empty or id_column not in frame:
+        st.info(f"No related {title}.")
+        return
+    display = frame.drop_duplicates(id_column).copy().reset_index(drop=True)
+    display["RECORD"] = display.apply(
+        lambda row: row.get(label_column) or str(row[id_column]), axis=1
+    )
+    visible = [column for column in display.columns if column not in {id_column, "RECORD", "CREATED_AT", "UPDATED_AT"}][:5]
+    st.dataframe(
+        display[["RECORD", *visible]], width="stretch", hide_index=True,
+        on_select="rerun", selection_mode="single-row", key=key,
+    )
+    index = selected_row_index(key)
+    if index is not None and index < len(display):
+        if st.button(f"View selected {title}", key=f"{key}_open", icon=":material/visibility:"):
+            open_module(page_slug, "detail", str(display.iloc[index][id_column]))
 
 
 def list_command_bar(prefix: str, selected: bool = False) -> str | None:

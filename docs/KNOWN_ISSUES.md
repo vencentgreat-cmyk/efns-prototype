@@ -1,5 +1,18 @@
 # Known Issues
 
+## Farm Location model is provisional
+
+Dynamics labels the navigation item “Other Addresses” and its saved view
+“Active Farm Locations.” The prototype now uses `FARM_LOCATION` as an
+Account-owned address entity and keeps it separate from regulated Facilities.
+The actual Dataverse table/logical names, fields, choices, relationships and
+whether downstream records reference a Farm Location must be confirmed before
+this DEV model becomes authoritative.
+
+Flock and Quota Transactions remain historical event tables because their
+current DDL has no lifecycle status. Active/Inactive views must not be added
+until metadata establishes a real transaction status.
+
 - Dataverse logical names, choices, required fields, keys and relationship cardinalities remain unknown.
 - Imported EIMS rows remain `UNMATCHED`; candidate generation and manual confirmation UI remain future work.
 - Mock data resets with each Streamlit session.
@@ -37,3 +50,5 @@
   200 MB. Current pages are not paginated for very large result sets.
 - Historical migration mappings, natural keys, choices and relationship rules are provisional. The generated package is safe synthetic test data; it does not prove compatibility with the pending EIMS metadata or export layouts.
 - Connector and warehouse-runtime uploads to the named migration stage, large-batch SQL size, deployed reconciliation, and batch-scoped cleanup still require EFNS DEV smoke testing.
+- Quota Summary currently selects an Active Farm Location first and then the lowest `FARM_LOCATION_ID`; Fax comes from Account and producer count uses current `PRODUCER_ROLE`. These deterministic rules, the Issuance formula, the displayed mortality value and historical as-of semantics require stakeholder confirmation. No Issuance or mortality value is fabricated.
+- Flock Age/Current reports and EIMS forms/letters are catalog-only until their business definitions and approved printable templates are supplied. Session-saved report configurations are intentionally lost when the Streamlit session ends.

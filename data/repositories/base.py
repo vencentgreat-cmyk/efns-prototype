@@ -79,7 +79,10 @@ class BaseRepository(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def get_accounts(self) -> pd.DataFrame:
+    def get_accounts(
+        self, statuses: tuple[str, ...] | None = None,
+        role_field: str | None = None, keyword: str | None = None,
+    ) -> pd.DataFrame:
         """Return all accounts."""
         ...
 
@@ -105,12 +108,38 @@ class BaseRepository(ABC):
         """Soft or hard delete. Returns True if deleted."""
         ...
 
+    # Farm Locations / Dynamics "Other Addresses" (provisional)
+
+    @abstractmethod
+    def get_farm_locations(
+        self, farm_location_id: Optional[str] = None,
+        account_id: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
+        keyword: str | None = None,
+    ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def get_farm_location(self, farm_location_id: str) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    def upsert_farm_location(self, record: dict) -> str:
+        ...
+
+    @abstractmethod
+    def delete_farm_location(self, farm_location_id: str) -> bool:
+        ...
+
     # ------------------------------------------------------------------
     # Facilities
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def get_facilities(self, account_id: Optional[str] = None) -> pd.DataFrame:
+    def get_facilities(
+        self, account_id: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
+    ) -> pd.DataFrame:
         ...
 
     @abstractmethod
@@ -122,7 +151,11 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
-    def get_facility_details(self, facility_id: Optional[str] = None) -> pd.DataFrame:
+    def get_facility_details(
+        self, facility_id: Optional[str] = None,
+        account_id: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
+    ) -> pd.DataFrame:
         ...
 
     @abstractmethod
@@ -143,7 +176,9 @@ class BaseRepository(ABC):
 
     @abstractmethod
     def get_flocks(
-        self, account_id: Optional[str] = None, facility_id: Optional[str] = None
+        self, account_id: Optional[str] = None, facility_id: Optional[str] = None,
+        facility_detail_id: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
     ) -> pd.DataFrame:
         ...
 
@@ -164,7 +199,10 @@ class BaseRepository(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def get_flock_transactions(self, flock_id: Optional[str] = None) -> pd.DataFrame:
+    def get_flock_transactions(
+        self, flock_id: Optional[str] = None, account_id: Optional[str] = None,
+        transaction_type: Optional[str] = None, date_from=None, date_to=None,
+    ) -> pd.DataFrame:
         ...
 
     @abstractmethod
@@ -183,6 +221,7 @@ class BaseRepository(ABC):
         status: Optional[str] = None,
         quota_type: Optional[str] = None,
         active_only: bool = False,
+        statuses: tuple[str, ...] | None = None,
     ) -> pd.DataFrame:
         ...
 
@@ -212,6 +251,14 @@ class BaseRepository(ABC):
 
     @abstractmethod
     def get_quota_transaction(self, transaction_id: str) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    def get_quota_summary(
+        self, as_of_date, quota_type: str,
+        account_id: Optional[str] = None, status: Optional[str] = "Active",
+    ) -> pd.DataFrame:
+        """Return one row per qualifying Quota Registration."""
         ...
 
     @abstractmethod
@@ -338,6 +385,7 @@ class BaseRepository(ABC):
         grader_number: Optional[str] = None,
         barn_identity: Optional[str] = None,
         egg_colour: Optional[str] = None,
+        account_id: Optional[str] = None,
     ) -> pd.DataFrame:
         ...
 

@@ -5,10 +5,11 @@ from __future__ import annotations
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import ensure_record_form_state, format_timestamp, list_command_bar, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column, view_parameter
+from app.navigation import ensure_record_form_state, format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, related_records_table, saved_view_selector, selected_row_index, timestamp_column, view_parameter
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.repositories import get_repository
 from data.repositories.base import RepositoryError
+from data.constants import FACILITY_DETAIL_STATUSES
 
 
 require_operational_page()
@@ -36,6 +37,7 @@ def label_for_id(mapping, value):
 
 if view.name == "list":
     page_header("Facility Details", "Maintain the existing provisional detail records associated with Facilities.", "FACILITY MANAGEMENT")
+    statuses, _ = saved_view_selector("FACILITY_DETAIL", "Facility Details", key="facility_detail_saved_view", selection_keys=("facility_detail_list_grid", "facility_detail_list_row_ids", "facility_detail_delete_pending"))
     selected_index = selected_row_index("facility_detail_list_grid")
     row_ids = st.session_state.get("facility_detail_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
@@ -62,7 +64,7 @@ if view.name == "list":
         if st.button("Reset Filters", icon=":material/filter_alt_off:", key="facility_detail_reset", width="stretch"):
             clear_widget_prefix("facility_detail_filter_"); st.rerun()
     facility_filter = st.selectbox("Facility", ["All", *facility_options], key="facility_detail_filter_facility")
-    display = repo.get_facility_details(facility_options.get(facility_filter)).copy()
+    display = repo.get_facility_details(facility_options.get(facility_filter), statuses=statuses).copy()
     if not display.empty:
         display["FACILITY_NAME"] = display["FACILITY_ID"].map(facility_names)
         display["ACCOUNT_ID"] = display["FACILITY_ID"].map(facility_accounts)
@@ -70,7 +72,7 @@ if view.name == "list":
         if keyword:
             columns = ["DETAIL_NAME", "DETAIL_TYPE", "FACILITY_NAME", "ACCOUNT_NAME"]
             display = display[display[columns].fillna("").astype(str).apply(lambda column: column.str.contains(keyword, case=False, regex=False)).any(axis=1)]
-    st.caption(f"{len(display):,} facility detail(s)")
+    st.caption(f"{len(display):,} facility detail(s) in this view")
     if display.empty:
         st.info("No Facility Details match the current filters.")
     else:
@@ -107,12 +109,12 @@ else:
                 if account_id: right.markdown(f"**Account**  \n{account_names.get(account_id, 'Unknown')}")
                 right.markdown(f"**Comments**  \n{current.get('COMMENTS') or 'No comments.'}")
         with related:
-            section_intro("Flocks")
-            flocks = repo.get_flocks(facility_id=facility_id)
-            if "FACILITY_DETAIL_ID" in flocks: flocks = flocks[flocks["FACILITY_DETAIL_ID"] == view.record_id]
-            if flocks.empty: st.info("No Flocks reference this Facility Detail.")
-            else:
-                st.dataframe(flocks[["FLOCK_NUMBER", "PERMIT_NUMBER", "BIRD_COUNT", "STATUS"]], width="stretch", hide_index=True, column_config={"FLOCK_NUMBER": "Flock"})
+            flocks = repo.get_flocks(facility_detail_id=view.record_id)
+            related_records_table("Flocks", flocks, id_column="FLOCK_ID", label_column="FLOCK_NUMBER", page_slug="Flocks", key="facility_detail_related_flocks")
+            if facility_id and st.button("View Facility", key="facility_detail_parent_facility", icon=":material/domain:"):
+                open_module("Facilities", "detail", facility_id)
+            if account_id and st.button("View Account", key="facility_detail_parent_account", icon=":material/account_circle:"):
+                open_module("Accounts_&_Facilities", "detail", account_id)
     else:
         current = current or {}
         if facilities.empty:
@@ -129,12 +131,12 @@ else:
             left.text_input("Account", value=account_names.get(facility_accounts.get(selected_facility_id), "Unknown"), disabled=True, key="facility_detail_form_account")
             detail_name = left.text_input("Detail Name *", value=str(current.get("DETAIL_NAME") or ""), key="facility_detail_form_name")
             detail_type = right.text_input("Detail Type", value=str(current.get("DETAIL_TYPE") or ""), key="facility_detail_form_type")
-            status = right.text_input("Status", value=str(current.get("STATUS") or ""), key="facility_detail_form_status")
+            status = right.selectbox("Status", FACILITY_DETAIL_STATUSES, index=option_index(list(FACILITY_DETAIL_STATUSES), current.get("STATUS")), key="facility_detail_form_status")
             comments = right.text_area("Comments", value=str(current.get("COMMENTS") or ""), key="facility_detail_form_comments")
         if action == "save":
             if not detail_name.strip(): st.error("Detail Name is required.")
             else:
-                record = {"FACILITY_DETAIL_ID": view.record_id, "FACILITY_ID": selected_facility_id, "DETAIL_NAME": detail_name.strip(), "DETAIL_TYPE": detail_type.strip() or None, "STATUS": status.strip() or None, "COMMENTS": comments.strip() or None}
+                record = {"FACILITY_DETAIL_ID": view.record_id, "FACILITY_ID": selected_facility_id, "DETAIL_NAME": detail_name.strip(), "DETAIL_TYPE": detail_type.strip() or None, "STATUS": status, "COMMENTS": comments.strip() or None}
                 if not view.record_id: record.pop("FACILITY_DETAIL_ID")
                 else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
                 try:

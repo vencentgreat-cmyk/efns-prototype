@@ -15,11 +15,12 @@ import pandas as pd
 
 from data.connection import ConnectorExecutor, SqlExecutor, create_executor
 from data.repositories.base import BaseRepository, ConcurrencyError, RepositoryError
-from data.validation import validate_flock, validate_quota_registration, validate_quota_transaction, validate_salmonella_test
+from data.validation import validate_farm_location, validate_flock, validate_quota_registration, validate_quota_transaction, validate_salmonella_test
 
 
 MODEL = {
     "ACCOUNT": ("ACCOUNT_ID", "REGISTRATION_NUMBER ORGANIZATION_NAME ADDRESS_LINE1 ADDRESS_LINE2 ADDRESS_LINE3 CITY PROVINCE POSTAL_CODE COUNTRY_REGION LATITUDE LONGITUDE CONTACT_NAME CONTACT_PHONE CONTACT_EMAIL FAX WEBSITE LICENCE_NUMBER PARENT_ACCOUNT_ID GRADING_STATION_ACCOUNT_ID PULLET_GROWER_ACCOUNT_ID PROVINCE_OF_REGISTRATION SPENT_FOWL_PLANS DEFAULT_ON_REPORTS NO_SVG DESCRIPTION PRODUCER_ROLE BREEDER_ROLE HATCHERY_ROLE PULLET_GROWER_ROLE GRADER_ROLE PROCESSOR_BREAKER_ROLE DISPOSAL_PLANT_ROLE UNREGULATED_ROLE PROV_BOARD_EFC_ROLE GOVERNMENT_ROLE VENDOR_ROLE RESEARCH_EXEMPT_ROLE SHIPPER_ROLE OTHER_ROLE STATUS"),
+    "FARM_LOCATION": ("FARM_LOCATION_ID", "ACCOUNT_ID LOCATION_NAME ADDRESS_1 ADDRESS_2 CITY PROVINCE POSTAL_CODE PHONE STATUS"),
     "FACILITY": ("FACILITY_ID", "ACCOUNT_ID FACILITY_NAME FACILITY_TYPE STATUS ACTIVATION_DATE CONSTRUCTION_DATE CLOSURE_DATE DESTRUCTION_DATE INACTIVE_DATE"),
     "FACILITY_DETAIL": ("FACILITY_DETAIL_ID", "FACILITY_ID DETAIL_NAME DETAIL_TYPE STATUS COMMENTS"),
     "FLOCK": ("FLOCK_ID", "FLOCK_NUMBER ACCOUNT_ID FACILITY_ID FACILITY_DETAIL_ID QUOTA_ID FLOCK_QUOTA_TYPE STATUS CREATE_DELIVERY_TRANSACTION PERMIT_NUMBER PERMIT_DATE HATCH_DATE DATE_ORDERED BIRD_COUNT EGG_COLOUR BIRD_STRAIN PLACEMENT_DATE EST_DISPOSAL DISPOSAL_DATE BIRDS_DISPOSED BREEDER HATCHERY PULLET_GROWER DISPOSAL_PLANT DISPOSAL_METHOD COMMENTS"),
@@ -323,14 +324,36 @@ class SnowflakeRepository(BaseRepository):
         conditions, params = [], []
         for column, value in filters:
             if value is not None and value != "":
-                conditions.append(f"{column} = %s")
-                params.append(value)
+                if isinstance(value, (tuple, list, set, frozenset)):
+                    values = tuple(value)
+                    if not values:
+                        conditions.append("1 = 0")
+                    else:
+                        conditions.append(f"{column} IN ({', '.join(['%s'] * len(values))})")
+                        params.extend(values)
+                else:
+                    conditions.append(f"{column} = %s")
+                    params.append(value)
         sql = f"SELECT * FROM {self._table(table, schema)}"
         if conditions:
             sql += " WHERE " + " AND ".join(conditions)
         return self._query(sql, tuple(params) if params else None)
 
-    def get_accounts(self): return self._filtered("ACCOUNT", ())
+    def get_accounts(self, statuses=None, role_field=None, keyword=None):
+        from data.constants import ACCOUNT_ROLE_FIELDS
+        conditions, params = [], []
+        if statuses is not None:
+            conditions.append(f"STATUS IN ({', '.join(['%s'] * len(statuses))})"); params.extend(statuses)
+        if role_field:
+            if role_field not in {field for field, _ in ACCOUNT_ROLE_FIELDS}:
+                raise RepositoryError("Unknown Account role view.")
+            conditions.append(f"COALESCE({role_field}, FALSE) = TRUE")
+        if keyword:
+            conditions.append("(ORGANIZATION_NAME ILIKE %s OR REGISTRATION_NUMBER ILIKE %s OR CITY ILIKE %s OR CONTACT_PHONE ILIKE %s OR CONTACT_EMAIL ILIKE %s)")
+            params.extend([f"%{keyword}%"] * 5)
+        sql = f"SELECT DISTINCT * FROM {self._table('ACCOUNT')}"
+        if conditions: sql += " WHERE " + " AND ".join(conditions)
+        return self._query(sql, tuple(params) if params else None)
     def get_account(self, account_id): return self._one("ACCOUNT", "ACCOUNT_ID", account_id)
     def find_accounts_by_registration_number(self, registration_number): return self._query(f"SELECT * FROM {self._table('ACCOUNT')} WHERE UPPER(TRIM(REGISTRATION_NUMBER)) = UPPER(TRIM(%s))", (registration_number,))
     def upsert_account(self, record):
@@ -344,17 +367,42 @@ class SnowflakeRepository(BaseRepository):
             if account_id and record.get(field) == account_id:
                 raise RepositoryError("Account cannot reference itself in an Account lookup.")
         return self._upsert("ACCOUNT", record)
-    def delete_account(self, value): return self._delete("ACCOUNT", "ACCOUNT_ID", value, (("ACCOUNT", "PARENT_ACCOUNT_ID"), ("ACCOUNT", "GRADING_STATION_ACCOUNT_ID"), ("ACCOUNT", "PULLET_GROWER_ACCOUNT_ID"), ("FACILITY", "ACCOUNT_ID"), ("FLOCK", "ACCOUNT_ID"), ("QUOTA_REGISTRATION", "ACCOUNT_ID"), ("SALMONELLA_TEST", "ACCOUNT_ID")))
+    def delete_account(self, value): return self._delete("ACCOUNT", "ACCOUNT_ID", value, (("ACCOUNT", "PARENT_ACCOUNT_ID"), ("ACCOUNT", "GRADING_STATION_ACCOUNT_ID"), ("ACCOUNT", "PULLET_GROWER_ACCOUNT_ID"), ("FARM_LOCATION", "ACCOUNT_ID"), ("FACILITY", "ACCOUNT_ID"), ("FLOCK", "ACCOUNT_ID"), ("QUOTA_REGISTRATION", "ACCOUNT_ID"), ("SALMONELLA_TEST", "ACCOUNT_ID")))
 
-    def get_facilities(self, account_id=None): return self._filtered("FACILITY", (("ACCOUNT_ID", account_id),))
+    def get_farm_locations(self, farm_location_id=None, account_id=None, statuses=None, keyword=None):
+        conditions, params = [], []
+        if farm_location_id: conditions.append("fl.FARM_LOCATION_ID = %s"); params.append(farm_location_id)
+        if account_id: conditions.append("fl.ACCOUNT_ID = %s"); params.append(account_id)
+        if statuses is not None:
+            conditions.append(f"fl.STATUS IN ({', '.join(['%s'] * len(statuses))})"); params.extend(statuses)
+        if keyword:
+            conditions.append("(fl.LOCATION_NAME ILIKE %s OR a.ORGANIZATION_NAME ILIKE %s OR fl.CITY ILIKE %s OR fl.POSTAL_CODE ILIKE %s OR fl.PHONE ILIKE %s)")
+            params.extend([f"%{keyword}%"] * 5)
+        sql = f"SELECT DISTINCT fl.* FROM {self._table('FARM_LOCATION')} fl JOIN {self._table('ACCOUNT')} a ON a.ACCOUNT_ID = fl.ACCOUNT_ID"
+        if conditions: sql += " WHERE " + " AND ".join(conditions)
+        return self._query(sql, tuple(params) if params else None)
+    def get_farm_location(self, value): return self._one("FARM_LOCATION", "FARM_LOCATION_ID", value)
+    def upsert_farm_location(self, record):
+        errors = validate_farm_location(self, record)
+        if errors: raise RepositoryError(" ".join(errors))
+        return self._upsert("FARM_LOCATION", record)
+    def delete_farm_location(self, value): return self._delete("FARM_LOCATION", "FARM_LOCATION_ID", value)
+
+    def get_facilities(self, account_id=None, statuses=None): return self._filtered("FACILITY", (("ACCOUNT_ID", account_id), ("STATUS", statuses)))
     def upsert_facility(self, record): return self._upsert("FACILITY", record)
     def delete_facility(self, value): return self._delete("FACILITY", "FACILITY_ID", value, (("FACILITY_DETAIL", "FACILITY_ID"), ("FLOCK", "FACILITY_ID")))
-    def get_facility_details(self, facility_id=None): return self._filtered("FACILITY_DETAIL", (("FACILITY_ID", facility_id),))
+    def get_facility_details(self, facility_id=None, account_id=None, statuses=None):
+        if account_id:
+            conditions, params = ["f.ACCOUNT_ID = %s"], [account_id]
+            if facility_id: conditions.append("fd.FACILITY_ID = %s"); params.append(facility_id)
+            if statuses is not None: conditions.append(f"fd.STATUS IN ({', '.join(['%s'] * len(statuses))})"); params.extend(statuses)
+            return self._query(f"SELECT DISTINCT fd.* FROM {self._table('FACILITY_DETAIL')} fd JOIN {self._table('FACILITY')} f ON f.FACILITY_ID = fd.FACILITY_ID WHERE " + " AND ".join(conditions), tuple(params))
+        return self._filtered("FACILITY_DETAIL", (("FACILITY_ID", facility_id), ("STATUS", statuses)))
     def get_facility_detail(self, value): return self._one("FACILITY_DETAIL", "FACILITY_DETAIL_ID", value)
     def upsert_facility_detail(self, record): return self._upsert("FACILITY_DETAIL", record)
     def delete_facility_detail(self, value): return self._delete("FACILITY_DETAIL", "FACILITY_DETAIL_ID", value, (("FLOCK", "FACILITY_DETAIL_ID"),))
 
-    def get_flocks(self, account_id=None, facility_id=None): return self._filtered("FLOCK", (("ACCOUNT_ID", account_id), ("FACILITY_ID", facility_id)))
+    def get_flocks(self, account_id=None, facility_id=None, facility_detail_id=None, statuses=None): return self._filtered("FLOCK", (("ACCOUNT_ID", account_id), ("FACILITY_ID", facility_id), ("FACILITY_DETAIL_ID", facility_detail_id), ("STATUS", statuses)))
     def get_flock(self, flock_id): return self._one("FLOCK", "FLOCK_ID", flock_id)
     def upsert_flock(self, record):
         record = self._normalize_date_fields("FLOCK", record)
@@ -363,7 +411,14 @@ class SnowflakeRepository(BaseRepository):
         return self._upsert("FLOCK", record)
     def delete_flock(self, value): return self._delete("FLOCK", "FLOCK_ID", value, (("FLOCK_TRANSACTION", "FLOCK_ID"), ("SALMONELLA_TEST", "FLOCK_ID"), ("PRODUCTION_RECORD", "FLOCK_ID")))
 
-    def get_flock_transactions(self, flock_id=None): return self._filtered("FLOCK_TRANSACTION", (("FLOCK_ID", flock_id),))
+    def get_flock_transactions(self, flock_id=None, account_id=None, transaction_type=None, date_from=None, date_to=None):
+        join = f" JOIN {self._table('FLOCK')} f ON f.FLOCK_ID = ft.FLOCK_ID" if account_id else ""
+        conditions, params = [], []
+        for column, operator, value in (("ft.FLOCK_ID", "=", flock_id), ("f.ACCOUNT_ID", "=", account_id), ("ft.TRANSACTION_TYPE", "=", transaction_type), ("ft.TRANSACTION_DATE", ">=", date_from), ("ft.TRANSACTION_DATE", "<=", date_to)):
+            if value is not None: conditions.append(f"{column} {operator} %s"); params.append(value)
+        sql = f"SELECT DISTINCT ft.* FROM {self._table('FLOCK_TRANSACTION')} ft{join}"
+        if conditions: sql += " WHERE " + " AND ".join(conditions)
+        return self._query(sql, tuple(params) if params else None)
     def upsert_flock_transaction(self, record):
         record = self._normalize_date_fields("FLOCK_TRANSACTION", record)
         if record.get("TRANSACTION_DATE") is None:
@@ -371,8 +426,8 @@ class SnowflakeRepository(BaseRepository):
         return self._upsert("FLOCK_TRANSACTION", record)
     def delete_flock_transaction(self, value): return self._delete("FLOCK_TRANSACTION", "FLOCK_TRANSACTION_ID", value)
 
-    def get_quota_registrations(self, account_id=None, status=None, quota_type=None, active_only=False):
-        filters = [("ACCOUNT_ID", account_id), ("STATUS", status), ("QUOTA_TYPE", quota_type)]
+    def get_quota_registrations(self, account_id=None, status=None, quota_type=None, active_only=False, statuses=None):
+        filters = [("ACCOUNT_ID", account_id), ("STATUS", status), ("QUOTA_TYPE", quota_type), ("STATUS", statuses)]
         if not active_only: return self._filtered("QUOTA_REGISTRATION", filters)
         conditions, params = ["STATUS = %s", "(EFFECTIVE_DATE IS NULL OR EFFECTIVE_DATE <= CURRENT_DATE())", "(END_DATE IS NULL OR END_DATE >= CURRENT_DATE())"], ["Active"]
         for column, value in filters:
@@ -404,6 +459,31 @@ class SnowflakeRepository(BaseRepository):
         stored = dict(record); stored["OWNER_ACCOUNT_ID"] = self.get_quota_registration(record["QUOTA_ID"])["ACCOUNT_ID"]
         return self._upsert("QUOTA_TRANSACTION", stored)
     def get_quota_transaction(self, value): return self._one("QUOTA_TRANSACTION", "QUOTA_TRANSACTION_ID", value)
+    def get_quota_summary(self, as_of_date, quota_type, account_id=None, status="Active"):
+        conditions = ["qr.QUOTA_TYPE = %s", "(qr.EFFECTIVE_DATE IS NULL OR qr.EFFECTIVE_DATE <= %s)", "(qr.END_DATE IS NULL OR qr.END_DATE >= %s)"]
+        params = [quota_type, as_of_date, as_of_date]
+        if account_id: conditions.append("qr.ACCOUNT_ID = %s"); params.append(account_id)
+        if status: conditions.append("qr.STATUS = %s"); params.append(status)
+        sql = f"""
+WITH ranked_location AS (
+  SELECT fl.*, ROW_NUMBER() OVER (
+    PARTITION BY fl.ACCOUNT_ID
+    ORDER BY IFF(fl.STATUS = 'Active', 0, 1), fl.FARM_LOCATION_ID
+  ) AS LOCATION_RANK
+  FROM {self._table('FARM_LOCATION')} fl
+)
+SELECT DISTINCT qr.QUOTA_ID, qr.ACCOUNT_ID,
+       a.REGISTRATION_NUMBER, a.ORGANIZATION_NAME AS ACCOUNT_NAME,
+       fl.ADDRESS_1 AS ADDRESS, fl.CITY, fl.PROVINCE, fl.POSTAL_CODE,
+       COALESCE(fl.PHONE, a.CONTACT_PHONE) AS PHONE, a.FAX,
+       a.PRODUCER_ROLE, CAST(NULL AS NUMBER(18,2)) AS ISSUANCE
+FROM {self._table('QUOTA_REGISTRATION')} qr
+JOIN {self._table('ACCOUNT')} a ON a.ACCOUNT_ID = qr.ACCOUNT_ID
+LEFT JOIN ranked_location fl ON fl.ACCOUNT_ID = qr.ACCOUNT_ID AND fl.LOCATION_RANK = 1
+WHERE {" AND ".join(conditions)}
+ORDER BY a.ORGANIZATION_NAME, qr.REGISTRATION_NUMBER, qr.QUOTA_ID
+"""
+        return self._query(sql, tuple(params))
     def delete_quota_transaction(self, value): return self._delete("QUOTA_TRANSACTION", "QUOTA_TRANSACTION_ID", value, (("QUOTA_TRANSACTION", "RELATED_TRANSACTION_ID"),))
 
     def get_salmonella_tests(self, account_id=None, facility_id=None, flock_id=None, permit_number=None, test_result=None, inspector=None, case_number=None, invoice_number=None, date_from=None, date_to=None):
@@ -533,7 +613,7 @@ class SnowflakeRepository(BaseRepository):
         return tx.executemany(sql, params)
 
     def commit_migration_batch(self, batch_id):
-        from data.migration import load_mapping
+        from data.migration import load_mapping_for_version
         batch = self._one("MIGRATION_BATCH", "MIGRATION_BATCH_ID", batch_id, self.schema_raw)
         if not batch: raise RepositoryError("Migration batch was not found.")
         if str(batch.get("STATUS", "")).upper() == "COMMITTED":
@@ -545,7 +625,7 @@ class SnowflakeRepository(BaseRepository):
                     f"SELECT SOURCE_ENTITY, NORMALIZED_DATA FROM {self._table('MIGRATION_RAW_ROW', self.schema_raw)} WHERE MIGRATION_BATCH_ID = %s AND VALIDATION_STATUS = %s ORDER BY SOURCE_ENTITY, SOURCE_ROW_NUMBER",
                     (batch_id, "READY"),
                 )
-                for entity in load_mapping()["entity_order"]:
+                for entity in load_mapping_for_version(batch.get("SCHEMA_VERSION"))["entity_order"]:
                     records = [row["NORMALIZED_DATA"] for row in rows.to_dict("records") if row["SOURCE_ENTITY"] == entity]
                     if entity == "PRODUCTION_RECORD":
                         existing_batch = tx.query(f"SELECT IMPORT_ID FROM {self._table('IMPORT_BATCH', self.schema_raw)} WHERE IMPORT_ID = %s", (batch_id,))
@@ -615,7 +695,7 @@ class SnowflakeRepository(BaseRepository):
                 raise RepositoryError("Snowflake did not finalize the Import Batch record.")
         return import_id, count
 
-    def get_production_records(self, reporting_year=None, reporting_week=None, grader_number=None, barn_identity=None, egg_colour=None): return self._filtered("VW_PRODUCTION_SUMMARY", (("REPORTING_YEAR", reporting_year), ("REPORTING_WEEK", reporting_week), ("GRADER_NUMBER", grader_number), ("BARN_IDENTITY", barn_identity), ("EGG_COLOUR", egg_colour)), self.schema_reporting)
+    def get_production_records(self, reporting_year=None, reporting_week=None, grader_number=None, barn_identity=None, egg_colour=None, account_id=None): return self._filtered("VW_PRODUCTION_SUMMARY", (("REPORTING_YEAR", reporting_year), ("REPORTING_WEEK", reporting_week), ("GRADER_NUMBER", grader_number), ("BARN_IDENTITY", barn_identity), ("EGG_COLOUR", egg_colour), ("PRODUCER_ACCOUNT_ID", account_id)), self.schema_reporting)
     def get_production_summary_metrics(self):
         row = self._query(f"SELECT COUNT(*) PRODUCTION_RECORD_COUNT, COALESCE(SUM(TOTAL_RECEIVED),0) TOTAL_RECEIVED, COALESCE(SUM(TOTAL_ACCEPTED),0) TOTAL_ACCEPTED, COALESCE(SUM(REJECTED),0) TOTAL_REJECTED, COALESCE(SUM(LOSS),0) TOTAL_LOSS FROM {self._table('VW_PRODUCTION_SUMMARY', self.schema_reporting)}").iloc[0]
         counts = {name: int(self._query(f"SELECT COUNT(*) RECORD_COUNT FROM {self._table(table, schema)}").iloc[0]["RECORD_COUNT"] or 0) for name, schema, table in (("import_count", self.schema_raw, "IMPORT_BATCH"), ("account_count", self.schema_core, "ACCOUNT"), ("flock_count", self.schema_core, "FLOCK"))}

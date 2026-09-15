@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
+from app.navigation import format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, related_records_table, saved_view_selector, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.repositories.base import RepositoryError
 from data.constants import FACILITY_STATUSES
@@ -42,7 +42,8 @@ def get_facility(record_id):
 
 
 if view.name == "list":
-    page_header("Active Facilities", "Search and maintain facilities and their physical details.", "FACILITY MANAGEMENT")
+    page_header("Facilities", "Search and maintain facilities and their physical details.", "FACILITY MANAGEMENT")
+    statuses, _ = saved_view_selector("FACILITY", "Facilities", key="facility_saved_view", selection_keys=("facility_list_grid", "facility_list_row_ids", "facility_delete_pending"))
     selected_index = selected_row_index("facility_list_grid")
     row_ids = st.session_state.get("facility_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
@@ -62,17 +63,15 @@ if view.name == "list":
                     except (ValueError, RepositoryError) as exc: show_data_error(exc)
                 if st.button("Cancel", key="facility_cancel_delete"):
                     st.session_state.pop("facility_delete_pending", None); st.rerun()
-    filters = st.columns([2, 1, 1])
+    filters = st.columns([2, 1])
     keyword = filters[0].text_input("Filter by keyword", placeholder="Facility or Account name", key="facility_filter_keyword")
-    status = filters[1].selectbox("Status", ["All", *FACILITY_STATUSES], key="facility_filter_status")
-    facility_type = filters[2].selectbox("Facility type", ["All", *FACILITY_TYPES], key="facility_filter_type")
-    display = facilities.copy()
+    facility_type = filters[1].selectbox("Facility type", ["All", *FACILITY_TYPES], key="facility_filter_type")
+    display = repo.get_facilities(statuses=statuses).copy()
     display["ACCOUNT_NAME"] = display["ACCOUNT_ID"].map(account_names)
     if keyword:
         display = display[display[["FACILITY_NAME", "ACCOUNT_NAME"]].fillna("").astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)]
-    if status != "All": display = display[display["STATUS"] == status]
     if facility_type != "All": display = display[display["FACILITY_TYPE"] == facility_type]
-    st.caption(f"{len(display):,} facility record(s)")
+    st.caption(f"{len(display):,} facility record(s) in this view")
     if display.empty:
         st.info("No Facilities match the current filters.")
     else:
@@ -101,6 +100,8 @@ else:
                 left, right = st.columns(2)
                 left.markdown(f"**Facility Name**  \n{current.get('FACILITY_NAME')}")
                 left.markdown(f"**Account**  \n{account_names.get(current.get('ACCOUNT_ID'), 'Unknown')}")
+                if current.get("ACCOUNT_ID") and left.button("View Account", key="facility_parent_account", icon=":material/account_circle:"):
+                    open_module("Accounts_&_Facilities", "detail", current["ACCOUNT_ID"])
                 left.markdown(f"**Type**  \n{current.get('FACILITY_TYPE') or '—'}")
                 right.markdown(f"**Status**  \n{current.get('STATUS')}")
                 right.markdown(f"**Activation Date**  \n{current.get('ACTIVATION_DATE') or '—'}")
@@ -113,12 +114,7 @@ else:
                 ("Flocks", repo.get_flocks(facility_id=view.record_id), "FLOCK_ID", "FLOCK_NUMBER", "Flocks"),
                 ("Salmonella Tests", repo.get_salmonella_tests(facility_id=view.record_id), "SALMONELLA_TEST_ID", "PERMIT_NUMBER", "Salmonella_Tests"),
             ):
-                section_intro(heading)
-                if frame.empty: st.info(f"No related {heading}.")
-                else:
-                    frame = frame.copy(); frame["RECORD"] = frame.apply(lambda row: row.get(label) or row[key], axis=1)
-                    columns = [column for column in frame.columns if column not in {key, "RECORD", "CREATED_AT", "UPDATED_AT"}][:5]
-                    st.dataframe(frame[["RECORD", *columns]], width="stretch", hide_index=True)
+                related_records_table(heading, frame, id_column=key, label_column=label, page_slug=slug, key=f"facility_related_{slug}")
     else:
         current = current or {}
         expected_key = f"facility_form_expected_{view.record_id}"

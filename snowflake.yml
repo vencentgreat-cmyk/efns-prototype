@@ -28,6 +28,8 @@ entities:
         dest: data/repositories/
       - src: config/eims_migration_mapping.json
         dest: config/eims_migration_mapping.json
+      - src: config/eims_migration_mapping_v1.json
+        dest: config/eims_migration_mapping_v1.json
     grants:
       - privilege: USAGE
         role: EFNS_DEV_ADMIN

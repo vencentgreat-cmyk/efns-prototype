@@ -3,6 +3,8 @@
 UNASSIGNED_LABEL = "Unassigned"
 
 ACCOUNT_STATUSES = ("Active", "Inactive")
+FARM_LOCATION_STATUSES = ("Active", "Inactive")
+FACILITY_DETAIL_STATUSES = ("Active", "Inactive")
 FACILITY_STATUSES = ("Active", "Inactive", "Closed")
 FLOCK_STATUSES = ("Planned", "Active", "Depopulated")
 EGG_COLOURS = ("White", "Brown", "Mostly White", "Mostly Brown")
@@ -17,6 +19,35 @@ QUOTA_TRANSACTION_TYPES = ("Purchase", "Sale", "Lease In", "Lease Out")
 QUOTA_LEASE_TYPES = ("Fixed Term", "Open Ended", "Seasonal")
 SALMONELLA_RESULTS = ("Pending", "Negative", "Positive", "Inconclusive")
 FLOCK_TRANSACTION_TYPES = ("Count", "Delivery", "Removal", "Sale")
+
+# Shared saved-view definitions.  Several provisional entities have lifecycle
+# values in addition to Active/Inactive; the inactive view intentionally means
+# every current non-active lifecycle state so records are never hidden.
+SAVED_VIEW_STATUS_GROUPS = {
+    "ACCOUNT": {"active": ("Active",), "inactive": ("Inactive",)},
+    "FARM_LOCATION": {"active": ("Active",), "inactive": ("Inactive",)},
+    "FACILITY": {"active": ("Active",), "inactive": ("Inactive", "Closed")},
+    "FACILITY_DETAIL": {"active": ("Active",), "inactive": ("Inactive",)},
+    "FLOCK": {"active": ("Active",), "inactive": ("Planned", "Depopulated")},
+    "QUOTA_REGISTRATION": {"active": ("Active",), "inactive": ("Inactive", "Expired")},
+}
+
+ACCOUNT_ROLE_FIELDS = (
+    ("BREEDER_ROLE", "Breeders"),
+    ("HATCHERY_ROLE", "Hatcheries"),
+    ("PULLET_GROWER_ROLE", "Pullet Producers"),
+    ("PRODUCER_ROLE", "Producers"),
+    ("GRADER_ROLE", "Graders"),
+    ("PROCESSOR_BREAKER_ROLE", "Processors / Breakers"),
+    ("DISPOSAL_PLANT_ROLE", "Disposal Plants"),
+    ("UNREGULATED_ROLE", "Unregulated Accounts"),
+    ("PROV_BOARD_EFC_ROLE", "Provincial Board / EFC Accounts"),
+    ("GOVERNMENT_ROLE", "Government Accounts"),
+    ("VENDOR_ROLE", "Vendors"),
+    ("RESEARCH_EXEMPT_ROLE", "Research / Exempt Accounts"),
+    ("SHIPPER_ROLE", "Shippers"),
+    ("OTHER_ROLE", "Other-role Accounts"),
+)
 
 SOURCE_TYPE_SYNTHETIC = "SYNTHETIC"
 SOURCE_TYPE_EIMS_IMPORT = "EIMS_IMPORT"

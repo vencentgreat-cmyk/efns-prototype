@@ -14,10 +14,12 @@ from scripts.generate_fake_eims_export import generate
 
 
 EXPECTED_COUNTS = {
-    "ACCOUNT": 50, "FACILITY": 100, "FACILITY_DETAIL": 150,
+    "ACCOUNT": 50, "FARM_LOCATION": 125, "FACILITY": 100, "FACILITY_DETAIL": 150,
     "QUOTA_REGISTRATION": 100, "FLOCK": 500, "FLOCK_TRANSACTION": 2000,
     "QUOTA_TRANSACTION": 300, "SALMONELLA_TEST": 250, "PRODUCTION_RECORD": 5000,
 }
+
+HISTORICAL_V1_TOTAL = 8450
 
 
 def _sources(directory: Path):
@@ -51,6 +53,18 @@ def test_clean_package_counts_and_relationships(generated):
     assert analysis.rejected_count == 0
     assert analysis.errors.empty
     assert manifest["datasets"]["clean"]["package_hash"] == analysis.package_hash
+
+
+def test_v1_nine_file_package_remains_explicitly_supported(tmp_path):
+    from data.migration import load_mapping
+    from scripts.generate_fake_eims_export import clean_frames, package_bytes
+
+    mapping = load_mapping(Path("config/eims_migration_mapping_v1.json"))
+    files = package_bytes(clean_frames(), mapping)
+    analysis = analyze_migration_files([MigrationSourceFile(name, content) for name, content in files.items()])
+    assert analysis.schema_version == "EFNS-EIMS-PROVISIONAL-1"
+    assert analysis.ready_count == HISTORICAL_V1_TOTAL
+    assert analysis.rejected_count == 0
 
 
 def test_edge_package_quarantines_bad_rows_with_traceable_messages(generated):
@@ -159,6 +173,7 @@ def test_migration_sql_keeps_stage_and_tables_behind_app_owner():
     assert "USE ROLE SECURITYADMIN" in sql
     assert "USE ROLE ACCOUNTADMIN" in sql
     assert "CREATE OR REPLACE PROCEDURE EFNS_DEV.RAW.CLEANUP_SYNTHETIC_MIGRATION" in sql
+    assert "SOURCE_ENTITY = 'FARM_LOCATION'" in sql
     assert "GRANT USAGE ON PROCEDURE EFNS_DEV.RAW.CLEANUP_SYNTHETIC_MIGRATION(VARCHAR)" in sql
     assert "GRANT DELETE ON TABLE EFNS_DEV.CORE.PRODUCTION_RECORD TO ROLE EFNS_DEV_APP_OWNER" not in sql
     assert "GRANT DELETE ON TABLE EFNS_DEV.RAW.IMPORT_BATCH TO ROLE EFNS_DEV_APP_OWNER" not in sql

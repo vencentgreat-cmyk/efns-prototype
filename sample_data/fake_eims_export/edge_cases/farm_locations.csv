@@ -1,0 +1,5 @@
+FARM_LOCATION_ID,ACCOUNT_ID,LOCATION_NAME,ADDRESS_1,ADDRESS_2,CITY,PROVINCE,POSTAL_CODE,PHONE,STATUS
+DEV_MIGRATION_L_00001,DEV_MIGRATION_A_00001,Synthetic Farm Location 001,101 Fictional Migration Road,,Synthetic City 01,NS,B0B 1A1,,Active
+DEV_MIGRATION_L_00002,DEV_MIGRATION_A_00002,Synthetic Farm Location 002,102 Fictional Migration Road,Synthetic Site 2,Synthetic City 02,NS,B0B 1A2,902-555-0002,Unknown
+DEV_MIGRATION_L_00001,DEV_MIGRATION_A_00001,Synthetic Farm Location 001,101 Fictional Migration Road,,Synthetic City 01,NS,B0B 1A1,,Active
+DEV_MIGRATION_L_90001,DEV_MIGRATION_A_99999,Orphan Farm Location,101 Fictional Migration Road,,Synthetic City 01,NS,B0B 1A1,,Active

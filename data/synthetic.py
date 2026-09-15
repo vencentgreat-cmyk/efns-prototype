@@ -325,6 +325,32 @@ def generate_flock_transactions(flocks: pd.DataFrame, seed: int = 42) -> pd.Data
     return df
 
 
+def generate_farm_locations(accounts: pd.DataFrame, seed: int = 42) -> pd.DataFrame:
+    """Generate Account-owned addresses distinct from regulated Facilities."""
+    rng = random.Random(seed + 11)
+    rows = []
+    for account_index, account in accounts.reset_index(drop=True).iterrows():
+        city, province, postal_prefix = _CITIES[account_index % len(_CITIES)]
+        for location_index in range(1, 3):
+            rows.append({
+                "FARM_LOCATION_ID": _make_id(rng),
+                "ACCOUNT_ID": account["ACCOUNT_ID"],
+                "LOCATION_NAME": f"{account['ORGANIZATION_NAME']} · Location {location_index}",
+                "ADDRESS_1": f"{100 + account_index * 10 + location_index} Synthetic Farm Road",
+                "ADDRESS_2": None if location_index == 1 else "Mailing Site B",
+                "CITY": city,
+                "PROVINCE": province,
+                "POSTAL_CODE": f"{postal_prefix} 1A{account_index % 10}",
+                "PHONE": f"(902) 555-{account_index:02d}{location_index:02d}",
+                "STATUS": "Inactive" if location_index == 2 and account_index % 4 == 0 else "Active",
+            })
+    frame = pd.DataFrame(rows)
+    now = dt.datetime.now(dt.timezone.utc)
+    frame["CREATED_AT"] = now
+    frame["UPDATED_AT"] = now
+    return frame
+
+
 def generate_quota_transactions(
     quotas: pd.DataFrame, accounts: pd.DataFrame, seed: int = 42
 ) -> pd.DataFrame:
@@ -498,6 +524,7 @@ def generate_size_breakdown(production: pd.DataFrame, seed: int = 42) -> pd.Data
 def generate_all(seed: int = 42) -> dict:
     """Generate a complete consistent synthetic dataset."""
     accounts = generate_accounts(seed=seed)
+    farm_locations = generate_farm_locations(accounts, seed=seed)
     facilities = generate_facilities(accounts, seed=seed)
     facility_details = generate_facility_details(facilities, seed=seed)
     quota_registrations = generate_quota_registrations(accounts, seed=seed)
@@ -515,6 +542,7 @@ def generate_all(seed: int = 42) -> dict:
     sizes = generate_size_breakdown(production, seed=seed)
     return {
         "accounts": accounts,
+        "farm_locations": farm_locations,
         "facilities": facilities,
         "facility_details": facility_details,
         "flocks": flocks,
