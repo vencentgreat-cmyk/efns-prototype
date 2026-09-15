@@ -2,7 +2,7 @@
 
 ## Implemented
 
-- Streamlit workspaces for Accounts, Facilities, Facility Details, Flocks, Flock Transactions, Quota Registrations, Quota Transactions, Salmonella Tests and reporting. Operational entity pages use record-based list/new/detail/edit navigation; Quota related records support cross-module links and new-transaction prefill.
+- Streamlit workspaces for Accounts, Facilities, Facility Details, Flocks, Flock Transactions, Quota Registrations, Quota Transactions, Salmonella Tests and reporting. Operational entity pages use record-based list/new/detail/edit navigation through page-local session state and registered-page actions; Quota related records support cross-module actions and new-transaction prefill without generated browser URLs.
 - Full Flock validation at the repository boundary; the dedicated Flocks page is the only Flock editor.
 - EIMS validation, SHA-256 duplicate detection, RAW preservation and atomic RAW/normalized import.
 - Mock persistence and a parameterized Snowflake adapter for CRUD, import writes, filtered reads, commit and rollback.

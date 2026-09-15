@@ -49,8 +49,11 @@ schema or uses `DROP` or `TRUNCATE`.
 3. **Authorization:** verify Admin, Data Editor, Reporting Viewer, and Developer
    navigation and direct-page guards against the documented permission matrix.
    Confirm an inactive `APP_USER` cannot enter the application.
-4. **Reads:** open Accounts, Facilities, Flocks, Quota, Salmonella, Production,
-   and Reports. Apply filters and confirm bounded result sets and links.
+4. **Reads and record navigation:** open Accounts, Facilities, Flocks, Quota,
+   Salmonella, Production, and Reports. Apply filters, select a row, and use
+   View. Confirm detail/edit remains inside the registered page, Back clears the
+   selection, no new browser tab opens, and a deleted/stale Account returns to
+   the list with a warning.
 5. **Creates/updates:** as Data Editor create and update one synthetic Account,
    Facility, Flock, Quota, and Salmonella record. Create a Flock with Estimated
    Disposal Date, Permit Date, Date Ordered, Placement Date and Disposal Date
@@ -60,14 +63,19 @@ schema or uses `DROP` or `TRUNCATE`.
    `America/Halifax` time and timezone label. Update the record and confirm
    `CREATED_AT` is unchanged while `UPDATED_AT` advances. Attempt a stale edit
    from a second browser and confirm the first saved value is not overwritten.
-6. **Permission enforcement:** as Reporting Viewer attempt direct new/edit URLs
-   and service mutations. Confirm the repository rejects writes. Confirm only an
+6. **Permission enforcement:** as Reporting Viewer attempt New/Edit actions and
+   service mutations. Confirm the repository rejects writes. Confirm only an
    Admin can manage users and only Admin/Developer can read audit events.
-7. **Production import:** upload a small synthetic workbook, verify one import
+7. **Production import:** upload a small synthetic workbook containing blank
+   numeric cells and a comma-formatted number such as `1,234.50`. Verify one import
    batch, source rows, normalized rows, source hash, and `UNMATCHED` status.
+   Confirm blank numeric cells are SQL `NULL`, `FLOCK_AGE` is NUMBER-compatible,
+   and the comma-formatted value retains its numeric value.
    Re-upload it and confirm duplicate detection blocks it unless override is used.
-8. **Rollback:** use a deliberately invalid normalized row in DEV. Confirm the
-   batch, RAW rows, and normalized rows all roll back and an error is safely shown.
+8. **Rollback:** use a deliberately invalid non-empty numeric value in a
+   normalized DEV row. Confirm the batch, RAW rows, and normalized rows all roll
+   back and the UI identifies only the field and source row, without showing the
+   uploaded value.
 9. **Audit:** verify create, update, delete, import, and user-management events
    contain the actual `st.user.email` and a UTC `OCCURRED_AT` timestamp. For any
    failure, record the sanitized operation, entity, query ID, error code and

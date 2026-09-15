@@ -3,7 +3,7 @@ import datetime as dt
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
+from app.navigation import format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, page_header, show_data_error
 from data.constants import FLOCK_TRANSACTION_TYPES
 from data.repositories import get_repository
@@ -32,6 +32,7 @@ if view.name == "list":
     selected_id = ids[selected_index] if selected_index is not None and selected_index < len(ids) else None
     action = list_command_bar("flock_tx_list", bool(selected_id))
     if action == "new": open_view("new")
+    if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": clear_widget_prefix("flock_tx_filter_"); st.rerun()
     if action == "delete" and selected_id:
         repo.delete_flock_transaction(selected_id); st.rerun()
@@ -47,9 +48,8 @@ if view.name == "list":
     if display.empty: st.info("No Flock Transactions match the current filters.")
     else:
         display = display.reset_index(drop=True); st.session_state.flock_tx_row_ids = display["FLOCK_TRANSACTION_ID"].tolist()
-        display["TRANSACTION_LINK"] = display.apply(lambda row: current_page_url(row["FLOCK_TRANSACTION_ID"], f"{row['TRANSACTION_TYPE']} · {str(row['FLOCK_TRANSACTION_ID'])[:8]}"), axis=1)
-        display["FLOCK_LINK"] = display.apply(lambda row: module_url("Flocks", row["FLOCK_ID"], row["FLOCK_NUMBER"]), axis=1)
-        st.dataframe(display[["TRANSACTION_LINK", "FLOCK_LINK", "QUANTITY", "TRANSACTION_DATE", "NOTES", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_tx_grid", column_config={"TRANSACTION_LINK": st.column_config.LinkColumn("Transaction", display_text=r".*#(.*)$"), "FLOCK_LINK": st.column_config.LinkColumn("Flock", display_text=r".*#(.*)$"), "CREATED_AT": timestamp_column("Created On")})
+        display["TRANSACTION"] = display.apply(lambda row: f"{row['TRANSACTION_TYPE']} · {str(row['FLOCK_TRANSACTION_ID'])[:8]}", axis=1)
+        st.dataframe(display[["TRANSACTION", "FLOCK_NUMBER", "QUANTITY", "TRANSACTION_DATE", "NOTES", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_tx_grid", column_config={"TRANSACTION": "Transaction", "FLOCK_NUMBER": "Flock", "CREATED_AT": timestamp_column("Created On")})
 else:
     current = get_record(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None: st.error("The requested Transaction could not be found."); st.stop()
@@ -72,7 +72,8 @@ else:
                 st.markdown(f"**Transaction Date**  \n{current['TRANSACTION_DATE']}")
                 st.markdown(f"**Notes**  \n{current.get('NOTES') or '—'}")
         with related:
-            st.link_button("Open related Flock", module_url("Flocks", current["FLOCK_ID"], flock_names.get(current["FLOCK_ID"], "Flock")), icon=":material/open_in_new:")
+            if st.button("Open related Flock", icon=":material/visibility:"):
+                open_module("Flocks", "detail", current["FLOCK_ID"])
     else:
         current = current or {}
         expected_key = f"flock_tx_form_expected_{view.record_id}"

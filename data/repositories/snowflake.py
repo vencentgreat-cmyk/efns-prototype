@@ -6,6 +6,7 @@ import json
 import os
 import re
 import datetime as dt
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 import uuid
 
@@ -27,6 +28,20 @@ MODEL = {
     "SALMONELLA_TEST": ("SALMONELLA_TEST_ID", "FLOCK_ID ACCOUNT_ID PERMIT_NUMBER TESTING_DATE INSPECTOR NUMBER_OF_SAMPLES TEST_RESULT DATE_RESULT_SENT DATE_RECEIVED CASE_FILE_NUMBER INVOICE_NUMBER INVOICE_DATE COMMENTS"),
 }
 PRODUCTION_COLUMNS = "PRODUCER_ACCOUNT_ID GRADER_ACCOUNT_ID FACILITY_ID FLOCK_ID GRADER_NAME PRODUCER_NUMBER GRADER_NUMBER BARN_IDENTITY SOURCE_WEEK_CODE REPORTING_YEAR REPORTING_WEEK MARKETING_TYPE HOUSING_SYSTEM EGG_TYPE EGG_COLOUR FLOCK_AGE NET_WEIGHT NET_BOXES NET_PER_BOX JUMBO EXTRA_LARGE LARGE MEDIUM SMALL PEEWEE GRADE_B GRADE_C CRACKS NEST_RUN NEST_RUN_25_PLUS NEST_RUN_24_PLUS NEST_RUN_23_PLUS NEST_RUN_22_PLUS NEST_RUN_21_PLUS NEST_RUN_20_PLUS NEST_RUN_19_PLUS NEST_RUN_18_PLUS NEST_RUN_17_PLUS OTHER_LEVIABLE OTHER_NON_LEVIABLE FARM_GATE_SALES ON_FARM_CONSUMPTION SUBTOTAL REJECTS LEAKERS TOTAL TOTAL_RECEIVED REJECTED LOSS LEGACY_REJECT_LOSS_TOTAL TOTAL_ACCEPTED SOURCE_TYPE MATCH_STATUS SOURCE_ROW_NUMBER MATCH_CONFIRMED_AT MATCH_CONFIRMED_BY".split()
+PRODUCTION_INTEGER_COLUMNS = frozenset({
+    "REPORTING_YEAR", "REPORTING_WEEK", "FLOCK_AGE", "SOURCE_ROW_NUMBER",
+})
+PRODUCTION_DECIMAL_COLUMNS = frozenset({
+    "NET_WEIGHT", "NET_BOXES", "NET_PER_BOX", "JUMBO", "EXTRA_LARGE",
+    "LARGE", "MEDIUM", "SMALL", "PEEWEE", "GRADE_B", "GRADE_C",
+    "CRACKS", "NEST_RUN", "NEST_RUN_25_PLUS", "NEST_RUN_24_PLUS",
+    "NEST_RUN_23_PLUS", "NEST_RUN_22_PLUS", "NEST_RUN_21_PLUS",
+    "NEST_RUN_20_PLUS", "NEST_RUN_19_PLUS", "NEST_RUN_18_PLUS",
+    "NEST_RUN_17_PLUS", "OTHER_LEVIABLE", "OTHER_NON_LEVIABLE",
+    "FARM_GATE_SALES", "ON_FARM_CONSUMPTION", "SUBTOTAL", "REJECTS",
+    "LEAKERS", "TOTAL", "TOTAL_RECEIVED", "REJECTED", "LOSS",
+    "LEGACY_REJECT_LOSS_TOTAL", "TOTAL_ACCEPTED",
+})
 IMPORT_BATCH_COLUMNS = "FILENAME SOURCE FILE_HASH FILE_SIZE_BYTES WORKSHEET_NAME REPORTING_YEAR REPORTING_WEEK SOURCE_RECORD_COUNT ROW_COUNT ERROR_COUNT STATUS NOTES".split()
 RAW_ROW_COLUMNS = "RAW_ROW_ID IMPORT_ID SOURCE_ROW_NUMBER RAW_DATA VALIDATION_STATUS MATCH_STATUS VALIDATION_MESSAGES".split()
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
@@ -40,6 +55,10 @@ DATE_FIELDS = {
     "SALMONELLA_TEST": frozenset({"TESTING_DATE", "DATE_RESULT_SENT", "DATE_RECEIVED", "INVOICE_DATE"}),
 }
 _NULL_DATE_TEXT = frozenset({"", "none", "nat", "null"})
+_NULL_NUMERIC_TEXT = frozenset({"", "none", "nan", "nat", "null"})
+_NUMERIC_TEXT = re.compile(
+    r"^[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$"
+)
 
 
 def normalize_date_bind(value, field: str = "Date") -> dt.date | None:
@@ -66,6 +85,62 @@ def normalize_date_bind(value, field: str = "Date") -> dt.date | None:
         except ValueError as exc:
             raise RepositoryError(f"{field.replace('_', ' ').title()} must be a valid ISO date.") from exc
     raise RepositoryError(f"{field.replace('_', ' ').title()} must be a date value.")
+
+
+def _is_missing_bind(value) -> bool:
+    if value is None:
+        return True
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def normalize_numeric_bind(
+    value,
+    field: str,
+    source_row: int,
+    *,
+    integer: bool,
+) -> int | Decimal | None:
+    """Return a typed Snowflake NUMBER bind or a safe field/row error."""
+    if _is_missing_bind(value):
+        return None
+    if isinstance(value, bool):
+        raise RepositoryError(f"{field} has an invalid numeric value at source row {source_row}.")
+    if isinstance(value, str):
+        text = value.strip()
+        if text.casefold() in _NULL_NUMERIC_TEXT:
+            return None
+        if not _NUMERIC_TEXT.fullmatch(text):
+            raise RepositoryError(f"{field} has an invalid numeric value at source row {source_row}.")
+        value = text.replace(",", "")
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise RepositoryError(
+            f"{field} has an invalid numeric value at source row {source_row}."
+        ) from exc
+    if not number.is_finite():
+        if number.is_nan():
+            return None
+        raise RepositoryError(f"{field} has an invalid numeric value at source row {source_row}.")
+    if integer:
+        if number != number.to_integral_value():
+            raise RepositoryError(f"{field} must be a whole number at source row {source_row}.")
+        return int(number)
+    return number
+
+
+def _source_row_number(item: dict, ordinal: int) -> int:
+    value = item.get("SOURCE_ROW_NUMBER")
+    try:
+        if _is_missing_bind(value):
+            return ordinal
+        number = Decimal(str(value).replace(",", ""))
+        return int(number) if number == number.to_integral_value() else ordinal
+    except (InvalidOperation, TypeError, ValueError):
+        return ordinal
 
 
 class _LegacyCursorExecutor(SqlExecutor):
@@ -376,9 +451,23 @@ class SnowflakeRepository(BaseRepository):
         columns = ["PRODUCTION_ID", "IMPORT_ID", *PRODUCTION_COLUMNS]
         sql = f"INSERT INTO {self._table('PRODUCTION_RECORD')} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) VALUES ({', '.join(['%s'] * len(columns))}, {UTC_NOW_NTZ}, {UTC_NOW_NTZ})"
         params = []
-        for row in rows:
+        for ordinal, row in enumerate(rows, 1):
             item = dict(row); item.setdefault("SOURCE_TYPE", "EIMS_IMPORT"); item.setdefault("MATCH_STATUS", "UNMATCHED")
-            params.append((item.get("PRODUCTION_ID") or str(uuid.uuid4()), import_id, *(item.get(column) for column in PRODUCTION_COLUMNS)))
+            source_row = _source_row_number(item, ordinal)
+            bound_values = []
+            for column in PRODUCTION_COLUMNS:
+                value = item.get(column)
+                if column in PRODUCTION_INTEGER_COLUMNS:
+                    value = normalize_numeric_bind(value, column, source_row, integer=True)
+                elif column in PRODUCTION_DECIMAL_COLUMNS:
+                    value = normalize_numeric_bind(value, column, source_row, integer=False)
+                elif _is_missing_bind(value):
+                    value = None
+                bound_values.append(value)
+            production_id = item.get("PRODUCTION_ID")
+            if _is_missing_bind(production_id) or not str(production_id).strip():
+                production_id = str(uuid.uuid4())
+            params.append((production_id, import_id, *bound_values))
         return executor.executemany(sql, params) if params else 0
     def insert_production_records(self, records, import_id):
         with self._executor().transaction() as tx: return self._insert_production(tx, records, import_id)

@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
+from app.navigation import format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import SALMONELLA_RESULTS, UNASSIGNED_LABEL
 from data.repositories import get_repository
@@ -49,6 +49,7 @@ if view.name == "list":
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("salmonella_list", selected=bool(selected_id))
     if action == "new": open_view("new")
+    if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": clear_widget_prefix("salmonella_filter_"); st.rerun()
     if action == "delete" and selected_id: st.session_state.salmonella_delete_pending = selected_id
     pending_delete = st.session_state.get("salmonella_delete_pending")
@@ -84,11 +85,9 @@ if view.name == "list":
         st.info("No Salmonella Tests match the current filters.")
     else:
         display = display.reset_index(drop=True)
-        display["TEST_LINK"] = display.apply(lambda row: current_page_url(row["SALMONELLA_TEST_ID"], test_label(row)), axis=1)
-        display["FLOCK_LINK"] = display.apply(lambda row: module_url("Flocks", row["FLOCK_ID"], row["FLOCK_NUMBER"]), axis=1)
-        display["ACCOUNT_LINK"] = display.apply(lambda row: module_url("Accounts_&_Facilities", row["ACCOUNT_ID"], row["ACCOUNT_NAME"]), axis=1)
+        display["TEST"] = display.apply(lambda row: test_label(row), axis=1)
         st.session_state.salmonella_list_row_ids = display["SALMONELLA_TEST_ID"].tolist()
-        st.dataframe(display[["TEST_LINK", "ACCOUNT_LINK", "FLOCK_LINK", "FACILITY_NAME", "TEST_RESULT", "INSPECTOR", "NUMBER_OF_SAMPLES", "DATE_RECEIVED", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="salmonella_list_grid", column_config={"TEST_LINK": st.column_config.LinkColumn("Test", display_text=r".*#(.*)$"), "ACCOUNT_LINK": st.column_config.LinkColumn("Account", display_text=r".*#(.*)$"), "FLOCK_LINK": st.column_config.LinkColumn("Flock", display_text=r".*#(.*)$"), "FACILITY_NAME": "Facility", "CREATED_AT": timestamp_column("Created On")})
+        st.dataframe(display[["TEST", "ACCOUNT_NAME", "FLOCK_NUMBER", "FACILITY_NAME", "TEST_RESULT", "INSPECTOR", "NUMBER_OF_SAMPLES", "DATE_RECEIVED", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="salmonella_list_grid", column_config={"TEST": "Test", "ACCOUNT_NAME": "Account", "FLOCK_NUMBER": "Flock", "FACILITY_NAME": "Facility", "CREATED_AT": timestamp_column("Created On")})
 else:
     current = repo.get_salmonella_test(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -124,7 +123,10 @@ else:
             st.dataframe(pd.DataFrame({"Field": [key.replace("_", " ").title() for key in detail_fields], "Value": [str(current[key]) if current[key] is not None else "—" for key in detail_fields]}), width="stretch", hide_index=True)
         with related:
             section_intro("Flock")
-            if flock: st.markdown(f"[{flock['FLOCK_NUMBER']}]({module_url('Flocks', flock['FLOCK_ID'], flock['FLOCK_NUMBER'])})")
+            if flock:
+                st.write(flock["FLOCK_NUMBER"])
+                if st.button("Open related Flock", icon=":material/visibility:"):
+                    open_module("Flocks", "detail", flock["FLOCK_ID"])
             else: st.info("The related Flock is unavailable.")
             section_intro("Test Samples")
             sample_rows = repo.get_salmonella_test_samples(view.record_id)

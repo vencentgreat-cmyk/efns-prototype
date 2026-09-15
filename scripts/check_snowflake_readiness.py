@@ -113,6 +113,10 @@ def check() -> list[str]:
         errors.append("SnowflakeRepository must use the reviewed server-side UTC expression.")
     if "DATE_FIELDS" not in repository or "normalize_date_bind" not in repository:
         errors.append("SnowflakeRepository must normalize typed DATE bind values at its boundary.")
+    if "PRODUCTION_INTEGER_COLUMNS" not in repository or "PRODUCTION_DECIMAL_COLUMNS" not in repository:
+        errors.append("SnowflakeRepository must declare the typed PRODUCTION_RECORD numeric contract.")
+    if "normalize_numeric_bind" not in repository or "_NULL_NUMERIC_TEXT" not in repository:
+        errors.append("SnowflakeRepository must normalize missing numeric bind values at its boundary.")
 
     synthetic_seed = (ROOT / "sql" / "09_dev_synthetic_seed.sql").read_text(encoding="utf-8")
     if "TO_TIMESTAMP_NTZ('2026-01-01 00:00:00')" in synthetic_seed:
@@ -123,6 +127,20 @@ def check() -> list[str]:
     navigation = (ROOT / "app" / "navigation.py").read_text(encoding="utf-8")
     if 'DISPLAY_TIMEZONE = "America/Halifax"' not in navigation:
         errors.append("The UI must explicitly display persisted timestamps in America/Halifax.")
+    operational_pages = (
+        "3_Accounts_Facilities_Flocks.py", "5_Flocks.py", "6_Flock_Transactions.py",
+        "7_Quota_Registrations.py", "8_Quota_Transactions.py", "9_Salmonella_Tests.py",
+        "11_Facilities.py", "13_Facility_Details.py",
+    )
+    page_source = "\n".join(
+        (ROOT / "app" / "pages" / name).read_text(encoding="utf-8")
+        for name in operational_pages
+    )
+    if any(marker in page_source for marker in (
+        "LinkColumn", "current_page_url", "module_url", "module_view_url",
+        "snowflake.app", "href=",
+    )):
+        errors.append("Operational record pages must use registered-page session navigation, not browser links.")
 
     for path in runtime_python_files():
         try:
