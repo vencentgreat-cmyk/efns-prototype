@@ -3,7 +3,7 @@ import datetime as dt
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
+from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, page_header, show_data_error
 from data.constants import FLOCK_TRANSACTION_TYPES
 from data.repositories import get_repository
@@ -49,7 +49,7 @@ if view.name == "list":
         display = display.reset_index(drop=True); st.session_state.flock_tx_row_ids = display["FLOCK_TRANSACTION_ID"].tolist()
         display["TRANSACTION_LINK"] = display.apply(lambda row: current_page_url(row["FLOCK_TRANSACTION_ID"], f"{row['TRANSACTION_TYPE']} · {str(row['FLOCK_TRANSACTION_ID'])[:8]}"), axis=1)
         display["FLOCK_LINK"] = display.apply(lambda row: module_url("Flocks", row["FLOCK_ID"], row["FLOCK_NUMBER"]), axis=1)
-        st.dataframe(display[["TRANSACTION_LINK", "FLOCK_LINK", "QUANTITY", "TRANSACTION_DATE", "NOTES", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_tx_grid", column_config={"TRANSACTION_LINK": st.column_config.LinkColumn("Transaction", display_text=r".*#(.*)$"), "FLOCK_LINK": st.column_config.LinkColumn("Flock", display_text=r".*#(.*)$"), "CREATED_AT": st.column_config.DatetimeColumn("Created On", format="YYYY-MM-DD HH:mm")})
+        st.dataframe(display[["TRANSACTION_LINK", "FLOCK_LINK", "QUANTITY", "TRANSACTION_DATE", "NOTES", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_tx_grid", column_config={"TRANSACTION_LINK": st.column_config.LinkColumn("Transaction", display_text=r".*#(.*)$"), "FLOCK_LINK": st.column_config.LinkColumn("Flock", display_text=r".*#(.*)$"), "CREATED_AT": timestamp_column("Created On")})
 else:
     current = get_record(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None: st.error("The requested Transaction could not be found."); st.stop()

@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
+from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import SALMONELLA_RESULTS, UNASSIGNED_LABEL
 from data.repositories import get_repository
@@ -88,7 +88,7 @@ if view.name == "list":
         display["FLOCK_LINK"] = display.apply(lambda row: module_url("Flocks", row["FLOCK_ID"], row["FLOCK_NUMBER"]), axis=1)
         display["ACCOUNT_LINK"] = display.apply(lambda row: module_url("Accounts_&_Facilities", row["ACCOUNT_ID"], row["ACCOUNT_NAME"]), axis=1)
         st.session_state.salmonella_list_row_ids = display["SALMONELLA_TEST_ID"].tolist()
-        st.dataframe(display[["TEST_LINK", "ACCOUNT_LINK", "FLOCK_LINK", "FACILITY_NAME", "TEST_RESULT", "INSPECTOR", "NUMBER_OF_SAMPLES", "DATE_RECEIVED", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="salmonella_list_grid", column_config={"TEST_LINK": st.column_config.LinkColumn("Test", display_text=r".*#(.*)$"), "ACCOUNT_LINK": st.column_config.LinkColumn("Account", display_text=r".*#(.*)$"), "FLOCK_LINK": st.column_config.LinkColumn("Flock", display_text=r".*#(.*)$"), "FACILITY_NAME": "Facility", "CREATED_AT": st.column_config.DatetimeColumn("Created On", format="YYYY-MM-DD HH:mm")})
+        st.dataframe(display[["TEST_LINK", "ACCOUNT_LINK", "FLOCK_LINK", "FACILITY_NAME", "TEST_RESULT", "INSPECTOR", "NUMBER_OF_SAMPLES", "DATE_RECEIVED", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="salmonella_list_grid", column_config={"TEST_LINK": st.column_config.LinkColumn("Test", display_text=r".*#(.*)$"), "ACCOUNT_LINK": st.column_config.LinkColumn("Account", display_text=r".*#(.*)$"), "FLOCK_LINK": st.column_config.LinkColumn("Flock", display_text=r".*#(.*)$"), "FACILITY_NAME": "Facility", "CREATED_AT": timestamp_column("Created On")})
 else:
     current = repo.get_salmonella_test(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -120,7 +120,8 @@ else:
                 right.markdown(f"**Case / File Number**  \n{current.get('CASE_FILE_NUMBER') or '—'}")
                 right.markdown(f"**Invoice Number**  \n{current.get('INVOICE_NUMBER') or '—'}")
         with details:
-            st.dataframe(pd.DataFrame({"Field": [key.replace("_", " ").title() for key in current], "Value": [str(value) if value is not None else "—" for value in current.values()]}), width="stretch", hide_index=True)
+            detail_fields = [key for key in current if key not in {"CREATED_AT", "UPDATED_AT"}]
+            st.dataframe(pd.DataFrame({"Field": [key.replace("_", " ").title() for key in detail_fields], "Value": [str(current[key]) if current[key] is not None else "—" for key in detail_fields]}), width="stretch", hide_index=True)
         with related:
             section_intro("Flock")
             if flock: st.markdown(f"[{flock['FLOCK_NUMBER']}]({module_url('Flocks', flock['FLOCK_ID'], flock['FLOCK_NUMBER'])})")

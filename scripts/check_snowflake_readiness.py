@@ -95,6 +95,35 @@ def check() -> list[str]:
     if audit_privileges != {"SELECT", "INSERT"}:
         errors.append("APP.AUDIT_EVENT must grant only SELECT and INSERT to the app owner.")
 
+    utc_ntz = "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ"
+    for ddl_name in ("02_core_tables.sql", "03_production_tables.sql"):
+        ddl = (ROOT / "sql" / ddl_name).read_text(encoding="utf-8")
+        if "DEFAULT CURRENT_TIMESTAMP()" in ddl:
+            errors.append(f"{ddl_name} contains a session-timezone timestamp default.")
+        timestamp_defaults = re.findall(
+            r"\b(?:CREATED_AT|UPDATED_AT|UPLOAD_TIMESTAMP)\s+TIMESTAMP_NTZ\s+DEFAULT\s+([^\n]+)",
+            ddl,
+            flags=re.IGNORECASE,
+        )
+        if not timestamp_defaults or any(utc_ntz not in value.upper() for value in timestamp_defaults):
+            errors.append(f"{ddl_name} must generate persisted TIMESTAMP_NTZ values in UTC.")
+
+    repository = (ROOT / "data" / "repositories" / "snowflake.py").read_text(encoding="utf-8")
+    if f'UTC_NOW_NTZ = "{utc_ntz}"' not in repository:
+        errors.append("SnowflakeRepository must use the reviewed server-side UTC expression.")
+    if "DATE_FIELDS" not in repository or "normalize_date_bind" not in repository:
+        errors.append("SnowflakeRepository must normalize typed DATE bind values at its boundary.")
+
+    synthetic_seed = (ROOT / "sql" / "09_dev_synthetic_seed.sql").read_text(encoding="utf-8")
+    if "TO_TIMESTAMP_NTZ('2026-01-01 00:00:00')" in synthetic_seed:
+        errors.append("The DEV synthetic seed must not use a fixed creation timestamp.")
+    if utc_ntz not in synthetic_seed:
+        errors.append("The DEV synthetic seed must assign timestamps from Snowflake UTC time.")
+
+    navigation = (ROOT / "app" / "navigation.py").read_text(encoding="utf-8")
+    if 'DISPLAY_TIMEZONE = "America/Halifax"' not in navigation:
+        errors.append("The UI must explicitly display persisted timestamps in America/Halifax.")
+
     for path in runtime_python_files():
         try:
             ast.parse(path.read_text(encoding="utf-8"), filename=str(path), feature_version=(3, 11))

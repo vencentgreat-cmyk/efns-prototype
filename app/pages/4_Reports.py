@@ -14,6 +14,7 @@ from app.services.export import spreadsheet_safe
 from app.ui import apply_theme, page_header, section_intro
 from data.repositories import get_repository
 from app.services.report_builder import REPORT_FIELDS, build_report
+from app.navigation import timestamp_columns
 
 require_page_permission(Permission.VIEW_REPORTS)
 apply_theme()
@@ -61,7 +62,13 @@ with st.spinner("Building report..."):
         st.stop()
 
 st.write(f"**Rows:** {len(report_df)}  |  **Columns:** {len(report_df.columns)}")
-st.dataframe(report_df.head(100), width="stretch", height=470, hide_index=True)
+st.dataframe(
+    report_df.head(100),
+    width="stretch",
+    height=470,
+    hide_index=True,
+    column_config=timestamp_columns(report_df.columns),
+)
 
 # --- Export ---
 section_intro("Export", "Spreadsheet-safe CSV and Excel files use the current report result.")

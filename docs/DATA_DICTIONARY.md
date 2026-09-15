@@ -1,6 +1,6 @@
 # EFNS Data Dictionary
 
-**Status:** provisional until Dataverse metadata is available. Python and DEV SQL use the same uppercase internal names. Every persisted entity has `CREATED_AT` and `UPDATED_AT` (`TIMESTAMP_NTZ`); the UI labels these “Created On” and “Last Updated”.
+**Status:** provisional until Dataverse metadata is available. Python and DEV SQL use the same uppercase internal names. Every persisted business entity has `CREATED_AT` and `UPDATED_AT` (`TIMESTAMP_NTZ`). Snowflake generates these values server-side in canonical UTC; updates preserve `CREATED_AT` and advance only `UPDATED_AT`. The UI converts them to `America/Halifax` and labels the timezone. Security/audit timestamps use `TIMESTAMP_TZ` and are also generated in UTC.
 
 | Entity | Primary key | Required fields | Foreign keys | Main optional fields |
 |---|---|---|---|---|
@@ -18,7 +18,7 @@
 | Production Record | `PRODUCTION_ID` | import, source type | Import; nullable Account/Facility/Flock | normalized EIMS fields, period, match audit |
 | Production Size Breakdown | `SIZE_BREAKDOWN_ID` | production, size band | Production Record | quantity |
 
-IDs are provisional `VARCHAR(36)` values. Quantities/counts are Snowflake `NUMBER`, business dates are `DATE`, and audit values are `TIMESTAMP_NTZ`. Exact column definitions and constraints are in `sql/02_core_tables.sql` and `sql/03_production_tables.sql`.
+IDs are provisional `VARCHAR(36)` values. Quantities/counts are Snowflake `NUMBER`, business dates are `DATE`, and operational audit values are canonical-UTC `TIMESTAMP_NTZ`. The Snowflake repository binds missing optional dates as SQL `NULL` and typed `datetime` values as `date`; it never persists textual `None`, `NaT`, or `null` sentinels. Exact column definitions and constraints are in `sql/02_core_tables.sql` and `sql/03_production_tables.sql`.
 
 `MATCH_STATUS` values are `UNMATCHED`, `UNIQUE_CANDIDATE`, `NO_CANDIDATE`, `MULTIPLE_CANDIDATES`, and `CONFIRMED`. EIMS imports start `UNMATCHED`; no relationship ID is invented.
 

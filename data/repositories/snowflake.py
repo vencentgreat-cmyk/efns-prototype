@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import datetime as dt
 from typing import Optional
 import uuid
 
@@ -26,7 +27,45 @@ MODEL = {
     "SALMONELLA_TEST": ("SALMONELLA_TEST_ID", "FLOCK_ID ACCOUNT_ID PERMIT_NUMBER TESTING_DATE INSPECTOR NUMBER_OF_SAMPLES TEST_RESULT DATE_RESULT_SENT DATE_RECEIVED CASE_FILE_NUMBER INVOICE_NUMBER INVOICE_DATE COMMENTS"),
 }
 PRODUCTION_COLUMNS = "PRODUCER_ACCOUNT_ID GRADER_ACCOUNT_ID FACILITY_ID FLOCK_ID GRADER_NAME PRODUCER_NUMBER GRADER_NUMBER BARN_IDENTITY SOURCE_WEEK_CODE REPORTING_YEAR REPORTING_WEEK MARKETING_TYPE HOUSING_SYSTEM EGG_TYPE EGG_COLOUR FLOCK_AGE NET_WEIGHT NET_BOXES NET_PER_BOX JUMBO EXTRA_LARGE LARGE MEDIUM SMALL PEEWEE GRADE_B GRADE_C CRACKS NEST_RUN NEST_RUN_25_PLUS NEST_RUN_24_PLUS NEST_RUN_23_PLUS NEST_RUN_22_PLUS NEST_RUN_21_PLUS NEST_RUN_20_PLUS NEST_RUN_19_PLUS NEST_RUN_18_PLUS NEST_RUN_17_PLUS OTHER_LEVIABLE OTHER_NON_LEVIABLE FARM_GATE_SALES ON_FARM_CONSUMPTION SUBTOTAL REJECTS LEAKERS TOTAL TOTAL_RECEIVED REJECTED LOSS LEGACY_REJECT_LOSS_TOTAL TOTAL_ACCEPTED SOURCE_TYPE MATCH_STATUS SOURCE_ROW_NUMBER MATCH_CONFIRMED_AT MATCH_CONFIRMED_BY".split()
+IMPORT_BATCH_COLUMNS = "FILENAME SOURCE FILE_HASH FILE_SIZE_BYTES WORKSHEET_NAME REPORTING_YEAR REPORTING_WEEK SOURCE_RECORD_COUNT ROW_COUNT ERROR_COUNT STATUS NOTES".split()
+RAW_ROW_COLUMNS = "RAW_ROW_ID IMPORT_ID SOURCE_ROW_NUMBER RAW_DATA VALIDATION_STATUS MATCH_STATUS VALIDATION_MESSAGES".split()
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
+UTC_NOW_NTZ = "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ"
+DATE_FIELDS = {
+    "FACILITY": frozenset({"ACTIVATION_DATE", "CONSTRUCTION_DATE", "CLOSURE_DATE", "DESTRUCTION_DATE", "INACTIVE_DATE"}),
+    "FLOCK": frozenset({"PERMIT_DATE", "HATCH_DATE", "DATE_ORDERED", "PLACEMENT_DATE", "EST_DISPOSAL", "DISPOSAL_DATE"}),
+    "FLOCK_TRANSACTION": frozenset({"TRANSACTION_DATE"}),
+    "QUOTA_REGISTRATION": frozenset({"EFFECTIVE_DATE", "END_DATE"}),
+    "QUOTA_TRANSACTION": frozenset({"EFFECTIVE_DATE", "END_DATE"}),
+    "SALMONELLA_TEST": frozenset({"TESTING_DATE", "DATE_RESULT_SENT", "DATE_RECEIVED", "INVOICE_DATE"}),
+}
+_NULL_DATE_TEXT = frozenset({"", "none", "nat", "null"})
+
+
+def normalize_date_bind(value, field: str = "Date") -> dt.date | None:
+    """Return a Snowflake DATE-compatible value without stringifying nulls."""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, dt.datetime):
+        return value.date()
+    if isinstance(value, dt.date):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if text.lower() in _NULL_DATE_TEXT:
+            return None
+        try:
+            # Existing repository callers may supply ISO strings. Convert them
+            # to a typed date so Connector and Snowpark bind the same value.
+            return dt.date.fromisoformat(text)
+        except ValueError as exc:
+            raise RepositoryError(f"{field.replace('_', ' ').title()} must be a valid ISO date.") from exc
+    raise RepositoryError(f"{field.replace('_', ' ').title()} must be a date value.")
 
 
 class _LegacyCursorExecutor(SqlExecutor):
@@ -122,10 +161,20 @@ class SnowflakeRepository(BaseRepository):
         frame = self._query(f"SELECT * FROM {self._table(table, schema)} WHERE {column} = %s", (value,))
         return frame.iloc[0].to_dict() if not frame.empty else None
 
+    @staticmethod
+    def _normalize_date_fields(table: str, record: dict) -> dict:
+        normalized = dict(record)
+        for field in DATE_FIELDS.get(table, ()):
+            if field in normalized:
+                normalized[field] = normalize_date_bind(normalized[field], field)
+        return normalized
+
     def _upsert(self, table: str, record: dict) -> str:
+        record = self._normalize_date_fields(table, record)
         key, allowed_text = MODEL[table]
         expected = record.get("EXPECTED_UPDATED_AT")
-        entity_id = record.get(key) or str(uuid.uuid4())
+        supplied_id = record.get(key)
+        entity_id = supplied_id or str(uuid.uuid4())
         allowed = allowed_text.split()
         values = {name: record[name] for name in allowed if name in record}
         if not values:
@@ -134,7 +183,7 @@ class SnowflakeRepository(BaseRepository):
         update_sql = (
             f"UPDATE {self._table(table)} SET "
             + ", ".join(f"{name} = %s" for name in values)
-            + f", UPDATED_AT = CURRENT_TIMESTAMP() WHERE {key} = %s{lock}"
+            + f", UPDATED_AT = {UTC_NOW_NTZ} WHERE {key} = %s{lock}"
         )
         update_params = [*values.values(), entity_id]
         if expected is not None:
@@ -142,21 +191,40 @@ class SnowflakeRepository(BaseRepository):
         columns = [key, *values]
         insert_sql = (
             f"INSERT INTO {self._table(table)} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) "
-            f"VALUES ({', '.join(['%s'] * len(columns))}, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
+            f"VALUES ({', '.join(['%s'] * len(columns))}, {UTC_NOW_NTZ}, {UTC_NOW_NTZ})"
         )
         with self._executor().transaction() as tx:
-            affected = tx.execute(update_sql, tuple(update_params))
-            if expected is not None and affected < 0:
-                raise RepositoryError("The active Snowflake runtime did not report an affected-row count; the protected update was not accepted.")
-            if affected == 0:
-                existing = tx.query(f"SELECT UPDATED_AT FROM {self._table(table)} WHERE {key} = %s", (entity_id,))
-                if not existing.empty:
-                    if expected is not None:
-                        raise ConcurrencyError("This record changed after it was opened. Reload it before saving again.")
-                    return entity_id
+            existing = pd.DataFrame()
+            if supplied_id is not None:
+                existing = tx.query(
+                    f"SELECT CREATED_AT, UPDATED_AT FROM {self._table(table)} WHERE {key} = %s",
+                    (entity_id,),
+                )
+            if existing.empty:
                 if expected is not None:
                     raise ConcurrencyError("This record no longer exists. Return to the list and reload.")
-                tx.execute(insert_sql, (entity_id, *values.values()))
+                inserted = tx.execute(insert_sql, (entity_id, *values.values()))
+                if inserted == 0:
+                    raise RepositoryError(f"Snowflake did not insert the new {table.replace('_', ' ').title()} record.")
+                if inserted < 0:
+                    confirmed = tx.query(
+                        f"SELECT CREATED_AT, UPDATED_AT FROM {self._table(table)} WHERE {key} = %s",
+                        (entity_id,),
+                    )
+                    if confirmed.empty:
+                        raise RepositoryError(f"Snowflake could not confirm the new {table.replace('_', ' ').title()} record.")
+                return entity_id
+
+            affected = tx.execute(update_sql, tuple(update_params))
+            if expected is not None and affected < 0:
+                raise RepositoryError(
+                    "The active Snowflake runtime did not report an affected-row count; "
+                    "the protected update was not accepted."
+                )
+            if affected == 0:
+                if expected is not None:
+                    raise ConcurrencyError("This record changed after it was opened. Reload it before saving again.")
+                raise RepositoryError(f"Snowflake did not update the {table.replace('_', ' ').title()} record.")
         return entity_id
 
     def _delete(self, table, key, entity_id, references=()):
@@ -166,7 +234,14 @@ class SnowflakeRepository(BaseRepository):
                 existing = tx.query(f"SELECT 1 AS FOUND FROM {self._table(ref_table, schema)} WHERE {ref_col} = %s LIMIT 1", (entity_id,))
                 if not existing.empty:
                     raise RepositoryError(f"This {table.replace('_', ' ').title()} still has related records and cannot be deleted.")
-            return tx.execute(f"DELETE FROM {self._table(table)} WHERE {key} = %s", (entity_id,)) > 0
+            affected = tx.execute(f"DELETE FROM {self._table(table)} WHERE {key} = %s", (entity_id,))
+            if affected >= 0:
+                return affected > 0
+            remaining = tx.query(
+                f"SELECT 1 AS FOUND FROM {self._table(table)} WHERE {key} = %s LIMIT 1",
+                (entity_id,),
+            )
+            return remaining.empty
 
     def _filtered(self, table, filters, schema=None):
         conditions, params = [], []
@@ -206,13 +281,18 @@ class SnowflakeRepository(BaseRepository):
     def get_flocks(self, account_id=None, facility_id=None): return self._filtered("FLOCK", (("ACCOUNT_ID", account_id), ("FACILITY_ID", facility_id)))
     def get_flock(self, flock_id): return self._one("FLOCK", "FLOCK_ID", flock_id)
     def upsert_flock(self, record):
+        record = self._normalize_date_fields("FLOCK", record)
         errors = validate_flock(self, record)
         if errors: raise RepositoryError(" ".join(errors))
         return self._upsert("FLOCK", record)
     def delete_flock(self, value): return self._delete("FLOCK", "FLOCK_ID", value, (("FLOCK_TRANSACTION", "FLOCK_ID"), ("SALMONELLA_TEST", "FLOCK_ID"), ("PRODUCTION_RECORD", "FLOCK_ID")))
 
     def get_flock_transactions(self, flock_id=None): return self._filtered("FLOCK_TRANSACTION", (("FLOCK_ID", flock_id),))
-    def upsert_flock_transaction(self, record): return self._upsert("FLOCK_TRANSACTION", record)
+    def upsert_flock_transaction(self, record):
+        record = self._normalize_date_fields("FLOCK_TRANSACTION", record)
+        if record.get("TRANSACTION_DATE") is None:
+            raise RepositoryError("Transaction Date is required.")
+        return self._upsert("FLOCK_TRANSACTION", record)
     def delete_flock_transaction(self, value): return self._delete("FLOCK_TRANSACTION", "FLOCK_TRANSACTION_ID", value)
 
     def get_quota_registrations(self, account_id=None, status=None, quota_type=None, active_only=False):
@@ -224,6 +304,7 @@ class SnowflakeRepository(BaseRepository):
         return self._query(f"SELECT * FROM {self._table('QUOTA_REGISTRATION')} WHERE " + " AND ".join(conditions), tuple(params))
     def get_quota_registration(self, value): return self._one("QUOTA_REGISTRATION", "QUOTA_ID", value)
     def upsert_quota_registration(self, record):
+        record = self._normalize_date_fields("QUOTA_REGISTRATION", record)
         errors = validate_quota_registration(self, record)
         if errors: raise RepositoryError(" ".join(errors))
         return self._upsert("QUOTA_REGISTRATION", record)
@@ -239,6 +320,9 @@ class SnowflakeRepository(BaseRepository):
         if conditions: sql += " WHERE " + " AND ".join(conditions)
         return self._query(sql, tuple(params) if params else None)
     def upsert_quota_transaction(self, record):
+        record = self._normalize_date_fields("QUOTA_TRANSACTION", record)
+        if record.get("EFFECTIVE_DATE") is None:
+            raise RepositoryError("Effective Date is required.")
         errors = validate_quota_transaction(self, record)
         if errors: raise RepositoryError(" ".join(errors))
         stored = dict(record); stored["OWNER_ACCOUNT_ID"] = self.get_quota_registration(record["QUOTA_ID"])["ACCOUNT_ID"]
@@ -258,6 +342,7 @@ class SnowflakeRepository(BaseRepository):
         return self._query(sql, tuple(params) if params else None)
     def get_salmonella_test(self, value): return self._one("SALMONELLA_TEST", "SALMONELLA_TEST_ID", value)
     def upsert_salmonella_test(self, record):
+        record = self._normalize_date_fields("SALMONELLA_TEST", record)
         errors = validate_salmonella_test(self, record)
         if errors: raise RepositoryError(" ".join(errors))
         return self._upsert("SALMONELLA_TEST", record)
@@ -265,10 +350,11 @@ class SnowflakeRepository(BaseRepository):
     def get_salmonella_test_samples(self, test_id=None): return self._filtered("SALMONELLA_TEST_SAMPLE", (("SALMONELLA_TEST_ID", test_id),))
 
     def _insert_batch(self, executor, import_id, record):
-        allowed = "FILENAME SOURCE FILE_HASH FILE_SIZE_BYTES WORKSHEET_NAME REPORTING_YEAR REPORTING_WEEK SOURCE_RECORD_COUNT ROW_COUNT ERROR_COUNT STATUS NOTES".split()
-        values = {key: record[key] for key in allowed if key in record}; columns = ["IMPORT_ID", *values]
-        sql = f"INSERT INTO {self._table('IMPORT_BATCH', self.schema_raw)} ({', '.join(columns)}, UPLOAD_TIMESTAMP, CREATED_AT, UPDATED_AT) VALUES ({', '.join(['%s'] * len(columns))}, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
-        executor.execute(sql, (import_id, *values.values()))
+        values = {key: record[key] for key in IMPORT_BATCH_COLUMNS if key in record}; columns = ["IMPORT_ID", *values]
+        sql = f"INSERT INTO {self._table('IMPORT_BATCH', self.schema_raw)} ({', '.join(columns)}, UPLOAD_TIMESTAMP, CREATED_AT, UPDATED_AT) VALUES ({', '.join(['%s'] * len(columns))}, {UTC_NOW_NTZ}, {UTC_NOW_NTZ}, {UTC_NOW_NTZ})"
+        affected = executor.execute(sql, (import_id, *values.values()))
+        if affected == 0:
+            raise RepositoryError("Snowflake did not create the Import Batch record.")
 
     def create_import_batch(self, record):
         import_id = record.get("IMPORT_ID") or str(uuid.uuid4())
@@ -278,7 +364,7 @@ class SnowflakeRepository(BaseRepository):
     def find_import_by_hash(self, file_hash): return self._one("IMPORT_BATCH", "FILE_HASH", file_hash, self.schema_raw) if file_hash else None
 
     def _insert_raw(self, executor, import_id, rows):
-        sql = f"INSERT INTO {self._table('IMPORT_RAW_ROW', self.schema_raw)} (RAW_ROW_ID, IMPORT_ID, SOURCE_ROW_NUMBER, RAW_DATA, VALIDATION_STATUS, MATCH_STATUS, VALIDATION_MESSAGES, CREATED_AT, UPDATED_AT) VALUES (%s, %s, %s, PARSE_JSON(%s), %s, %s, PARSE_JSON(%s), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
+        sql = f"INSERT INTO {self._table('IMPORT_RAW_ROW', self.schema_raw)} (RAW_ROW_ID, IMPORT_ID, SOURCE_ROW_NUMBER, RAW_DATA, VALIDATION_STATUS, MATCH_STATUS, VALIDATION_MESSAGES, CREATED_AT, UPDATED_AT) SELECT %s, %s, %s, PARSE_JSON(%s), %s, %s, PARSE_JSON(%s), {UTC_NOW_NTZ}, {UTC_NOW_NTZ}"
         params = [(row.get("RAW_ROW_ID") or str(uuid.uuid4()), import_id, row.get("SOURCE_ROW_NUMBER", index), json.dumps(row.get("RAW_DATA", row.get("ROW_DATA", row)), default=str), row.get("VALIDATION_STATUS", "PENDING"), row.get("MATCH_STATUS", "UNMATCHED"), json.dumps(row.get("VALIDATION_MESSAGES", row.get("MESSAGES", [])), default=str)) for index, row in enumerate(rows, 1)]
         return executor.executemany(sql, params) if params else 0
     def insert_raw_rows(self, import_id, rows):
@@ -288,7 +374,7 @@ class SnowflakeRepository(BaseRepository):
     def _insert_production(self, executor, records, import_id):
         rows = records.to_dict("records") if isinstance(records, pd.DataFrame) else list(records)
         columns = ["PRODUCTION_ID", "IMPORT_ID", *PRODUCTION_COLUMNS]
-        sql = f"INSERT INTO {self._table('PRODUCTION_RECORD')} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) VALUES ({', '.join(['%s'] * len(columns))}, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
+        sql = f"INSERT INTO {self._table('PRODUCTION_RECORD')} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) VALUES ({', '.join(['%s'] * len(columns))}, {UTC_NOW_NTZ}, {UTC_NOW_NTZ})"
         params = []
         for row in rows:
             item = dict(row); item.setdefault("SOURCE_TYPE", "EIMS_IMPORT"); item.setdefault("MATCH_STATUS", "UNMATCHED")
@@ -306,7 +392,9 @@ class SnowflakeRepository(BaseRepository):
             self._insert_batch(tx, import_id, batch)
             self._insert_raw(tx, import_id, raw_rows)
             count = self._insert_production(tx, records, import_id)
-            tx.execute(f"UPDATE {self._table('IMPORT_BATCH', self.schema_raw)} SET ROW_COUNT = %s, STATUS = %s, UPDATED_AT = CURRENT_TIMESTAMP() WHERE IMPORT_ID = %s", (count, "Committed", import_id))
+            updated = tx.execute(f"UPDATE {self._table('IMPORT_BATCH', self.schema_raw)} SET ROW_COUNT = %s, STATUS = %s, UPDATED_AT = {UTC_NOW_NTZ} WHERE IMPORT_ID = %s", (count, "Committed", import_id))
+            if updated == 0:
+                raise RepositoryError("Snowflake did not finalize the Import Batch record.")
         return import_id, count
 
     def get_production_records(self, reporting_year=None, reporting_week=None, grader_number=None, barn_identity=None, egg_colour=None): return self._filtered("VW_PRODUCTION_SUMMARY", (("REPORTING_YEAR", reporting_year), ("REPORTING_WEEK", reporting_week), ("GRADER_NUMBER", grader_number), ("BARN_IDENTITY", barn_identity), ("EGG_COLOUR", egg_colour)), self.schema_reporting)

@@ -94,6 +94,12 @@ in this repository.
    Treat the deploy and this script as one release procedure. Do not open the
    application to viewers until both steps succeed.
 
+   This application release changes runtime write behavior. Fresh tables
+   created from `02_core_tables.sql` and `03_production_tables.sql` also receive
+   UTC defaults. Those `CREATE TABLE IF NOT EXISTS` scripts do not alter defaults
+   on existing tables, so do not rerun them expecting a migration. Current app
+   inserts and updates explicitly use Snowflake's server-side UTC expression.
+
 8. Grant one of the four viewer account roles to each approved Snowflake user.
    Add each real email to `SECURITY.APP_USER` through the EFNS User Management
    page (the initial Admin is already seeded). Account-role access and the table
@@ -155,6 +161,12 @@ they do not drop tables or use `CREATE OR REPLACE TABLE`.
   confirm the Streamlit object's `RUNTIME_NAME` is `SYSTEM$WAREHOUSE_RUNTIME`.
 - **SQL permission error:** verify the Streamlit owner/deployer role inheritance
   and grants from `06_least_privilege_grants.sql`; do not add broad account grants.
+- **DATE conversion error (100040):** redeploy the current application bundle
+  and verify optional Flock dates save as SQL `NULL`. Correlate the sanitized
+  query ID with Query History. Do not make the date required or widen grants.
+- **Old synthetic timestamps:** remove only `DEV_SYNTH` data with
+  `sql/10_dev_synthetic_cleanup.sql`, then rerun `sql/09_dev_synthetic_seed.sql`.
+  The seed will not overwrite existing creation timestamps by design.
 - **Import failure:** verify the transaction rollback across IMPORT_BATCH, RAW,
   and PRODUCTION_RECORD, then correlate sanitized UI time with query history.
 - **Unexpected cost:** suspend `EFNS_DEV_WH`, inspect warehouse history and the

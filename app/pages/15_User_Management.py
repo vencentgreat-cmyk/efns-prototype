@@ -6,6 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import get_auth_store, require_page_permission
+from app.navigation import timestamp_column
 from app.security import Permission, Role
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 
@@ -59,8 +60,8 @@ st.dataframe(
         "ROLE": st.column_config.TextColumn("Role"),
         "ACTIVE": st.column_config.CheckboxColumn("Active"),
         "TEMPORARY_PASSWORD": st.column_config.CheckboxColumn("Password change required"),
-        "LAST_LOGIN_AT": st.column_config.DatetimeColumn("Last login", format="YYYY-MM-DD HH:mm"),
-        "UPDATED_AT": st.column_config.DatetimeColumn("Updated", format="YYYY-MM-DD HH:mm"),
+        "LAST_LOGIN_AT": timestamp_column("Last login"),
+        "UPDATED_AT": timestamp_column("Updated"),
     },
 )
 

@@ -13,6 +13,8 @@ from app.security import Permission
 
 
 VALID_VIEWS = {"list", "new", "detail", "edit"}
+DISPLAY_TIMEZONE = "America/Halifax"
+DISPLAY_TIMEZONE_LABEL = "America/Halifax"
 
 
 def _module_path(current_path: str, page_slug: str) -> str:
@@ -131,9 +133,37 @@ def ensure_record_form_state(prefix: str, record_id: str | None) -> None:
         st.session_state[marker] = identity
 
 
+def to_display_timestamp(value):
+    """Interpret persisted timestamps as UTC and convert them for EFNS users."""
+    converted = pd.to_datetime(value, errors="coerce", utc=True)
+    return converted if pd.isna(converted) else converted.tz_convert(DISPLAY_TIMEZONE)
+
+
 def format_timestamp(value) -> str:
-    converted = pd.to_datetime(value, errors="coerce")
-    return "Not available" if pd.isna(converted) else converted.strftime("%Y-%m-%d %H:%M")
+    converted = to_display_timestamp(value)
+    if pd.isna(converted):
+        return "Not available"
+    return f"{converted.strftime('%Y-%m-%d %H:%M %Z')} ({DISPLAY_TIMEZONE_LABEL})"
+
+
+def timestamp_column(label: str):
+    """Use an explicit timezone and label for every timestamp data column."""
+    return st.column_config.DatetimeColumn(
+        f"{label} ({DISPLAY_TIMEZONE_LABEL})",
+        format="YYYY-MM-DD HH:mm",
+        timezone=DISPLAY_TIMEZONE,
+    )
+
+
+def timestamp_columns(columns) -> dict:
+    """Build explicit Halifax display configuration for timestamp fields."""
+    configured = {}
+    for column in columns:
+        name = str(column)
+        if name.endswith(("_AT", "_ON", " At", " On")) or name == "UPLOAD_TIMESTAMP":
+            label = name.replace("_", " ").title()
+            configured[name] = timestamp_column(label)
+    return configured
 
 
 def selected_row_index(key: str) -> int | None:

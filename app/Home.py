@@ -1,11 +1,12 @@
 """EFNS application entry point and grouped navigation."""
 
 from __future__ import annotations
-
+from pathlib import Path
 import streamlit as st
 import os
 
 from app.auth import ensure_authorized_repository, render_user_sidebar, require_authenticated
+from app.navigation import timestamp_column
 from app.security import Permission, has_permission
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.connection import LazySqlExecutor
@@ -20,8 +21,7 @@ st.set_page_config(
 
 
 def page_file(filename: str) -> str:
-    prefix = os.getenv("EFNS_PAGE_PREFIX", "pages").strip("/")
-    return f"{prefix}/{filename}"
+    return str(Path(__file__).resolve().parent / "pages" / filename)
 
 
 apply_theme()
@@ -153,6 +153,7 @@ def dashboard() -> None:
                 imports.sort_values("UPLOAD_TIMESTAMP", ascending=False)[columns].head(10),
                 width="stretch",
                 hide_index=True,
+                column_config={"UPLOAD_TIMESTAMP": timestamp_column("Uploaded On")},
             )
 
 
