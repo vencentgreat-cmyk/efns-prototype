@@ -117,4 +117,4 @@ def test_snowflake_farm_location_insert_order_and_server_timestamps():
     repo.upsert_farm_location({**record, "LOCATION_NAME": "Updated", "EXPECTED_UPDATED_AT": "2026-01-02"})
     update = next(call for call in reversed(tx.calls) if call[0] == "execute" and "UPDATE EFNS_DEV.CORE.FARM_LOCATION" in call[1])
     assert "CREATED_AT" not in update[1]
-    assert update[2] == ("A1", "Updated", None, "Active", "L1", "2026-01-02")
+    assert update[2] == ("A1", "Updated", None, "Active", "L1", dt.datetime(2026, 1, 2))

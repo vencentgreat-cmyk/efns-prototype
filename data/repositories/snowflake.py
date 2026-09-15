@@ -89,6 +89,24 @@ def normalize_date_bind(value, field: str = "Date") -> dt.date | None:
     raise RepositoryError(f"{field.replace('_', ' ').title()} must be a date value.")
 
 
+def normalize_timestamp_bind(value, field: str = "Timestamp") -> dt.datetime | None:
+    """Return a Connector/Snowpark-compatible UTC-naive TIMESTAMP_NTZ bind."""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    try:
+        converted = pd.Timestamp(value)
+    except (TypeError, ValueError) as exc:
+        raise RepositoryError(f"{field.replace('_', ' ').title()} is not a valid timestamp.") from exc
+    if converted.tzinfo is not None:
+        converted = converted.tz_convert("UTC").tz_localize(None)
+    return converted.to_pydatetime()
+
+
 def _is_missing_bind(value) -> bool:
     if value is None:
         return True
@@ -249,7 +267,7 @@ class SnowflakeRepository(BaseRepository):
     def _upsert(self, table: str, record: dict) -> str:
         record = self._normalize_date_fields(table, record)
         key, allowed_text = MODEL[table]
-        expected = record.get("EXPECTED_UPDATED_AT")
+        expected = normalize_timestamp_bind(record.get("EXPECTED_UPDATED_AT"), "EXPECTED_UPDATED_AT")
         supplied_id = record.get(key)
         entity_id = supplied_id or str(uuid.uuid4())
         allowed = allowed_text.split()
@@ -481,7 +499,7 @@ FROM {self._table('QUOTA_REGISTRATION')} qr
 JOIN {self._table('ACCOUNT')} a ON a.ACCOUNT_ID = qr.ACCOUNT_ID
 LEFT JOIN ranked_location fl ON fl.ACCOUNT_ID = qr.ACCOUNT_ID AND fl.LOCATION_RANK = 1
 WHERE {" AND ".join(conditions)}
-ORDER BY a.ORGANIZATION_NAME, qr.REGISTRATION_NUMBER, qr.QUOTA_ID
+ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
 """
         return self._query(sql, tuple(params))
     def delete_quota_transaction(self, value): return self._delete("QUOTA_TRANSACTION", "QUOTA_TRANSACTION_ID", value, (("QUOTA_TRANSACTION", "RELATED_TRANSACTION_ID"),))
