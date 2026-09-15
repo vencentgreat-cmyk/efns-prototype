@@ -16,7 +16,10 @@
 - Production NUMBER bindings now convert pandas missing values and textual null
   sentinels to SQL `NULL`, preserve integer/decimal DDL semantics, accept valid
   comma-grouped numbers, and reject invalid text before writing. Connector and
-  Snowpark behavior still requires a DEV import verification.
+  Snowpark behavior still requires a DEV import verification. Snowpark expanded
+  bulk writes now literalize only Python `None` as SQL `NULL`; all non-NULL
+  values remain qmark-bound to avoid the warehouse runtime's observed textual
+  `"None"` conversion.
 - Operational detail navigation now uses registered Streamlit pages and
   page-local session state. Snowsight selection, Back, cross-module switching,
   and stale-record recovery still require a deployed UI smoke test.

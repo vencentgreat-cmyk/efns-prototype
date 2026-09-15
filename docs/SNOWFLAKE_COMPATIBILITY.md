@@ -62,6 +62,9 @@ Streamlit 1.52.2. This combination has deployed and started successfully in DEV.
 - Validate Connector/Snowpark binding of Python `int`, `Decimal`, and SQL `NULL`
   against every `PRODUCTION_RECORD` NUMBER column. Offline contracts reject
   invalid non-empty numeric text with only the field and source-row reference.
+  The warehouse bulk executor renders Python `None` as an unquoted SQL `NULL`
+  token for each expanded row and removes only that value from Snowpark's qmark
+  parameter sequence; all non-NULL values remain bound.
 
 Run `python scripts/check_snowflake_readiness.py` for offline structure and
 Python 3.11 grammar checks.

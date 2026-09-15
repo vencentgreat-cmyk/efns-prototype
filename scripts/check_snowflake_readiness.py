@@ -118,6 +118,12 @@ def check() -> list[str]:
     if "normalize_numeric_bind" not in repository or "_NULL_NUMERIC_TEXT" not in repository:
         errors.append("SnowflakeRepository must normalize missing numeric bind values at its boundary.")
 
+    connection = (ROOT / "data" / "connection.py").read_text(encoding="utf-8")
+    if "_literalize_null_bindings" not in connection:
+        errors.append("Snowpark bulk writes must render Python None as SQL NULL.")
+    if "parameters.extend(bound)" not in connection:
+        errors.append("Snowpark bulk writes must keep every non-NULL value parameter-bound.")
+
     synthetic_seed = (ROOT / "sql" / "09_dev_synthetic_seed.sql").read_text(encoding="utf-8")
     if "TO_TIMESTAMP_NTZ('2026-01-01 00:00:00')" in synthetic_seed:
         errors.append("The DEV synthetic seed must not use a fixed creation timestamp.")

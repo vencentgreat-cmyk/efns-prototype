@@ -361,6 +361,33 @@ def test_invalid_production_numeric_rolls_back_batch_and_raw_rows():
     assert not any(call[0] == "executemany" and "PRODUCTION_RECORD" in call[1] for call in executor.calls)
 
 
+def test_late_import_finalization_failure_rolls_back_every_prior_write():
+    class FinalizationFailureExecutor(RecordingExecutor):
+        def execute(self, sql, params=None):
+            self.calls.append(("execute", sql, tuple(params or ())))
+            if sql.startswith("UPDATE EFNS_DEV.RAW.IMPORT_BATCH"):
+                raise RepositoryError("safe finalization failure")
+            return self.affected
+
+    executor = FinalizationFailureExecutor()
+    repo = _repo(executor)
+    with pytest.raises(RepositoryError, match="safe finalization failure"):
+        repo.import_production_bundle(
+            {"FILENAME": "synthetic.xlsm", "FILE_HASH": "hash-late-failure"},
+            [{"SOURCE_ROW_NUMBER": 14, "RAW_DATA": {"synthetic": True}}],
+            [{
+                "PRODUCTION_ID": "DEV_VERIFY_PRODUCTION_ROLLBACK_1",
+                "SOURCE_ROW_NUMBER": 14,
+                "FLOCK_AGE": None,
+                "SOURCE_TYPE": "EIMS_IMPORT",
+                "MATCH_STATUS": "UNMATCHED",
+            }],
+        )
+    assert executor.commits == 0 and executor.rollbacks == 1
+    assert any(call[0] == "executemany" and "IMPORT_RAW_ROW" in call[1] for call in executor.calls)
+    assert any(call[0] == "executemany" and "PRODUCTION_RECORD" in call[1] for call in executor.calls)
+
+
 def test_persisted_ddl_and_seed_use_server_generated_utc_timestamps():
     for path in ("sql/02_core_tables.sql", "sql/03_production_tables.sql"):
         text = (ROOT / path).read_text(encoding="utf-8")

@@ -70,7 +70,9 @@ schema or uses `DROP` or `TRUNCATE`.
    numeric cells and a comma-formatted number such as `1,234.50`. Verify one import
    batch, source rows, normalized rows, source hash, and `UNMATCHED` status.
    Confirm blank numeric cells are SQL `NULL`, `FLOCK_AGE` is NUMBER-compatible,
-   and the comma-formatted value retains its numeric value.
+   and the comma-formatted value retains its numeric value. In query history,
+   confirm the expanded warehouse-runtime statement contains `NULL` at missing
+   positions and does not report `Numeric value 'None' is not recognized`.
    Re-upload it and confirm duplicate detection blocks it unless override is used.
 8. **Rollback:** use a deliberately invalid non-empty numeric value in a
    normalized DEV row. Confirm the batch, RAW rows, and normalized rows all roll
@@ -83,3 +85,10 @@ schema or uses `DROP` or `TRUNCATE`.
 10. **Cost/operations:** confirm X-Small size, 60-second auto-suspend, resource
    monitor assignment, query warehouse, event logging, and no plaintext secrets
    in the stage or Streamlit source.
+
+For a controlled lower-path verification that writes only `DEV_VERIFY_` records
+inside a transaction and always rolls them back, run:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/verify_snowpark_null_binding.py --confirm-dev-dml
+```

@@ -345,6 +345,61 @@ def _qmark(sql: str) -> str:
     return _rewrite_placeholders(sql, "%s", "?")[0]
 
 
+def _literalize_null_bindings(
+    sql: str,
+    params: Sequence[object],
+    marker: str = "?",
+) -> tuple[str, list[object]]:
+    """Render Python ``None`` as SQL NULL while keeping other values bound.
+
+    Snowpark warehouse-runtime binding can serialize ``None`` as the text
+    ``"None"`` in an expanded multi-row statement. This scanner replaces only
+    the corresponding unquoted bind marker with the SQL NULL literal. Values
+    are never interpolated, and bind-looking text inside quoted SQL remains
+    unchanged.
+    """
+    values = list(params)
+    bound: list[object] = []
+    output: list[str] = []
+    value_index = 0
+    index = 0
+    quote: str | None = None
+    while index < len(sql):
+        char = sql[index]
+        if quote:
+            output.append(char)
+            if char == quote:
+                if index + 1 < len(sql) and sql[index + 1] == quote:
+                    output.append(sql[index + 1])
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            output.append(char)
+            index += 1
+            continue
+        if sql.startswith(marker, index):
+            if value_index >= len(values):
+                raise RepositoryError("SQL bind count exceeds the supplied parameter count.")
+            value = values[value_index]
+            value_index += 1
+            if value is None:
+                output.append("NULL")
+            else:
+                output.append(marker)
+                bound.append(value)
+            index += len(marker)
+            continue
+        output.append(char)
+        index += 1
+    if value_index != len(values):
+        raise RepositoryError("Supplied parameter count exceeds the SQL bind count.")
+    return "".join(output), bound
+
+
 def _affected_rows(rows: list[object]) -> int:
     if not rows:
         return 0
@@ -417,8 +472,13 @@ class SnowparkExecutor(SqlExecutor):
         for start in range(0, len(values), batch_size):
             batch = values[start : start + batch_size]
             separator = ", " if values_match else " UNION ALL "
-            statement = prefix + ("" if values_match else " ") + separator.join([group] * len(batch)) + suffix
-            parameters = [value for row in batch for value in row]
+            groups: list[str] = []
+            parameters: list[object] = []
+            for row in batch:
+                null_safe_group, bound = _literalize_null_bindings(group, row)
+                groups.append(null_safe_group)
+                parameters.extend(bound)
+            statement = prefix + ("" if values_match else " ") + separator.join(groups) + suffix
             affected = self.execute(statement, parameters)
             total += len(batch) if affected < 0 else affected
         return total
