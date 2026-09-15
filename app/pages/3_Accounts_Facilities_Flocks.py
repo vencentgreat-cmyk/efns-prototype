@@ -7,10 +7,8 @@ import streamlit as st
 
 from app.auth import require_operational_page
 from app.navigation import (
-    current_page_url,
     format_timestamp,
     list_command_bar,
-    module_url,
     open_view,
     read_record_view,
     record_command_bar,
@@ -70,14 +68,23 @@ accounts = repo.get_accounts()
 
 if view.name == "list":
     page_header("Active Accounts", "Search and maintain organization, registration, contact, address and role records.", "ACCOUNT MANAGEMENT")
+    warning = st.session_state.pop("account_list_warning", None)
+    if warning:
+        st.warning(warning)
 
     selected_index = selected_row_index("account_list_grid")
     selected_id = None
     prior_rows = st.session_state.get("account_list_row_ids", [])
     if selected_index is not None and selected_index < len(prior_rows):
         selected_id = prior_rows[selected_index]
+    if selected_id:
+        st.session_state["account_selected_id"] = selected_id
+    else:
+        st.session_state.pop("account_selected_id", None)
 
     action = list_command_bar("account_list", selected=bool(selected_id))
+    if action == "view" and selected_id:
+        open_view("detail", selected_id)
     if action == "new":
         open_view("new")
     if action == "refresh":
@@ -126,11 +133,10 @@ if view.name == "list":
         st.info("No Accounts match the current filters.")
     else:
         display = filtered.copy().reset_index(drop=True)
-        display["ACCOUNT_LINK"] = display.apply(lambda row: current_page_url(row["ACCOUNT_ID"], row["ORGANIZATION_NAME"]), axis=1)
         st.session_state.account_list_row_ids = display["ACCOUNT_ID"].tolist()
-        st.caption(f"{len(display):,} Account(s) · Select a row to enable Delete, or open the blue Account Name.")
+        st.caption(f"{len(display):,} Account(s)")
         st.dataframe(
-            display[["ACCOUNT_LINK", "REGISTRATION_NUMBER", "CITY", "PROVINCE", "POSTAL_CODE", "CONTACT_PHONE", "CONTACT_EMAIL", "STATUS", "CREATED_AT"]],
+            display[["ORGANIZATION_NAME", "REGISTRATION_NUMBER", "CITY", "PROVINCE", "POSTAL_CODE", "CONTACT_PHONE", "CONTACT_EMAIL", "STATUS", "CREATED_AT"]],
             width="stretch",
             height=540,
             hide_index=True,
@@ -138,7 +144,7 @@ if view.name == "list":
             selection_mode="single-row",
             key="account_list_grid",
             column_config={
-                "ACCOUNT_LINK": st.column_config.LinkColumn("Account Name", display_text=r".*#(.*)$", width="large"),
+                "ORGANIZATION_NAME": st.column_config.TextColumn("Account Name", width="large"),
                 "REGISTRATION_NUMBER": "Registration Number",
                 "CONTACT_PHONE": "Main Phone",
                 "CONTACT_EMAIL": "Email",
@@ -149,10 +155,9 @@ if view.name == "list":
 else:
     current = repo.get_account(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
-        st.error("The requested Account could not be found.")
-        if st.button("Back to Accounts", icon=":material/arrow_back:"):
-            open_view("list")
-        st.stop()
+        st.session_state["account_list_warning"] = "The selected Account no longer exists. The list has been refreshed."
+        st.session_state.pop("account_selected_id", None)
+        open_view("list")
 
     is_form = view.name in {"new", "edit"}
     title = "New Account" if view.name == "new" else current["ORGANIZATION_NAME"]
@@ -160,6 +165,9 @@ else:
     page_header(title, subtitle, "ACCOUNT RECORD")
     action = record_command_bar("account_record", view.name)
     if action in {"back", "cancel"}:
+        if action == "back":
+            st.session_state.pop("account_selected_id", None)
+            st.session_state.pop("account_list_grid", None)
         open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "edit":
         clear_widget_prefix("account_form_")
@@ -238,9 +246,9 @@ else:
                     st.info(f"No related {heading}.")
                 else:
                     related_display = frame.copy()
-                    related_display["RECORD_LINK"] = related_display.apply(lambda row: module_url(slug, row[id_column], row.get(label_column) or row[id_column]), axis=1)
-                    columns = ["RECORD_LINK", *[column for column in frame.columns if column not in {id_column, "CREATED_AT", "UPDATED_AT"}][:5]]
-                    st.dataframe(related_display[columns], width="stretch", hide_index=True, column_config={"RECORD_LINK": st.column_config.LinkColumn("Record", display_text=r".*#(.*)$")})
+                    related_display["RECORD"] = related_display.apply(lambda row: row.get(label_column) or row[id_column], axis=1)
+                    columns = ["RECORD", *[column for column in frame.columns if column not in {id_column, "CREATED_AT", "UPDATED_AT"}][:5]]
+                    st.dataframe(related_display[columns], width="stretch", hide_index=True)
             production = repo.get_production_records()
             if "PRODUCER_ACCOUNT_ID" in production:
                 production = production[production["PRODUCER_ACCOUNT_ID"] == view.record_id]

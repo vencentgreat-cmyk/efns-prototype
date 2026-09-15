@@ -58,6 +58,10 @@ class MockRepository(BaseRepository):
         self._size_breakdown = data["size_breakdown"].copy()
         self._import_batches: list[dict] = []
         self._raw_rows: list[dict] = []
+        self._migration_batches: list[dict] = []
+        self._migration_files: list[dict] = []
+        self._migration_raw_rows: list[dict] = []
+        self._migration_id_map: list[dict] = []
         # Link production to a synthetic import batch
         self._ensure_default_batch()
 
@@ -537,6 +541,110 @@ class MockRepository(BaseRepository):
     def get_raw_rows(self, import_id: str) -> pd.DataFrame:
         rows = [row for row in self._raw_rows if row["IMPORT_ID"] == import_id]
         return pd.DataFrame(rows)
+
+    def find_migration_by_hash(self, package_hash: str) -> Optional[dict]:
+        return next((dict(row) for row in self._migration_batches if row.get("PACKAGE_HASH") == package_hash), None)
+
+    def get_migration_batches(self) -> pd.DataFrame:
+        return pd.DataFrame(self._migration_batches)
+
+    def get_migration_raw_rows(self, batch_id: str) -> pd.DataFrame:
+        return pd.DataFrame([dict(row) for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id])
+
+    def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:
+        from data.migration import migration_stage_path
+        del content
+        return migration_stage_path(batch_id, filename)
+
+    def prepare_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:
+        package_hash = batch.get("PACKAGE_HASH")
+        if package_hash and self.find_migration_by_hash(package_hash):
+            raise ValueError("This exact migration package has already been prepared.")
+        batch_id = batch["MIGRATION_BATCH_ID"]
+        now = dt.datetime.now(dt.timezone.utc)
+        stored = {**batch, "STATUS": batch.get("STATUS", "READY"), "CREATED_AT": now, "UPDATED_AT": now}
+        self._migration_batches.append(stored)
+        for file in files:
+            self._migration_files.append({**{k: v for k, v in file.items() if k != "CONTENT"}, "MIGRATION_BATCH_ID": batch_id})
+        for row in raw_rows:
+            item = {**row, "MIGRATION_BATCH_ID": batch_id, "CREATED_AT": now, "UPDATED_AT": now}
+            self._migration_raw_rows.append(item)
+            if item.get("VALIDATION_STATUS") == "READY" and item.get("TARGET_ID"):
+                self._migration_id_map.append({
+                    "MIGRATION_BATCH_ID": batch_id, "SOURCE_ENTITY": item["SOURCE_ENTITY"],
+                    "SOURCE_ID": item.get("SOURCE_ID"), "TARGET_ID": item["TARGET_ID"], "STATUS": "READY",
+                })
+        return batch_id
+
+    def commit_migration_batch(self, batch_id: str) -> dict:
+        batch = next((row for row in self._migration_batches if row["MIGRATION_BATCH_ID"] == batch_id), None)
+        if not batch:
+            raise ValueError("Migration batch was not found.")
+        if batch.get("STATUS") == "COMMITTED":
+            return {"batch_id": batch_id, "counts": dict(batch.get("COMMITTED_COUNTS", {})), "idempotent": True}
+        attributes = ["_accounts", "_facilities", "_facility_details", "_quota_registrations", "_flocks", "_flock_transactions", "_quota_transactions", "_salmonella_tests", "_production"]
+        snapshots = {name: getattr(self, name).copy(deep=True) for name in attributes}
+        import_snapshot = [dict(row) for row in self._import_batches]
+        methods = {
+            "ACCOUNT": ("ACCOUNT_ID", self.upsert_account), "FACILITY": ("FACILITY_ID", self.upsert_facility),
+            "FACILITY_DETAIL": ("FACILITY_DETAIL_ID", self.upsert_facility_detail),
+            "QUOTA_REGISTRATION": ("QUOTA_ID", self.upsert_quota_registration), "FLOCK": ("FLOCK_ID", self.upsert_flock),
+            "FLOCK_TRANSACTION": ("FLOCK_TRANSACTION_ID", self.upsert_flock_transaction),
+            "QUOTA_TRANSACTION": ("QUOTA_TRANSACTION_ID", self.upsert_quota_transaction),
+            "SALMONELLA_TEST": ("SALMONELLA_TEST_ID", self.upsert_salmonella_test),
+        }
+        counts = {}
+        try:
+            from data.migration import load_mapping
+            rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id and row["VALIDATION_STATUS"] == "READY"]
+            for entity in load_mapping()["entity_order"]:
+                records = [dict(row["NORMALIZED_DATA"]) for row in rows if row["SOURCE_ENTITY"] == entity]
+                if entity == "PRODUCTION_RECORD":
+                    if not any(item.get("IMPORT_ID") == batch_id for item in self._import_batches):
+                        self.create_import_batch({"IMPORT_ID": batch_id, "FILENAME": "Synthetic EIMS migration", "SOURCE": "EIMS_MIGRATION", "STATUS": "Validated"})
+                    existing = set(self._production.get("PRODUCTION_ID", pd.Series(dtype=str)).astype(str))
+                    pending = [record for record in records if str(record["PRODUCTION_ID"]) not in existing]
+                    counts[entity] = self.insert_production_records(pd.DataFrame(pending), batch_id) if pending else 0
+                else:
+                    key, method = methods[entity]
+                    attribute = attributes[list(methods).index(entity)]
+                    existing = set(getattr(self, attribute)[key].astype(str))
+                    counts[entity] = 0
+                    for record in records:
+                        if str(record[key]) not in existing:
+                            method(record); counts[entity] += 1
+            batch["STATUS"] = "COMMITTED"; batch["COMMITTED_COUNTS"] = counts; batch["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
+            for row in self._migration_id_map:
+                if row["MIGRATION_BATCH_ID"] == batch_id: row["STATUS"] = "COMMITTED"
+            return {"batch_id": batch_id, "counts": counts, "idempotent": False}
+        except Exception:
+            for name, frame in snapshots.items(): setattr(self, name, frame)
+            self._import_batches = import_snapshot
+            batch["STATUS"] = "FAILED"; batch["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
+            raise
+
+    def cleanup_synthetic_migration(self, batch_id: str) -> bool:
+        if not str(batch_id).startswith("DEV_MIGRATION_"):
+            raise ValueError("Cleanup is restricted to DEV_MIGRATION_ batches.")
+        maps = [row for row in self._migration_id_map if row["MIGRATION_BATCH_ID"] == batch_id]
+        targets = {}
+        for row in maps: targets.setdefault(row["SOURCE_ENTITY"], set()).add(row["TARGET_ID"])
+        frame_map = {
+            "ACCOUNT": ("_accounts", "ACCOUNT_ID"), "FACILITY": ("_facilities", "FACILITY_ID"),
+            "FACILITY_DETAIL": ("_facility_details", "FACILITY_DETAIL_ID"), "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
+            "FLOCK": ("_flocks", "FLOCK_ID"), "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
+            "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"), "SALMONELLA_TEST": ("_salmonella_tests", "SALMONELLA_TEST_ID"),
+            "PRODUCTION_RECORD": ("_production", "PRODUCTION_ID"),
+        }
+        for entity in reversed(list(frame_map)):
+            attribute, key = frame_map[entity]; frame = getattr(self, attribute)
+            if key in frame: setattr(self, attribute, frame[~frame[key].isin(targets.get(entity, set()))].copy())
+        self._import_batches = [row for row in self._import_batches if row.get("IMPORT_ID") != batch_id]
+        self._migration_batches = [row for row in self._migration_batches if row["MIGRATION_BATCH_ID"] != batch_id]
+        self._migration_files = [row for row in self._migration_files if row["MIGRATION_BATCH_ID"] != batch_id]
+        self._migration_raw_rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] != batch_id]
+        self._migration_id_map = [row for row in self._migration_id_map if row["MIGRATION_BATCH_ID"] != batch_id]
+        return True
 
     def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:
         """Insert production records. Returns count inserted."""

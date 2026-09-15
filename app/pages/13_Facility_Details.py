@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import current_page_url, ensure_record_form_state, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
+from app.navigation import ensure_record_form_state, format_timestamp, list_command_bar, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column, view_parameter
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.repositories import get_repository
 from data.repositories.base import RepositoryError
@@ -40,6 +40,7 @@ if view.name == "list":
     row_ids = st.session_state.get("facility_detail_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("facility_detail_list", selected=bool(selected_id))
+    if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "new": open_view("new")
     if action == "refresh": st.rerun()
     if action == "delete" and selected_id: st.session_state.facility_detail_delete_pending = selected_id
@@ -74,11 +75,8 @@ if view.name == "list":
         st.info("No Facility Details match the current filters.")
     else:
         display = display.reset_index(drop=True)
-        display["DETAIL_LINK"] = display.apply(lambda row: current_page_url(row["FACILITY_DETAIL_ID"], row["DETAIL_NAME"]), axis=1)
-        display["FACILITY_LINK"] = display.apply(lambda row: module_url("Facilities", row["FACILITY_ID"], row["FACILITY_NAME"]), axis=1)
-        display["ACCOUNT_LINK"] = display.apply(lambda row: module_url("Accounts_&_Facilities", row["ACCOUNT_ID"], row["ACCOUNT_NAME"]), axis=1)
         st.session_state.facility_detail_list_row_ids = display["FACILITY_DETAIL_ID"].tolist()
-        st.dataframe(display[["DETAIL_LINK", "FACILITY_LINK", "ACCOUNT_LINK", "DETAIL_TYPE", "STATUS", "COMMENTS", "CREATED_AT"]], width="stretch", height=520, hide_index=True, on_select="rerun", selection_mode="single-row", key="facility_detail_list_grid", column_config={"DETAIL_LINK": st.column_config.LinkColumn("Facility Detail", display_text=r".*#(.*)$"), "FACILITY_LINK": st.column_config.LinkColumn("Facility", display_text=r".*#(.*)$"), "ACCOUNT_LINK": st.column_config.LinkColumn("Account", display_text=r".*#(.*)$"), "CREATED_AT": timestamp_column("Created On")})
+        st.dataframe(display[["DETAIL_NAME", "FACILITY_NAME", "ACCOUNT_NAME", "DETAIL_TYPE", "STATUS", "COMMENTS", "CREATED_AT"]], width="stretch", height=520, hide_index=True, on_select="rerun", selection_mode="single-row", key="facility_detail_list_grid", column_config={"DETAIL_NAME": "Facility Detail", "FACILITY_NAME": "Facility", "ACCOUNT_NAME": "Account", "CREATED_AT": timestamp_column("Created On")})
 else:
     current = repo.get_facility_detail(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -105,8 +103,8 @@ else:
                 left.markdown(f"**Detail Name**  \n{current.get('DETAIL_NAME') or '—'}")
                 left.markdown(f"**Detail Type**  \n{current.get('DETAIL_TYPE') or '—'}")
                 left.markdown(f"**Status**  \n{current.get('STATUS') or '—'}")
-                right.markdown(f"**Facility**  \n[{facility_names.get(facility_id, 'Unknown')}]({module_url('Facilities', facility_id, facility_names.get(facility_id, 'Unknown'))})")
-                if account_id: right.markdown(f"**Account**  \n[{account_names.get(account_id, 'Unknown')}]({module_url('Accounts_&_Facilities', account_id, account_names.get(account_id, 'Unknown'))})")
+                right.markdown(f"**Facility**  \n{facility_names.get(facility_id, 'Unknown')}")
+                if account_id: right.markdown(f"**Account**  \n{account_names.get(account_id, 'Unknown')}")
                 right.markdown(f"**Comments**  \n{current.get('COMMENTS') or 'No comments.'}")
         with related:
             section_intro("Flocks")
@@ -114,8 +112,7 @@ else:
             if "FACILITY_DETAIL_ID" in flocks: flocks = flocks[flocks["FACILITY_DETAIL_ID"] == view.record_id]
             if flocks.empty: st.info("No Flocks reference this Facility Detail.")
             else:
-                flocks = flocks.copy(); flocks["FLOCK_LINK"] = flocks.apply(lambda row: module_url("Flocks", row["FLOCK_ID"], row["FLOCK_NUMBER"]), axis=1)
-                st.dataframe(flocks[["FLOCK_LINK", "PERMIT_NUMBER", "BIRD_COUNT", "STATUS"]], width="stretch", hide_index=True, column_config={"FLOCK_LINK": st.column_config.LinkColumn("Flock", display_text=r".*#(.*)$")})
+                st.dataframe(flocks[["FLOCK_NUMBER", "PERMIT_NUMBER", "BIRD_COUNT", "STATUS"]], width="stretch", hide_index=True, column_config={"FLOCK_NUMBER": "Flock"})
     else:
         current = current or {}
         if facilities.empty:
@@ -123,7 +120,7 @@ else:
         ensure_record_form_state("facility_detail_form_", view.record_id)
         expected_key = f"facility_detail_form_expected_{view.record_id}"
         if view.name == "edit": st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
-        requested_facility = st.query_params.get("facility_id")
+        requested_facility = view_parameter("facility_id")
         facility_id = current.get("FACILITY_ID") or (str(requested_facility) if requested_facility in set(facility_options.values()) else None)
         with st.container(border=True):
             left, right = st.columns(2)

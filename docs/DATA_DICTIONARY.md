@@ -17,9 +17,15 @@
 | Import Raw Row | `RAW_ROW_ID` | import, source row, RAW VARIANT | Import Batch | validation/match state, messages, matched IDs, audit |
 | Production Record | `PRODUCTION_ID` | import, source type | Import; nullable Account/Facility/Flock | normalized EIMS fields, period, match audit |
 | Production Size Breakdown | `SIZE_BREAKDOWN_ID` | production, size band | Production Record | quantity |
+| Migration Batch | `MIGRATION_BATCH_ID` | package hash, mapping version, workflow status, counts | — | operator, commit time |
+| Migration File | `MIGRATION_FILE_ID` | batch, filename, entity, SHA-256 | Migration Batch | size, row count, internal-stage path |
+| Migration Raw Row | `MIGRATION_RAW_ROW_ID` | batch, file, entity, source row, raw JSON, validation status | Migration Batch | source/target ID, normalized JSON, match state and messages |
+| Migration ID Map | `MIGRATION_ID_MAP_ID` | batch, entity, source ID, target ID | Migration Batch | commit status |
 
 IDs are provisional `VARCHAR(36)` values. Quantities/counts are Snowflake `NUMBER`, business dates are `DATE`, and operational audit values are canonical-UTC `TIMESTAMP_NTZ`. The Snowflake repository binds missing optional dates as SQL `NULL` and typed `datetime` values as `date`; it never persists textual `None`, `NaT`, or `null` sentinels. Exact column definitions and constraints are in `sql/02_core_tables.sql` and `sql/03_production_tables.sql`.
 
 `MATCH_STATUS` values are `UNMATCHED`, `UNIQUE_CANDIDATE`, `NO_CANDIDATE`, `MULTIPLE_CANDIDATES`, and `CONFIRMED`. EIMS imports start `UNMATCHED`; no relationship ID is invented.
 
 Dataverse names, choices, requiredness, cardinalities, alternate keys, deletion behavior, sample fields, and identity mapping remain provisional. RAW, CORE, history and reporting sources use standard Snowflake tables. Hybrid Tables may be evaluated after workload and constraint testing; this design does not depend on them.
+
+Historical migration field rules live in `config/eims_migration_mapping.json` and are explicitly provisional. They are separate from the recurring Production Import contract and must be replaced after authoritative EIMS metadata is received.

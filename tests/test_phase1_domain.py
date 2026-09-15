@@ -13,7 +13,12 @@ from data.constants import (
     SOURCE_TYPE_EIMS_IMPORT,
     SOURCE_TYPE_SYNTHETIC,
 )
-from data.importing import build_raw_rows, normalize_eims_records, read_eims_workbook
+from data.importing import (
+    build_raw_rows,
+    normalize_eims_records,
+    read_eims_workbook,
+    validate_eims_records,
+)
 from data.repositories.mock import MockRepository
 
 
@@ -72,6 +77,22 @@ def test_imported_fields_survive_repository_round_trip():
     assert pd.isna(imported["FACILITY_ID"])
     assert pd.isna(imported["PRODUCER_ACCOUNT_ID"])
     assert pd.isna(imported["GRADER_ACCOUNT_ID"])
+
+
+def test_import_numeric_normalization_accepts_commas_and_preserves_invalid_text():
+    source = sanitized_eims_source()
+    source["Total"] = source["Total"].astype(object)
+    source.loc[0, "Total"] = "1,234.50"
+    normalized = normalize_eims_records(source)
+    assert str(normalized.iloc[0]["TOTAL"]) == "1234.50"
+    errors, _ = validate_eims_records(source)
+    assert not errors
+
+    source.loc[0, "Total"] = "not-a-number"
+    normalized = normalize_eims_records(source)
+    assert normalized.iloc[0]["TOTAL"] == "not-a-number"
+    errors, _ = validate_eims_records(source)
+    assert any("Total must contain a valid number" in error for error in errors)
 
 
 def test_account_registration_lookup_is_unique_and_case_insensitive():

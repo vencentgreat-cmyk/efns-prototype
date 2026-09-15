@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, module_view_url, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
+from app.navigation import format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.repositories.base import RepositoryError
 from data.constants import FACILITY_STATUSES
@@ -47,6 +47,7 @@ if view.name == "list":
     row_ids = st.session_state.get("facility_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("facility_list", selected=bool(selected_id))
+    if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "new": open_view("new")
     if action == "refresh": clear_widget_prefix("facility_filter_"); st.rerun()
     if action == "delete" and selected_id: st.session_state.facility_delete_pending = selected_id
@@ -76,10 +77,8 @@ if view.name == "list":
         st.info("No Facilities match the current filters.")
     else:
         display = display.reset_index(drop=True)
-        display["FACILITY_LINK"] = display.apply(lambda row: current_page_url(row["FACILITY_ID"], row["FACILITY_NAME"]), axis=1)
-        display["ACCOUNT_LINK"] = display.apply(lambda row: module_url("Accounts_&_Facilities", row["ACCOUNT_ID"], row["ACCOUNT_NAME"]), axis=1)
         st.session_state.facility_list_row_ids = display["FACILITY_ID"].tolist()
-        st.dataframe(display[["FACILITY_LINK", "ACCOUNT_LINK", "FACILITY_TYPE", "STATUS", "ACTIVATION_DATE", "CLOSURE_DATE", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="facility_list_grid", column_config={"FACILITY_LINK": st.column_config.LinkColumn("Facility Name", display_text=r".*#(.*)$"), "ACCOUNT_LINK": st.column_config.LinkColumn("Account", display_text=r".*#(.*)$"), "CREATED_AT": timestamp_column("Created On")})
+        st.dataframe(display[["FACILITY_NAME", "ACCOUNT_NAME", "FACILITY_TYPE", "STATUS", "ACTIVATION_DATE", "CLOSURE_DATE", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="facility_list_grid", column_config={"FACILITY_NAME": "Facility Name", "ACCOUNT_NAME": "Account", "CREATED_AT": timestamp_column("Created On")})
 else:
     current = get_facility(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -107,7 +106,8 @@ else:
                 right.markdown(f"**Activation Date**  \n{current.get('ACTIVATION_DATE') or '—'}")
                 right.markdown(f"**Closure Date**  \n{current.get('CLOSURE_DATE') or '—'}")
         with related:
-            st.link_button("New Facility Detail", module_view_url("Facility_Details", "new", facility_id=view.record_id), icon=":material/add:", type="primary")
+            if st.button("New Facility Detail", icon=":material/add:", type="primary"):
+                open_module("Facility_Details", "new", facility_id=view.record_id)
             for heading, frame, key, label, slug in (
                 ("Facility Details", repo.get_facility_details(view.record_id), "FACILITY_DETAIL_ID", "DETAIL_NAME", "Facility_Details"),
                 ("Flocks", repo.get_flocks(facility_id=view.record_id), "FLOCK_ID", "FLOCK_NUMBER", "Flocks"),
@@ -116,9 +116,9 @@ else:
                 section_intro(heading)
                 if frame.empty: st.info(f"No related {heading}.")
                 else:
-                    frame = frame.copy(); frame["RECORD_LINK"] = frame.apply(lambda row: module_url(slug, row[key], row.get(label) or row[key]), axis=1)
-                    columns = [column for column in frame.columns if column not in {key, "RECORD_LINK", "CREATED_AT", "UPDATED_AT"}][:5]
-                    st.dataframe(frame[["RECORD_LINK", *columns]], width="stretch", hide_index=True, column_config={"RECORD_LINK": st.column_config.LinkColumn("Record", display_text=r".*#(.*)$")})
+                    frame = frame.copy(); frame["RECORD"] = frame.apply(lambda row: row.get(label) or row[key], axis=1)
+                    columns = [column for column in frame.columns if column not in {key, "RECORD", "CREATED_AT", "UPDATED_AT"}][:5]
+                    st.dataframe(frame[["RECORD", *columns]], width="stretch", hide_index=True)
     else:
         current = current or {}
         expected_key = f"facility_form_expected_{view.record_id}"

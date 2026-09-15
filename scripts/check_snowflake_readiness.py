@@ -22,7 +22,10 @@ def runtime_python_files():
 
 def check() -> list[str]:
     errors: list[str] = []
-    required = ("snowflake.yml", "environment.yml", "streamlit_app.py")
+    required = (
+        "snowflake.yml", "environment.yml", "streamlit_app.py",
+        "config/eims_migration_mapping.json", "sql/11_eims_migration_foundation.sql",
+    )
     for name in required:
         if not (ROOT / name).is_file():
             errors.append(f"Missing required deployment file: {name}")
@@ -43,6 +46,28 @@ def check() -> list[str]:
     for forbidden in ("ROOT_LOCATION", ".env", ".local", "tests/", "secrets.toml"):
         if forbidden in project:
             errors.append(f"snowflake.yml must not deploy {forbidden}.")
+    if "config/eims_migration_mapping.json" not in project:
+        errors.append("The provisional EIMS mapping must be included in the application artifact.")
+    if "sample_data/" in project or "fake_eims_export" in project:
+        errors.append("Generated EIMS sample packages must not be deployed with Streamlit.")
+
+    migration_sql = (ROOT / "sql" / "11_eims_migration_foundation.sql").read_text(encoding="utf-8").upper()
+    if "CREATE STAGE IF NOT EXISTS EFNS_DEV.RAW.EIMS_MIGRATION_FILES" not in migration_sql:
+        errors.append("The named internal EIMS migration stage is missing.")
+    if "SNOWFLAKE_SSE" not in migration_sql:
+        errors.append("The EIMS migration stage must declare server-side encryption.")
+    if "FUTURE" in migration_sql or "ALL TABLES" in migration_sql:
+        errors.append("Migration SQL must not grant broad or future object privileges.")
+    if "GRANT READ, WRITE ON STAGE EFNS_DEV.RAW.EIMS_MIGRATION_FILES TO ROLE EFNS_DEV_APP_OWNER" not in migration_sql:
+        errors.append("Only the app owner must receive required migration-stage privileges.")
+    if "USE ROLE SYSADMIN" not in migration_sql or "USE ROLE SECURITYADMIN" not in migration_sql:
+        errors.append("Migration object creation and exact grants must use their owning administrative roles.")
+    if "CREATE OR REPLACE PROCEDURE EFNS_DEV.RAW.CLEANUP_SYNTHETIC_MIGRATION" not in migration_sql:
+        errors.append("Synthetic cleanup must use its batch-restricted owner-rights procedure.")
+    if "GRANT USAGE ON PROCEDURE EFNS_DEV.RAW.CLEANUP_SYNTHETIC_MIGRATION(VARCHAR)" not in migration_sql:
+        errors.append("The app owner needs only USAGE on the guarded cleanup procedure.")
+    if re.search(r"GRANT\s+DELETE\s+ON\s+TABLE\s+EFNS_DEV\.(?:CORE\.PRODUCTION_RECORD|RAW\.IMPORT_BATCH)\s+TO\s+ROLE\s+EFNS_DEV_APP_OWNER", migration_sql):
+        errors.append("The app owner must not receive broad direct DELETE for migration cleanup.")
 
     post_deploy_path = ROOT / "sql" / "08_post_deploy_grants.sql"
     if not post_deploy_path.is_file():
@@ -113,6 +138,16 @@ def check() -> list[str]:
         errors.append("SnowflakeRepository must use the reviewed server-side UTC expression.")
     if "DATE_FIELDS" not in repository or "normalize_date_bind" not in repository:
         errors.append("SnowflakeRepository must normalize typed DATE bind values at its boundary.")
+    if "PRODUCTION_INTEGER_COLUMNS" not in repository or "PRODUCTION_DECIMAL_COLUMNS" not in repository:
+        errors.append("SnowflakeRepository must declare the typed PRODUCTION_RECORD numeric contract.")
+    if "normalize_numeric_bind" not in repository or "_NULL_NUMERIC_TEXT" not in repository:
+        errors.append("SnowflakeRepository must normalize missing numeric bind values at its boundary.")
+
+    connection = (ROOT / "data" / "connection.py").read_text(encoding="utf-8")
+    if "_literalize_null_bindings" not in connection:
+        errors.append("Snowpark bulk writes must render Python None as SQL NULL.")
+    if "parameters.extend(bound)" not in connection:
+        errors.append("Snowpark bulk writes must keep every non-NULL value parameter-bound.")
 
     synthetic_seed = (ROOT / "sql" / "09_dev_synthetic_seed.sql").read_text(encoding="utf-8")
     if "TO_TIMESTAMP_NTZ('2026-01-01 00:00:00')" in synthetic_seed:
@@ -123,6 +158,20 @@ def check() -> list[str]:
     navigation = (ROOT / "app" / "navigation.py").read_text(encoding="utf-8")
     if 'DISPLAY_TIMEZONE = "America/Halifax"' not in navigation:
         errors.append("The UI must explicitly display persisted timestamps in America/Halifax.")
+    operational_pages = (
+        "3_Accounts_Facilities_Flocks.py", "5_Flocks.py", "6_Flock_Transactions.py",
+        "7_Quota_Registrations.py", "8_Quota_Transactions.py", "9_Salmonella_Tests.py",
+        "11_Facilities.py", "13_Facility_Details.py",
+    )
+    page_source = "\n".join(
+        (ROOT / "app" / "pages" / name).read_text(encoding="utf-8")
+        for name in operational_pages
+    )
+    if any(marker in page_source for marker in (
+        "LinkColumn", "current_page_url", "module_url", "module_view_url",
+        "snowflake.app", "href=",
+    )):
+        errors.append("Operational record pages must use registered-page session navigation, not browser links.")
 
     for path in runtime_python_files():
         try:

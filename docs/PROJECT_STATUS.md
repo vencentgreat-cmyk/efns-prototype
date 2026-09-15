@@ -2,9 +2,10 @@
 
 ## Implemented
 
-- Streamlit workspaces for Accounts, Facilities, Facility Details, Flocks, Flock Transactions, Quota Registrations, Quota Transactions, Salmonella Tests and reporting. Operational entity pages use record-based list/new/detail/edit navigation; Quota related records support cross-module links and new-transaction prefill.
+- Streamlit workspaces for Accounts, Facilities, Facility Details, Flocks, Flock Transactions, Quota Registrations, Quota Transactions, Salmonella Tests and reporting. Operational entity pages use record-based list/new/detail/edit navigation through page-local session state and registered-page actions; Quota related records support cross-module actions and new-transaction prefill without generated browser URLs.
 - Full Flock validation at the repository boundary; the dedicated Flocks page is the only Flock editor.
 - EIMS validation, SHA-256 duplicate detection, RAW preservation and atomic RAW/normalized import.
+- A separate historical EIMS migration workspace with deterministic synthetic export generation, cross-file validation, encrypted-stage paths, RAW traceability, source-to-target IDs, dependency-ordered atomic CORE writes, reconciliation, idempotent retries, and batch-scoped synthetic cleanup.
 - Mock persistence and a parameterized Snowflake adapter for CRUD, import writes, filtered reads, commit and rollback.
 - A shared, lazy `SqlExecutor` boundary with Streamlit connection, active Snowpark session and connector runtimes. Snowpark uses public session APIs and bounded multi-row inserts.
 - Optimistic locking for Account, Facility, Facility Detail, Flock, Flock Transaction, Quota Registration, Quota Transaction and Salmonella Test upserts. Both repositories consume `EXPECTED_UPDATED_AT`; stale edits raise `ConcurrencyError`.
@@ -29,7 +30,7 @@ Mock mode remains the default. Connection/executor behavior is available for off
 
 - **Completed in code:** executor abstraction, lazy runtime choice, parameter binding, transaction boundary, bulk insert strategy, sanitized errors, configuration templates, optimistic locking, prototype authentication and application authorization.
 - **Offline verification:** syntax/import checks and executor/repository tests with fake connector and Snowpark sessions.
-- **Needs Snowflake DEV:** `st.user` email population, package resolution, grants,
+- **Needs Snowflake DEV:** migration stage upload, `st.user` email population, package resolution, grants,
   DML affected-row shapes, transaction behavior, query result casing and bulk limits.
 - **Needs EIMS metadata:** final identifiers, types, required fields, relationships, choice values and business rules.
 

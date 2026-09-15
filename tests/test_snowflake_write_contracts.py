@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import datetime as dt
+from decimal import Decimal
 from pathlib import Path
 import re
 
@@ -19,10 +20,13 @@ from data.repositories.snowflake import (
     DATE_FIELDS,
     MODEL,
     PRODUCTION_COLUMNS,
+    PRODUCTION_DECIMAL_COLUMNS,
+    PRODUCTION_INTEGER_COLUMNS,
     RAW_ROW_COLUMNS,
     SnowflakeRepository,
     UTC_NOW_NTZ,
     normalize_date_bind,
+    normalize_numeric_bind,
 )
 from data.repositories.mock import MockRepository
 
@@ -144,6 +148,27 @@ def test_import_and_production_insert_columns_align_with_ddl():
     assert _ddl_columns("sql/03_production_tables.sql", "PRODUCTION_RECORD") == [
         "PRODUCTION_ID", "IMPORT_ID", *PRODUCTION_COLUMNS, "CREATED_AT", "UPDATED_AT"
     ]
+
+
+def test_production_numeric_contract_matches_ddl_integer_and_decimal_scales():
+    ddl = (ROOT / "sql/03_production_tables.sql").read_text(encoding="utf-8")
+    body = re.search(
+        r"CREATE TABLE IF NOT EXISTS EFNS_DEV\.CORE\.PRODUCTION_RECORD\s*\((.*?)\)\s*COMMENT",
+        ddl,
+        flags=re.DOTALL,
+    ).group(1)
+    types = {
+        name: (int(precision), int(scale))
+        for name, precision, scale in re.findall(
+            r"^\s+([A-Z0-9_]+)\s+NUMBER\((\d+),\s*(\d+)\)", body, flags=re.MULTILINE
+        )
+    }
+    assert {name for name, (_, scale) in types.items() if scale == 0} == set(
+        PRODUCTION_INTEGER_COLUMNS
+    )
+    assert {name for name, (_, scale) in types.items() if scale > 0} == set(
+        PRODUCTION_DECIMAL_COLUMNS
+    )
 
 
 @pytest.mark.parametrize("table", list(MODEL))
@@ -273,6 +298,94 @@ def test_import_write_parameter_order_and_server_timestamps():
     assert values["SOURCE_TYPE"] == "EIMS_IMPORT"
     assert values["MATCH_STATUS"] == "UNMATCHED"
     assert values["REPORTING_WEEK"] == 5
+
+
+@pytest.mark.parametrize("value", [None, pd.NA, pd.NaT, float("nan"), "", "None", "nan", "NaN", "null"])
+def test_missing_numeric_values_bind_as_python_none(value):
+    assert normalize_numeric_bind(value, "FLOCK_AGE", 14, integer=True) is None
+
+
+def test_numeric_strings_preserve_integer_and_decimal_semantics():
+    assert normalize_numeric_bind("1,234", "FLOCK_AGE", 14, integer=True) == 1234
+    assert normalize_numeric_bind("1,234.50", "TOTAL", 14, integer=False) == Decimal("1234.50")
+    with pytest.raises(RepositoryError, match="FLOCK_AGE.*source row 14"):
+        normalize_numeric_bind("not-a-number", "FLOCK_AGE", 14, integer=True)
+    with pytest.raises(RepositoryError, match="whole number.*source row 14"):
+        normalize_numeric_bind("12.5", "FLOCK_AGE", 14, integer=True)
+
+
+def test_production_rows_bind_in_exact_column_order_with_typed_numbers():
+    executor = RecordingExecutor()
+    repo = _repo(executor)
+    repo.insert_production_records([{
+        "PRODUCTION_ID": "production-1",
+        "SOURCE_ROW_NUMBER": "14",
+        "FLOCK_AGE": "None",
+        "NET_WEIGHT": float("nan"),
+        "TOTAL": "1,234.50",
+        "REPORTING_YEAR": 2026.0,
+        "REPORTING_WEEK": "5",
+        "SOURCE_TYPE": "EIMS_IMPORT",
+        "MATCH_STATUS": "UNMATCHED",
+    }], "import-1")
+    _, sql, rows = next(call for call in executor.calls if call[0] == "executemany")
+    columns = re.search(r"PRODUCTION_RECORD \((.*?)\) VALUES", sql).group(1).split(", ")[:-2]
+    assert columns == ["PRODUCTION_ID", "IMPORT_ID", *PRODUCTION_COLUMNS]
+    assert len(rows[0]) == sql.count("%s")
+    bound = dict(zip(columns, rows[0]))
+    assert bound["FLOCK_AGE"] is None
+    assert bound["NET_WEIGHT"] is None
+    assert bound["TOTAL"] == Decimal("1234.50")
+    assert bound["REPORTING_YEAR"] == 2026
+    assert bound["REPORTING_WEEK"] == 5
+    assert bound["SOURCE_ROW_NUMBER"] == 14
+
+
+def test_invalid_production_numeric_rolls_back_batch_and_raw_rows():
+    executor = RecordingExecutor()
+    repo = _repo(executor)
+    with pytest.raises(RepositoryError, match="FLOCK_AGE.*source row 27"):
+        repo.import_production_bundle(
+            {"FILENAME": "synthetic.xlsm", "FILE_HASH": "hash-1"},
+            [{"SOURCE_ROW_NUMBER": 27, "RAW_DATA": {"Flock Age": "bad"}}],
+            [{
+                "SOURCE_ROW_NUMBER": 27,
+                "FLOCK_AGE": "bad",
+                "SOURCE_TYPE": "EIMS_IMPORT",
+            }],
+        )
+    assert executor.commits == 0
+    assert executor.rollbacks == 1
+    assert any(call[0] == "execute" and "IMPORT_BATCH" in call[1] for call in executor.calls)
+    assert any(call[0] == "executemany" and "IMPORT_RAW_ROW" in call[1] for call in executor.calls)
+    assert not any(call[0] == "executemany" and "PRODUCTION_RECORD" in call[1] for call in executor.calls)
+
+
+def test_late_import_finalization_failure_rolls_back_every_prior_write():
+    class FinalizationFailureExecutor(RecordingExecutor):
+        def execute(self, sql, params=None):
+            self.calls.append(("execute", sql, tuple(params or ())))
+            if sql.startswith("UPDATE EFNS_DEV.RAW.IMPORT_BATCH"):
+                raise RepositoryError("safe finalization failure")
+            return self.affected
+
+    executor = FinalizationFailureExecutor()
+    repo = _repo(executor)
+    with pytest.raises(RepositoryError, match="safe finalization failure"):
+        repo.import_production_bundle(
+            {"FILENAME": "synthetic.xlsm", "FILE_HASH": "hash-late-failure"},
+            [{"SOURCE_ROW_NUMBER": 14, "RAW_DATA": {"synthetic": True}}],
+            [{
+                "PRODUCTION_ID": "DEV_VERIFY_PRODUCTION_ROLLBACK_1",
+                "SOURCE_ROW_NUMBER": 14,
+                "FLOCK_AGE": None,
+                "SOURCE_TYPE": "EIMS_IMPORT",
+                "MATCH_STATUS": "UNMATCHED",
+            }],
+        )
+    assert executor.commits == 0 and executor.rollbacks == 1
+    assert any(call[0] == "executemany" and "IMPORT_RAW_ROW" in call[1] for call in executor.calls)
+    assert any(call[0] == "executemany" and "PRODUCTION_RECORD" in call[1] for call in executor.calls)
 
 
 def test_persisted_ddl_and_seed_use_server_generated_utc_timestamps():

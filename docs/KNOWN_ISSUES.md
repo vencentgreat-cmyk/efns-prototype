@@ -13,6 +13,16 @@
 - Snowflake create/update/delete now handles known and unknown Snowpark affected-row results without treating an unconfirmed insert as successful. Query ID, operation, object, error code and SQLSTATE are exposed as sanitized correlation fields. Exact result shapes and multi-session optimistic locking still require validation in the real DEV account.
 - Streamlit named-connection, active warehouse session, connector SSO and key-pair paths are implemented but still require deployment-specific validation.
 - Snowpark bulk writes use bounded multi-row `VALUES` statements. Real DEV testing must establish safe batch sizes for actual row widths and warehouse limits.
+- Production NUMBER bindings now convert pandas missing values and textual null
+  sentinels to SQL `NULL`, preserve integer/decimal DDL semantics, accept valid
+  comma-grouped numbers, and reject invalid text before writing. Connector and
+  Snowpark behavior still requires a DEV import verification. Snowpark expanded
+  bulk writes now literalize only Python `None` as SQL `NULL`; all non-NULL
+  values remain qmark-bound to avoid the warehouse runtime's observed textual
+  `"None"` conversion.
+- Operational detail navigation now uses registered Streamlit pages and
+  page-local session state. Snowsight selection, Back, cross-module switching,
+  and stale-record recovery still require a deployed UI smoke test.
 - Quota and Facility Detail fields, choices and requiredness remain provisional pending EIMS metadata, although their list/new/detail/edit workflows are implemented.
 - Source profiling is advisory and processes all selected worksheets in application memory; authoritative types, keys and relationships require EIMS metadata confirmation.
 - Local audit events remain SQLite-only. Snowflake audit events use the actual viewer
@@ -25,3 +35,5 @@
   every current repository path supplies the server-side UTC expression.
 - Warehouse runtime limits individual frontend messages to 32 MB and uploads to
   200 MB. Current pages are not paginated for very large result sets.
+- Historical migration mappings, natural keys, choices and relationship rules are provisional. The generated package is safe synthetic test data; it does not prove compatibility with the pending EIMS metadata or export layouts.
+- Connector and warehouse-runtime uploads to the named migration stage, large-batch SQL size, deployed reconciliation, and batch-scoped cleanup still require EFNS DEV smoke testing.

@@ -146,6 +146,14 @@ profiles every worksheet, and suggests possible keys and relationship-shaped
 columns. Suggestions are advisory and contain no EIMS mappings. Downloads contain
 profile summaries and limited sample values rather than the complete source data.
 
+### Historical EIMS migration
+
+`scripts/generate_fake_eims_export.py` creates a deterministic, fully fictional
+clean package plus controlled rejected-row cases. The separate Migration Import
+workspace stages source files, preserves RAW JSON, validates the versioned
+provisional contract, and commits Ready records to CORE in dependency order.
+Generated samples are intentionally excluded from the Snowflake app artifact.
+
 ### Prototype authentication and authorization
 
 Every page requires an active `@nsegg.ca` identity. Local mode uses the SQLite
@@ -183,6 +191,14 @@ EIMS Workbook → Python Ingestion → RAW source rows (MockRepository)
                                REPORTING (Views, Report Builder)
                                        ↓
                                Streamlit Report / Export
+```
+
+Historical exports follow a separate path:
+
+```
+Uploaded package → encrypted internal stage → migration RAW rows → validation
+                 → Ready / Rejected → atomic dependency-ordered CORE commit
+                 → reconciliation and reporting
 ```
 
 ### Schema

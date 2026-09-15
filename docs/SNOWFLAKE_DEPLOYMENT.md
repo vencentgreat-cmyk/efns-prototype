@@ -51,6 +51,7 @@ in this repository.
    snow sql --connection efns-dev --filename sql/04_reporting_views.sql
    snow sql --connection efns-dev --filename sql/05_security_tables.sql
    snow sql --connection efns-dev --filename sql/06_least_privilege_grants.sql
+   snow sql --connection efns-dev --filename sql/11_eims_migration_foundation.sql
    ```
 
 4. Grant `EFNS_DEV_DEPLOYER` directly to the approved deployment user, then use
@@ -106,6 +107,23 @@ in this repository.
    role must both be present.
 9. Complete every item in `SNOWFLAKE_SMOKE_TEST.md` with synthetic data before
    allowing operational use.
+
+The migration foundation uses `SYSADMIN` to create the encrypted internal stage
+and four RAW migration-control tables because that role owns the schemas from
+`01_setup.sql`; it then uses `SECURITYADMIN` for exact object grants. The app
+owner receives migration-table writes, stage READ/WRITE, and only `USAGE` on an
+owner-rights cleanup procedure that rejects non-`DEV_MIGRATION_` batch IDs and
+deletes through that batch's ID map. It receives no new direct DELETE on
+production or import-batch tables.
+Ordinary account roles receive no direct stage or table access. Re-run it after
+review when the provisional migration tables change, before deploying an
+application revision that depends on them.
+
+The current DEV business tables are owned by `ACCOUNTADMIN`, so that role owns
+the fixed-body cleanup procedure as well. The application cannot submit SQL to
+the procedure and receives no owner role. A future clean environment should
+assign object ownership to a dedicated database-owner role; update the procedure
+owner at the same time after validating COPY GRANTS and rollback behavior.
 
 ## Authentication behavior
 

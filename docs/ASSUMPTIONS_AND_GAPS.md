@@ -72,12 +72,16 @@
 1. **MockRepository** — All data is in-memory and ephemeral. No persistence.
 2. **Synthetic data** — Generated from seeded random pools. Not representative of real patterns.
 3. **PRODUCTION-to-FLOCK provisional link** — Fabricated random assignment for report demo.
-4. **No authentication** — Not needed for v0.1 prototype.
-5. **Snowflake DEV integration pending** — the adapter now converts errors and rolls back transactions, but still needs real-account integration testing
-   for write operations.
+4. **Prototype identity** — Local SQLite and Snowflake viewer identity are implemented; organizational identity lifecycle remains pending.
+5. **Historical migration contract** — `config/eims_migration_mapping.json` is a replaceable intake contract for synthetic workflow testing. Its filenames, requiredness, choices, natural keys and relationships must be reconciled with the incoming EIMS metadata before real migration use.
+6. **Snowflake migration verification pending** — the stage, RAW control tables and transactional writer are offline-tested but still need EFNS DEV stage/upload/rollback validation.
 
 ## Mapping authority
 
 `DATAVERSE_TO_TARGET_MAPPING.csv` is the single authoritative provisional mapping
 artifact in this repository. Documentation may explain the mapping but must not
 duplicate it as a second field-by-field table.
+
+The JSON migration contract does not replace that target mapping. It describes
+the temporary incoming-file shape used to exercise the migration engine and is
+explicitly marked `provisional_pending_eims_metadata`.

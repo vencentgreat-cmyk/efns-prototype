@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import io
 import os
 import re
 import datetime as dt
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 import uuid
 
@@ -27,6 +29,20 @@ MODEL = {
     "SALMONELLA_TEST": ("SALMONELLA_TEST_ID", "FLOCK_ID ACCOUNT_ID PERMIT_NUMBER TESTING_DATE INSPECTOR NUMBER_OF_SAMPLES TEST_RESULT DATE_RESULT_SENT DATE_RECEIVED CASE_FILE_NUMBER INVOICE_NUMBER INVOICE_DATE COMMENTS"),
 }
 PRODUCTION_COLUMNS = "PRODUCER_ACCOUNT_ID GRADER_ACCOUNT_ID FACILITY_ID FLOCK_ID GRADER_NAME PRODUCER_NUMBER GRADER_NUMBER BARN_IDENTITY SOURCE_WEEK_CODE REPORTING_YEAR REPORTING_WEEK MARKETING_TYPE HOUSING_SYSTEM EGG_TYPE EGG_COLOUR FLOCK_AGE NET_WEIGHT NET_BOXES NET_PER_BOX JUMBO EXTRA_LARGE LARGE MEDIUM SMALL PEEWEE GRADE_B GRADE_C CRACKS NEST_RUN NEST_RUN_25_PLUS NEST_RUN_24_PLUS NEST_RUN_23_PLUS NEST_RUN_22_PLUS NEST_RUN_21_PLUS NEST_RUN_20_PLUS NEST_RUN_19_PLUS NEST_RUN_18_PLUS NEST_RUN_17_PLUS OTHER_LEVIABLE OTHER_NON_LEVIABLE FARM_GATE_SALES ON_FARM_CONSUMPTION SUBTOTAL REJECTS LEAKERS TOTAL TOTAL_RECEIVED REJECTED LOSS LEGACY_REJECT_LOSS_TOTAL TOTAL_ACCEPTED SOURCE_TYPE MATCH_STATUS SOURCE_ROW_NUMBER MATCH_CONFIRMED_AT MATCH_CONFIRMED_BY".split()
+PRODUCTION_INTEGER_COLUMNS = frozenset({
+    "REPORTING_YEAR", "REPORTING_WEEK", "FLOCK_AGE", "SOURCE_ROW_NUMBER",
+})
+PRODUCTION_DECIMAL_COLUMNS = frozenset({
+    "NET_WEIGHT", "NET_BOXES", "NET_PER_BOX", "JUMBO", "EXTRA_LARGE",
+    "LARGE", "MEDIUM", "SMALL", "PEEWEE", "GRADE_B", "GRADE_C",
+    "CRACKS", "NEST_RUN", "NEST_RUN_25_PLUS", "NEST_RUN_24_PLUS",
+    "NEST_RUN_23_PLUS", "NEST_RUN_22_PLUS", "NEST_RUN_21_PLUS",
+    "NEST_RUN_20_PLUS", "NEST_RUN_19_PLUS", "NEST_RUN_18_PLUS",
+    "NEST_RUN_17_PLUS", "OTHER_LEVIABLE", "OTHER_NON_LEVIABLE",
+    "FARM_GATE_SALES", "ON_FARM_CONSUMPTION", "SUBTOTAL", "REJECTS",
+    "LEAKERS", "TOTAL", "TOTAL_RECEIVED", "REJECTED", "LOSS",
+    "LEGACY_REJECT_LOSS_TOTAL", "TOTAL_ACCEPTED",
+})
 IMPORT_BATCH_COLUMNS = "FILENAME SOURCE FILE_HASH FILE_SIZE_BYTES WORKSHEET_NAME REPORTING_YEAR REPORTING_WEEK SOURCE_RECORD_COUNT ROW_COUNT ERROR_COUNT STATUS NOTES".split()
 RAW_ROW_COLUMNS = "RAW_ROW_ID IMPORT_ID SOURCE_ROW_NUMBER RAW_DATA VALIDATION_STATUS MATCH_STATUS VALIDATION_MESSAGES".split()
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
@@ -40,6 +56,10 @@ DATE_FIELDS = {
     "SALMONELLA_TEST": frozenset({"TESTING_DATE", "DATE_RESULT_SENT", "DATE_RECEIVED", "INVOICE_DATE"}),
 }
 _NULL_DATE_TEXT = frozenset({"", "none", "nat", "null"})
+_NULL_NUMERIC_TEXT = frozenset({"", "none", "nan", "nat", "null"})
+_NUMERIC_TEXT = re.compile(
+    r"^[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$"
+)
 
 
 def normalize_date_bind(value, field: str = "Date") -> dt.date | None:
@@ -66,6 +86,62 @@ def normalize_date_bind(value, field: str = "Date") -> dt.date | None:
         except ValueError as exc:
             raise RepositoryError(f"{field.replace('_', ' ').title()} must be a valid ISO date.") from exc
     raise RepositoryError(f"{field.replace('_', ' ').title()} must be a date value.")
+
+
+def _is_missing_bind(value) -> bool:
+    if value is None:
+        return True
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def normalize_numeric_bind(
+    value,
+    field: str,
+    source_row: int,
+    *,
+    integer: bool,
+) -> int | Decimal | None:
+    """Return a typed Snowflake NUMBER bind or a safe field/row error."""
+    if _is_missing_bind(value):
+        return None
+    if isinstance(value, bool):
+        raise RepositoryError(f"{field} has an invalid numeric value at source row {source_row}.")
+    if isinstance(value, str):
+        text = value.strip()
+        if text.casefold() in _NULL_NUMERIC_TEXT:
+            return None
+        if not _NUMERIC_TEXT.fullmatch(text):
+            raise RepositoryError(f"{field} has an invalid numeric value at source row {source_row}.")
+        value = text.replace(",", "")
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise RepositoryError(
+            f"{field} has an invalid numeric value at source row {source_row}."
+        ) from exc
+    if not number.is_finite():
+        if number.is_nan():
+            return None
+        raise RepositoryError(f"{field} has an invalid numeric value at source row {source_row}.")
+    if integer:
+        if number != number.to_integral_value():
+            raise RepositoryError(f"{field} must be a whole number at source row {source_row}.")
+        return int(number)
+    return number
+
+
+def _source_row_number(item: dict, ordinal: int) -> int:
+    value = item.get("SOURCE_ROW_NUMBER")
+    try:
+        if _is_missing_bind(value):
+            return ordinal
+        number = Decimal(str(value).replace(",", ""))
+        return int(number) if number == number.to_integral_value() else ordinal
+    except (InvalidOperation, TypeError, ValueError):
+        return ordinal
 
 
 class _LegacyCursorExecutor(SqlExecutor):
@@ -150,7 +226,7 @@ class SnowflakeRepository(BaseRepository):
         self._executor().check_connection()
 
     def _table(self, table: str, schema: str | None = None) -> str:
-        if table not in MODEL and table not in {"SALMONELLA_TEST_SAMPLE", "IMPORT_BATCH", "IMPORT_RAW_ROW", "PRODUCTION_RECORD", "VW_PRODUCTION_SUMMARY"}:
+        if table not in MODEL and table not in {"SALMONELLA_TEST_SAMPLE", "IMPORT_BATCH", "IMPORT_RAW_ROW", "PRODUCTION_RECORD", "VW_PRODUCTION_SUMMARY", "MIGRATION_BATCH", "MIGRATION_FILE", "MIGRATION_RAW_ROW", "MIGRATION_ID_MAP"}:
             raise RepositoryError("Unsupported Snowflake table identifier.")
         return f"{self.database}.{schema or self.schema_core}.{table}"
 
@@ -371,14 +447,156 @@ class SnowflakeRepository(BaseRepository):
         with self._executor().transaction() as tx: return self._insert_raw(tx, import_id, rows)
     def get_raw_rows(self, import_id): return self._query(f"SELECT * FROM {self._table('IMPORT_RAW_ROW', self.schema_raw)} WHERE IMPORT_ID = %s ORDER BY SOURCE_ROW_NUMBER", (import_id,))
 
+    def find_migration_by_hash(self, package_hash):
+        return self._one("MIGRATION_BATCH", "PACKAGE_HASH", package_hash, self.schema_raw) if package_hash else None
+
+    def get_migration_batches(self):
+        return self._query(f"SELECT * FROM {self._table('MIGRATION_BATCH', self.schema_raw)} ORDER BY CREATED_AT DESC")
+
+    def get_migration_raw_rows(self, batch_id):
+        return self._query(
+            f"SELECT * FROM {self._table('MIGRATION_RAW_ROW', self.schema_raw)} WHERE MIGRATION_BATCH_ID = %s ORDER BY SOURCE_ENTITY, SOURCE_ROW_NUMBER",
+            (batch_id,),
+        )
+
+    def stage_migration_file(self, batch_id, filename, content):
+        from data.migration import migration_stage_path
+        path = migration_stage_path(batch_id, filename)
+        self._executor().put_stream(io.BytesIO(bytes(content)), path)
+        return path
+
+    def prepare_migration_batch(self, batch, files, raw_rows):
+        batch_id = batch["MIGRATION_BATCH_ID"]
+        with self._executor().transaction() as tx:
+            if batch.get("PACKAGE_HASH"):
+                existing = tx.query(
+                    f"SELECT MIGRATION_BATCH_ID FROM {self._table('MIGRATION_BATCH', self.schema_raw)} WHERE PACKAGE_HASH = %s LIMIT 1",
+                    (batch["PACKAGE_HASH"],),
+                )
+                if not existing.empty:
+                    raise RepositoryError("This exact migration package has already been prepared.")
+            tx.execute(
+                f"INSERT INTO {self._table('MIGRATION_BATCH', self.schema_raw)} "
+                f"(MIGRATION_BATCH_ID, PACKAGE_HASH, SCHEMA_VERSION, STATUS, SOURCE_FILE_COUNT, SOURCE_ROW_COUNT, READY_ROW_COUNT, REJECTED_ROW_COUNT, CREATED_BY, CREATED_AT, UPDATED_AT) "
+                f"VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, {UTC_NOW_NTZ}, {UTC_NOW_NTZ})",
+                (batch_id, batch.get("PACKAGE_HASH"), batch.get("SCHEMA_VERSION"), batch.get("STATUS", "READY"),
+                 len(files), len(raw_rows), sum(r.get("VALIDATION_STATUS") == "READY" for r in raw_rows),
+                 sum(r.get("VALIDATION_STATUS") == "REJECTED" for r in raw_rows), batch.get("CREATED_BY")),
+            )
+            file_sql = (
+                f"INSERT INTO {self._table('MIGRATION_FILE', self.schema_raw)} "
+                f"(MIGRATION_FILE_ID, MIGRATION_BATCH_ID, SOURCE_FILENAME, SOURCE_ENTITY, FILE_HASH, FILE_SIZE_BYTES, SOURCE_ROW_COUNT, STAGE_PATH, CREATED_AT) "
+                f"VALUES (%s, %s, %s, %s, %s, %s, %s, %s, {UTC_NOW_NTZ})"
+            )
+            tx.executemany(file_sql, [(
+                str(uuid.uuid4()), batch_id, row["SOURCE_FILENAME"], row["SOURCE_ENTITY"], row["FILE_HASH"],
+                row.get("FILE_SIZE_BYTES"), row.get("SOURCE_ROW_COUNT"), row.get("STAGE_PATH"),
+            ) for row in files])
+            raw_sql = (
+                f"INSERT INTO {self._table('MIGRATION_RAW_ROW', self.schema_raw)} "
+                f"(MIGRATION_RAW_ROW_ID, MIGRATION_BATCH_ID, SOURCE_FILENAME, SOURCE_ENTITY, SOURCE_ROW_NUMBER, SOURCE_ID, TARGET_ID, RAW_DATA, NORMALIZED_DATA, VALIDATION_STATUS, MATCH_STATUS, VALIDATION_MESSAGES, CREATED_AT, UPDATED_AT) "
+                f"SELECT %s, %s, %s, %s, %s, %s, %s, PARSE_JSON(%s), PARSE_JSON(%s), %s, %s, PARSE_JSON(%s), {UTC_NOW_NTZ}, {UTC_NOW_NTZ}"
+            )
+            tx.executemany(raw_sql, [(
+                row["MIGRATION_RAW_ROW_ID"], batch_id, row["SOURCE_FILENAME"], row["SOURCE_ENTITY"],
+                row["SOURCE_ROW_NUMBER"], row.get("SOURCE_ID"), row.get("TARGET_ID"),
+                json.dumps(row.get("RAW_DATA"), default=str), json.dumps(row.get("NORMALIZED_DATA"), default=str),
+                row["VALIDATION_STATUS"], row.get("MATCH_STATUS"), json.dumps(row.get("VALIDATION_MESSAGES", []), default=str),
+            ) for row in raw_rows])
+            map_sql = (
+                f"INSERT INTO {self._table('MIGRATION_ID_MAP', self.schema_raw)} "
+                f"(MIGRATION_ID_MAP_ID, MIGRATION_BATCH_ID, SOURCE_ENTITY, SOURCE_ID, TARGET_ID, STATUS, CREATED_AT, UPDATED_AT) "
+                f"VALUES (%s, %s, %s, %s, %s, %s, {UTC_NOW_NTZ}, {UTC_NOW_NTZ})"
+            )
+            ready = [row for row in raw_rows if row["VALIDATION_STATUS"] == "READY" and row.get("TARGET_ID")]
+            tx.executemany(map_sql, [(str(uuid.uuid4()), batch_id, row["SOURCE_ENTITY"], row.get("SOURCE_ID"), row["TARGET_ID"], "READY") for row in ready])
+        return batch_id
+
+    @staticmethod
+    def _variant_dict(value):
+        if isinstance(value, dict): return dict(value)
+        if value is None: return {}
+        return json.loads(value) if isinstance(value, str) else dict(value)
+
+    def _insert_migration_core(self, tx, table, records):
+        key, allowed_text = MODEL[table]
+        allowed = allowed_text.split()
+        normalized = [self._normalize_date_fields(table, self._variant_dict(record)) for record in records]
+        if not normalized: return 0
+        columns = [key, *allowed]
+        sql = (
+            f"INSERT INTO {self._table(table)} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) "
+            f"SELECT {', '.join(['%s'] * len(columns))}, {UTC_NOW_NTZ}, {UTC_NOW_NTZ} "
+            f"WHERE NOT EXISTS (SELECT 1 FROM {self._table(table)} WHERE {key} = %s)"
+        )
+        params = [tuple([row.get(key), *[row.get(column) for column in allowed], row.get(key)]) for row in normalized]
+        return tx.executemany(sql, params)
+
+    def commit_migration_batch(self, batch_id):
+        from data.migration import load_mapping
+        batch = self._one("MIGRATION_BATCH", "MIGRATION_BATCH_ID", batch_id, self.schema_raw)
+        if not batch: raise RepositoryError("Migration batch was not found.")
+        if str(batch.get("STATUS", "")).upper() == "COMMITTED":
+            return {"batch_id": batch_id, "counts": {}, "idempotent": True}
+        try:
+            counts = {}
+            with self._executor().transaction() as tx:
+                rows = tx.query(
+                    f"SELECT SOURCE_ENTITY, NORMALIZED_DATA FROM {self._table('MIGRATION_RAW_ROW', self.schema_raw)} WHERE MIGRATION_BATCH_ID = %s AND VALIDATION_STATUS = %s ORDER BY SOURCE_ENTITY, SOURCE_ROW_NUMBER",
+                    (batch_id, "READY"),
+                )
+                for entity in load_mapping()["entity_order"]:
+                    records = [row["NORMALIZED_DATA"] for row in rows.to_dict("records") if row["SOURCE_ENTITY"] == entity]
+                    if entity == "PRODUCTION_RECORD":
+                        existing_batch = tx.query(f"SELECT IMPORT_ID FROM {self._table('IMPORT_BATCH', self.schema_raw)} WHERE IMPORT_ID = %s", (batch_id,))
+                        if existing_batch.empty:
+                            self._insert_batch(tx, batch_id, {"FILENAME": "Synthetic EIMS migration", "SOURCE": "EIMS_MIGRATION", "STATUS": "Validated", "SOURCE_RECORD_COUNT": len(records)})
+                        counts[entity] = self._insert_production(tx, [self._variant_dict(record) for record in records], batch_id)
+                    else:
+                        counts[entity] = self._insert_migration_core(tx, entity, records)
+                tx.execute(f"UPDATE {self._table('MIGRATION_ID_MAP', self.schema_raw)} SET STATUS = %s, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("COMMITTED", batch_id))
+                tx.execute(f"UPDATE {self._table('MIGRATION_BATCH', self.schema_raw)} SET STATUS = %s, COMMITTED_AT = {UTC_NOW_NTZ}, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("COMMITTED", batch_id))
+            return {"batch_id": batch_id, "counts": counts, "idempotent": False}
+        except Exception:
+            with self._executor().transaction() as tx:
+                tx.execute(f"UPDATE {self._table('MIGRATION_BATCH', self.schema_raw)} SET STATUS = %s, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("FAILED", batch_id))
+            raise
+
+    def cleanup_synthetic_migration(self, batch_id):
+        if not str(batch_id).startswith("DEV_MIGRATION_"):
+            raise RepositoryError("Cleanup is restricted to DEV_MIGRATION_ batches.")
+        result = self._query(
+            f"CALL {self.database}.{self.schema_raw}.CLEANUP_SYNTHETIC_MIGRATION(%s)",
+            (batch_id,),
+        )
+        if result.empty or str(result.iloc[0, 0]).upper() != "CLEANED":
+            raise RepositoryError("Snowflake did not confirm the selected synthetic migration cleanup.")
+        from data.migration import migration_stage_prefix
+        self._executor().execute(f"REMOVE {migration_stage_prefix(batch_id)}")
+        return True
+
     def _insert_production(self, executor, records, import_id):
         rows = records.to_dict("records") if isinstance(records, pd.DataFrame) else list(records)
         columns = ["PRODUCTION_ID", "IMPORT_ID", *PRODUCTION_COLUMNS]
         sql = f"INSERT INTO {self._table('PRODUCTION_RECORD')} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) VALUES ({', '.join(['%s'] * len(columns))}, {UTC_NOW_NTZ}, {UTC_NOW_NTZ})"
         params = []
-        for row in rows:
+        for ordinal, row in enumerate(rows, 1):
             item = dict(row); item.setdefault("SOURCE_TYPE", "EIMS_IMPORT"); item.setdefault("MATCH_STATUS", "UNMATCHED")
-            params.append((item.get("PRODUCTION_ID") or str(uuid.uuid4()), import_id, *(item.get(column) for column in PRODUCTION_COLUMNS)))
+            source_row = _source_row_number(item, ordinal)
+            bound_values = []
+            for column in PRODUCTION_COLUMNS:
+                value = item.get(column)
+                if column in PRODUCTION_INTEGER_COLUMNS:
+                    value = normalize_numeric_bind(value, column, source_row, integer=True)
+                elif column in PRODUCTION_DECIMAL_COLUMNS:
+                    value = normalize_numeric_bind(value, column, source_row, integer=False)
+                elif _is_missing_bind(value):
+                    value = None
+                bound_values.append(value)
+            production_id = item.get("PRODUCTION_ID")
+            if _is_missing_bind(production_id) or not str(production_id).strip():
+                production_id = str(uuid.uuid4())
+            params.append((production_id, import_id, *bound_values))
         return executor.executemany(sql, params) if params else 0
     def insert_production_records(self, records, import_id):
         with self._executor().transaction() as tx: return self._insert_production(tx, records, import_id)

@@ -28,6 +28,7 @@ DELETE_METHODS = {
     "delete_quota_registration": "QUOTA_REGISTRATION",
     "delete_quota_transaction": "QUOTA_TRANSACTION",
     "delete_salmonella_test": "SALMONELLA_TEST",
+    "cleanup_synthetic_migration": "MIGRATION_BATCH",
 }
 
 IMPORT_METHODS = {
@@ -35,6 +36,9 @@ IMPORT_METHODS = {
     "import_production_bundle": "IMPORT_BATCH",
     "insert_raw_rows": "RAW_PRODUCTION",
     "insert_production_records": "PRODUCTION_RECORD",
+    "stage_migration_file": "MIGRATION_FILE",
+    "prepare_migration_batch": "MIGRATION_BATCH",
+    "commit_migration_batch": "MIGRATION_BATCH",
 }
 
 
@@ -106,6 +110,8 @@ class AuthorizedRepository:
             self._require(Permission.IMPORT_DATA)
             result = method(*args, **kwargs)
             entity_id = result[0] if name == "import_production_bundle" and isinstance(result, tuple) else result
+            if name == "commit_migration_batch" and isinstance(result, dict):
+                entity_id = result.get("batch_id")
             details = {"operation": name}
             if name == "import_production_bundle" and isinstance(result, tuple) and len(result) > 1:
                 details["record_count"] = int(result[1])
