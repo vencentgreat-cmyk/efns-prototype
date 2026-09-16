@@ -14,6 +14,7 @@ import pandas as pd
 from data.repositories.base import BaseRepository, ConcurrencyError
 from data.synthetic import generate_all
 from data.validation import (
+    validate_farm_location,
     validate_flock,
     validate_quota_registration,
     validate_quota_transaction,
@@ -46,6 +47,7 @@ class MockRepository(BaseRepository):
     def __init__(self, seed: int = 42):
         data = generate_all(seed=seed)
         self._accounts = data["accounts"].copy()
+        self._farm_locations = data["farm_locations"].copy()
         self._facilities = data["facilities"].copy()
         self._facility_details = data["facility_details"].copy()
         self._flocks = data["flocks"].copy()
@@ -118,8 +120,21 @@ class MockRepository(BaseRepository):
     # Accounts
     # ------------------------------------------------------------------
 
-    def get_accounts(self) -> pd.DataFrame:
-        return self._accounts.copy()
+    def get_accounts(self, statuses=None, role_field=None, keyword=None) -> pd.DataFrame:
+        frame = self._accounts.copy()
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
+        if role_field:
+            from data.constants import ACCOUNT_ROLE_FIELDS
+            if role_field not in {field for field, _ in ACCOUNT_ROLE_FIELDS}:
+                raise ValueError("Unknown Account role view.")
+            frame = frame[frame[role_field].fillna(False).astype(bool)]
+        if keyword:
+            mask = frame[["ORGANIZATION_NAME", "REGISTRATION_NUMBER", "CITY", "CONTACT_PHONE", "CONTACT_EMAIL"]].fillna("").astype(str).apply(
+                lambda column: column.str.contains(keyword, case=False, regex=False)
+            ).any(axis=1)
+            frame = frame[mask]
+        return frame.drop_duplicates("ACCOUNT_ID").copy()
 
     def get_account(self, account_id: str) -> Optional[dict]:
         match = self._accounts[self._accounts["ACCOUNT_ID"] == account_id]
@@ -176,6 +191,7 @@ class MockRepository(BaseRepository):
         )
         references = (
             lookup_reference
+            or not self.get_farm_locations(account_id=account_id).empty
             or not self.get_facilities(account_id=account_id).empty
             or not self.get_flocks(account_id=account_id).empty
             or not self.get_quota_registrations(account_id=account_id).empty
@@ -187,14 +203,53 @@ class MockRepository(BaseRepository):
         self._accounts = self._accounts[self._accounts["ACCOUNT_ID"] != account_id]
         return len(self._accounts) < before
 
+    # Farm Locations / Dynamics "Other Addresses" (provisional)
+
+    def get_farm_locations(self, farm_location_id=None, account_id=None, statuses=None, keyword=None) -> pd.DataFrame:
+        frame = self._farm_locations.copy()
+        if farm_location_id:
+            frame = frame[frame["FARM_LOCATION_ID"] == farm_location_id]
+        if account_id:
+            frame = frame[frame["ACCOUNT_ID"] == account_id]
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
+        if keyword:
+            account_names = self._accounts.set_index("ACCOUNT_ID")["ORGANIZATION_NAME"]
+            searchable = frame.assign(ACCOUNT_NAME=frame["ACCOUNT_ID"].map(account_names))
+            fields = ["LOCATION_NAME", "ACCOUNT_NAME", "CITY", "POSTAL_CODE", "PHONE"]
+            mask = searchable[fields].fillna("").astype(str).apply(
+                lambda column: column.str.contains(keyword, case=False, regex=False)
+            ).any(axis=1)
+            frame = frame[mask]
+        return frame.drop_duplicates("FARM_LOCATION_ID").copy()
+
+    def get_farm_location(self, farm_location_id: str) -> Optional[dict]:
+        matches = self._farm_locations[self._farm_locations["FARM_LOCATION_ID"] == farm_location_id]
+        return matches.iloc[0].to_dict() if not matches.empty else None
+
+    def upsert_farm_location(self, record: dict) -> str:
+        errors = validate_farm_location(self, record)
+        if errors:
+            raise ValueError(" ".join(errors))
+        return self._upsert_frame("_farm_locations", "FARM_LOCATION_ID", record)
+
+    def delete_farm_location(self, farm_location_id: str) -> bool:
+        before = len(self._farm_locations)
+        self._farm_locations = self._farm_locations[
+            self._farm_locations["FARM_LOCATION_ID"] != farm_location_id
+        ]
+        return len(self._farm_locations) < before
+
     # ------------------------------------------------------------------
     # Facilities
     # ------------------------------------------------------------------
 
-    def get_facilities(self, account_id: Optional[str] = None) -> pd.DataFrame:
+    def get_facilities(self, account_id: Optional[str] = None, statuses=None) -> pd.DataFrame:
         df = self._facilities.copy()
         if account_id:
             df = df[df["ACCOUNT_ID"] == account_id]
+        if statuses is not None:
+            df = df[df["STATUS"].isin(statuses)]
         return df
 
     def upsert_facility(self, record: dict) -> str:
@@ -207,10 +262,15 @@ class MockRepository(BaseRepository):
         self._facilities = self._facilities[self._facilities["FACILITY_ID"] != facility_id]
         return len(self._facilities) < before
 
-    def get_facility_details(self, facility_id: Optional[str] = None) -> pd.DataFrame:
+    def get_facility_details(self, facility_id: Optional[str] = None, account_id=None, statuses=None) -> pd.DataFrame:
         frame = self._facility_details.copy()
         if facility_id:
             frame = frame[frame["FACILITY_ID"] == facility_id]
+        if account_id:
+            facility_ids = set(self._facilities.loc[self._facilities["ACCOUNT_ID"] == account_id, "FACILITY_ID"])
+            frame = frame[frame["FACILITY_ID"].isin(facility_ids)]
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
         return frame
 
     def get_facility_detail(self, detail_id: str) -> Optional[dict]:
@@ -241,13 +301,18 @@ class MockRepository(BaseRepository):
     # ------------------------------------------------------------------
 
     def get_flocks(
-        self, account_id: Optional[str] = None, facility_id: Optional[str] = None
+        self, account_id: Optional[str] = None, facility_id: Optional[str] = None,
+        facility_detail_id=None, statuses=None,
     ) -> pd.DataFrame:
         df = self._flocks.copy()
         if account_id:
             df = df[df["ACCOUNT_ID"] == account_id]
         if facility_id:
             df = df[df["FACILITY_ID"] == facility_id]
+        if facility_detail_id:
+            df = df[df["FACILITY_DETAIL_ID"] == facility_detail_id]
+        if statuses is not None:
+            df = df[df["STATUS"].isin(statuses)]
         return df
 
     def get_flock(self, flock_id: str) -> Optional[dict]:
@@ -277,10 +342,18 @@ class MockRepository(BaseRepository):
     # Flock Transactions
     # ------------------------------------------------------------------
 
-    def get_flock_transactions(self, flock_id: Optional[str] = None) -> pd.DataFrame:
+    def get_flock_transactions(self, flock_id: Optional[str] = None, account_id=None, transaction_type=None, date_from=None, date_to=None) -> pd.DataFrame:
         df = self._flock_transactions.copy()
         if flock_id:
             df = df[df["FLOCK_ID"] == flock_id]
+        if account_id:
+            flock_ids = set(self._flocks.loc[self._flocks["ACCOUNT_ID"] == account_id, "FLOCK_ID"])
+            df = df[df["FLOCK_ID"].isin(flock_ids)]
+        if transaction_type:
+            df = df[df["TRANSACTION_TYPE"] == transaction_type]
+        dates = pd.to_datetime(df["TRANSACTION_DATE"], errors="coerce")
+        if date_from is not None: df = df[dates >= pd.Timestamp(date_from)]
+        if date_to is not None: df = df[dates <= pd.Timestamp(date_to)]
         return df
 
     def upsert_flock_transaction(self, record: dict) -> str:
@@ -307,12 +380,15 @@ class MockRepository(BaseRepository):
         status: Optional[str] = None,
         quota_type: Optional[str] = None,
         active_only: bool = False,
+        statuses=None,
     ) -> pd.DataFrame:
         frame = self._quota_registrations.copy()
         if account_id:
             frame = frame[frame["ACCOUNT_ID"] == account_id]
         if status:
             frame = frame[frame["STATUS"] == status]
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
         if quota_type:
             frame = frame[frame["QUOTA_TYPE"] == quota_type]
         if active_only:
@@ -391,6 +467,35 @@ class MockRepository(BaseRepository):
         quota = self.get_quota_registration(record["QUOTA_ID"])
         stored = dict(record, OWNER_ACCOUNT_ID=quota["ACCOUNT_ID"])
         return self._upsert_frame("_quota_transactions", "QUOTA_TRANSACTION_ID", stored)
+
+    def get_quota_summary(self, as_of_date, quota_type, account_id=None, status="Active") -> pd.DataFrame:
+        as_of = pd.Timestamp(as_of_date)
+        quotas = self.get_quota_registrations(account_id=account_id, status=status, quota_type=quota_type).copy()
+        if quotas.empty:
+            return pd.DataFrame(columns=["QUOTA_ID", "ACCOUNT_ID", "REGISTRATION_NUMBER", "ACCOUNT_NAME", "ADDRESS", "CITY", "PROVINCE", "POSTAL_CODE", "PHONE", "FAX", "PRODUCER_ROLE", "ISSUANCE"])
+        effective = pd.to_datetime(quotas["EFFECTIVE_DATE"], errors="coerce")
+        end = pd.to_datetime(quotas["END_DATE"], errors="coerce")
+        quotas = quotas[(effective.isna() | (effective <= as_of)) & (end.isna() | (end >= as_of))]
+        accounts = self._accounts.set_index("ACCOUNT_ID")
+        locations = self._farm_locations.copy()
+        locations["_ACTIVE_RANK"] = locations["STATUS"].ne("Active").astype(int)
+        locations = locations.sort_values(["ACCOUNT_ID", "_ACTIVE_RANK", "FARM_LOCATION_ID"]).drop_duplicates("ACCOUNT_ID")
+        locations = locations.set_index("ACCOUNT_ID")
+        rows = []
+        for quota in quotas.drop_duplicates("QUOTA_ID").itertuples():
+            account = accounts.loc[quota.ACCOUNT_ID] if quota.ACCOUNT_ID in accounts.index else {}
+            location = locations.loc[quota.ACCOUNT_ID] if quota.ACCOUNT_ID in locations.index else {}
+            rows.append({
+                "QUOTA_ID": quota.QUOTA_ID, "ACCOUNT_ID": quota.ACCOUNT_ID,
+                "REGISTRATION_NUMBER": account.get("REGISTRATION_NUMBER"),
+                "ACCOUNT_NAME": account.get("ORGANIZATION_NAME"),
+                "ADDRESS": location.get("ADDRESS_1"), "CITY": location.get("CITY"),
+                "PROVINCE": location.get("PROVINCE"), "POSTAL_CODE": location.get("POSTAL_CODE"),
+                "PHONE": location.get("PHONE") or account.get("CONTACT_PHONE"),
+                "FAX": account.get("FAX"), "PRODUCER_ROLE": bool(account.get("PRODUCER_ROLE", False)),
+                "ISSUANCE": None,
+            })
+        return pd.DataFrame(rows)
 
     def get_quota_transaction(self, transaction_id: str) -> Optional[dict]:
         matches = self._quota_transactions[
@@ -582,11 +687,11 @@ class MockRepository(BaseRepository):
             raise ValueError("Migration batch was not found.")
         if batch.get("STATUS") == "COMMITTED":
             return {"batch_id": batch_id, "counts": dict(batch.get("COMMITTED_COUNTS", {})), "idempotent": True}
-        attributes = ["_accounts", "_facilities", "_facility_details", "_quota_registrations", "_flocks", "_flock_transactions", "_quota_transactions", "_salmonella_tests", "_production"]
+        attributes = ["_accounts", "_farm_locations", "_facilities", "_facility_details", "_quota_registrations", "_flocks", "_flock_transactions", "_quota_transactions", "_salmonella_tests", "_production"]
         snapshots = {name: getattr(self, name).copy(deep=True) for name in attributes}
         import_snapshot = [dict(row) for row in self._import_batches]
         methods = {
-            "ACCOUNT": ("ACCOUNT_ID", self.upsert_account), "FACILITY": ("FACILITY_ID", self.upsert_facility),
+            "ACCOUNT": ("ACCOUNT_ID", self.upsert_account), "FARM_LOCATION": ("FARM_LOCATION_ID", self.upsert_farm_location), "FACILITY": ("FACILITY_ID", self.upsert_facility),
             "FACILITY_DETAIL": ("FACILITY_DETAIL_ID", self.upsert_facility_detail),
             "QUOTA_REGISTRATION": ("QUOTA_ID", self.upsert_quota_registration), "FLOCK": ("FLOCK_ID", self.upsert_flock),
             "FLOCK_TRANSACTION": ("FLOCK_TRANSACTION_ID", self.upsert_flock_transaction),
@@ -595,9 +700,9 @@ class MockRepository(BaseRepository):
         }
         counts = {}
         try:
-            from data.migration import load_mapping
+            from data.migration import load_mapping_for_version
             rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id and row["VALIDATION_STATUS"] == "READY"]
-            for entity in load_mapping()["entity_order"]:
+            for entity in load_mapping_for_version(batch.get("SCHEMA_VERSION"))["entity_order"]:
                 records = [dict(row["NORMALIZED_DATA"]) for row in rows if row["SOURCE_ENTITY"] == entity]
                 if entity == "PRODUCTION_RECORD":
                     if not any(item.get("IMPORT_ID") == batch_id for item in self._import_batches):
@@ -630,7 +735,7 @@ class MockRepository(BaseRepository):
         targets = {}
         for row in maps: targets.setdefault(row["SOURCE_ENTITY"], set()).add(row["TARGET_ID"])
         frame_map = {
-            "ACCOUNT": ("_accounts", "ACCOUNT_ID"), "FACILITY": ("_facilities", "FACILITY_ID"),
+            "ACCOUNT": ("_accounts", "ACCOUNT_ID"), "FARM_LOCATION": ("_farm_locations", "FARM_LOCATION_ID"), "FACILITY": ("_facilities", "FACILITY_ID"),
             "FACILITY_DETAIL": ("_facility_details", "FACILITY_DETAIL_ID"), "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
             "FLOCK": ("_flocks", "FLOCK_ID"), "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
             "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"), "SALMONELLA_TEST": ("_salmonella_tests", "SALMONELLA_TEST_ID"),
@@ -682,6 +787,7 @@ class MockRepository(BaseRepository):
         grader_number: Optional[str] = None,
         barn_identity: Optional[str] = None,
         egg_colour: Optional[str] = None,
+        account_id: Optional[str] = None,
     ) -> pd.DataFrame:
         # Join production to import batches for year/week
         ib = pd.DataFrame(self._import_batches)
@@ -715,6 +821,11 @@ class MockRepository(BaseRepository):
             df = df[df["BARN_IDENTITY"] == barn_identity]
         if egg_colour:
             df = df[df["EGG_COLOUR"] == egg_colour]
+        if account_id:
+            if "PRODUCER_ACCOUNT_ID" in df.columns:
+                df = df[df["PRODUCER_ACCOUNT_ID"] == account_id]
+            else:
+                df = df.iloc[0:0]
         return df
 
     def get_production_summary_metrics(self) -> dict:

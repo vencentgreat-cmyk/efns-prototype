@@ -87,4 +87,7 @@ def test_primary_workflows_expose_clear_controls(tmp_path, monkeypatch):
     assert "Add New Flock" not in source
 
     app.switch_page("pages/4_Reports.py").run()
-    assert any("Selected fields: 0" in caption.value for caption in app.caption)
+    assert any(radio.label == "Report Center section" for radio in app.radio)
+    report_source = (Path(__file__).parents[1] / "app" / "pages" / "4_Reports.py").read_text(encoding="utf-8")
+    assert '["Report Library", "Customize Report", "Saved Reports"]' in report_source
+    assert "LinkColumn" not in report_source

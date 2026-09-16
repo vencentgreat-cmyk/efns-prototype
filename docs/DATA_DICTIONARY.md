@@ -5,6 +5,7 @@
 | Entity | Primary key | Required fields | Foreign keys | Main optional fields |
 |---|---|---|---|---|
 | Account | `ACCOUNT_ID` | `ORGANIZATION_NAME` | self lookups through `PARENT_ACCOUNT_ID`, `GRADING_STATION_ACCOUNT_ID`, `PULLET_GROWER_ACCOUNT_ID` | registration; email/phone/fax/website; three address lines, city, province, postal code, country, latitude/longitude; Province of Registration; Spent Fowl Plans; Default on Reports; No SVG; description; status; 14 role flags |
+| Farm Location | `FARM_LOCATION_ID` | account, location name | Account | two address lines, city, province, postal code, phone, status |
 | Facility | `FACILITY_ID` | account, name | Account | type, status, lifecycle dates |
 | Facility Detail | `FACILITY_DETAIL_ID` | facility, name | Facility | type, status, comments |
 | Quota Registration | `QUOTA_ID` | registration, account, type | Account | name, status, effective/end dates, comments |
@@ -28,4 +29,4 @@ IDs are provisional `VARCHAR(36)` values. Quantities/counts are Snowflake `NUMBE
 
 Dataverse names, choices, requiredness, cardinalities, alternate keys, deletion behavior, sample fields, and identity mapping remain provisional. RAW, CORE, history and reporting sources use standard Snowflake tables. Hybrid Tables may be evaluated after workload and constraint testing; this design does not depend on them.
 
-Historical migration field rules live in `config/eims_migration_mapping.json` and are explicitly provisional. They are separate from the recurring Production Import contract and must be replaced after authoritative EIMS metadata is received.
+Historical migration field rules live in explicit versioned contracts. `config/eims_migration_mapping.json` is provisional V2 and includes `farm_locations.csv`; `config/eims_migration_mapping_v1.json` preserves the prior nine-file V1 shape. They are separate from the recurring Production Import contract and must be replaced after authoritative EIMS metadata is received.

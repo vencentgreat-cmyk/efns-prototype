@@ -15,6 +15,7 @@ PRODUCTION_DDL = (ROOT / "sql" / "03_production_tables.sql").read_text(encoding=
 
 EXPECTED_GENERATED_ROWS = {
     "EFNS_DEV.CORE.ACCOUNT": 5,
+    "EFNS_DEV.CORE.FARM_LOCATION": 10,
     "EFNS_DEV.CORE.FACILITY": 8,
     "EFNS_DEV.CORE.QUOTA_REGISTRATION": 6,
     "EFNS_DEV.CORE.FLOCK": 12,
@@ -60,10 +61,11 @@ def test_seed_counts_order_and_idempotent_merges_are_explicit():
         assert "WHEN NOT MATCHED THEN INSERT" in section
 
     assert "MERGE INTO EFNS_DEV.RAW.IMPORT_BATCH" in SEED
-    assert SEED.count("WHEN NOT MATCHED THEN INSERT") == 9
+    assert SEED.count("WHEN NOT MATCHED THEN INSERT") == 10
 
     parent_order = (
         "EFNS_DEV.CORE.ACCOUNT",
+        "EFNS_DEV.CORE.FARM_LOCATION",
         "EFNS_DEV.CORE.FACILITY",
         "EFNS_DEV.CORE.QUOTA_REGISTRATION",
         "EFNS_DEV.CORE.FLOCK",
@@ -85,7 +87,7 @@ def test_seed_insert_columns_exist_in_current_snowflake_ddl():
         re.IGNORECASE | re.DOTALL,
     )
     merges = insert_pattern.findall(SEED)
-    assert len(merges) == 9
+    assert len(merges) == 10
     for table, raw_columns in merges:
         columns = {column.strip().upper() for column in raw_columns.split(",")}
         assert table.upper() in ddl
@@ -122,7 +124,7 @@ def test_cleanup_uses_dependency_safe_dev_synth_filters_only():
         re.IGNORECASE,
     )
     deletes = delete_pattern.findall(CLEANUP)
-    assert len(deletes) == 13
+    assert len(deletes) == 14
     assert "LIKE 'DEV_SYNTH_%'" not in CLEANUP.upper()
 
     ordered_tables = [table.upper() for table, _ in deletes]
@@ -142,6 +144,7 @@ def test_cleanup_uses_dependency_safe_dev_synth_filters_only():
         "EFNS_DEV.CORE.FACILITY"
     )
     assert ordered_tables[-1] == "EFNS_DEV.CORE.ACCOUNT"
+    assert ordered_tables.index("EFNS_DEV.CORE.FARM_LOCATION") < ordered_tables.index("EFNS_DEV.CORE.ACCOUNT")
 
 
 def test_seed_includes_count_relationship_and_repository_semantic_checks():

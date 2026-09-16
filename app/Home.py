@@ -115,10 +115,10 @@ def dashboard() -> None:
             "Open Production Data",
         ),
         (
-            "Build a report",
-            "Choose fields from the provisional account, flock, facility, and production model.",
+            "Open Report Center",
+            "Run curated reports or customize an allowlisted operational dataset.",
             "4_Reports.py",
-            "Open Custom Reports",
+            "Open Report Center",
         ),
     ))
     next_columns = st.columns(len(next_actions))
@@ -181,6 +181,11 @@ pages = {
                 icon=":material/account_tree:",
             ),
             st.Page(
+                page_file("18_Farm_Locations.py"),
+                title="Farm Locations",
+                icon=":material/location_on:",
+            ),
+            st.Page(
                 page_file("11_Facilities.py"),
                 title="Facilities",
                 icon=":material/domain:",
@@ -203,7 +208,7 @@ pages = {
         "Reporting": [
             st.Page(
                 page_file("4_Reports.py"),
-                title="Custom Reports",
+                title="Report Center",
                 icon=":material/analytics:",
             ),
             st.Page(page_file("10_Salmonella_Report.py"), title="Salmonella Test Report", icon=":material/lab_profile:"),

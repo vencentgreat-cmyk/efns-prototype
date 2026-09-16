@@ -22,6 +22,7 @@ def test_app_owner_grants_match_repository_access_and_keep_audit_append_only():
 
     operational_tables = (
         "ACCOUNT",
+        "FARM_LOCATION",
         "FACILITY",
         "FACILITY_DETAIL",
         "FLOCK",

@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import format_timestamp, list_command_bar, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column
+from app.navigation import format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, related_records_table, saved_view_selector, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import EGG_COLOURS, FLOCK_QUOTA_TYPES, FLOCK_STATUSES, UNASSIGNED_LABEL
 from data.repositories import get_repository
@@ -39,7 +39,8 @@ def label_for_id(mapping, value, default=None):
 
 
 if view.name == "list":
-    page_header("Active Flocks", "Search, filter and maintain validated Flock records.", "FLOCK MANAGEMENT")
+    page_header("Flocks", "Search, filter and maintain validated Flock records.", "FLOCK MANAGEMENT")
+    statuses, _ = saved_view_selector("FLOCK", "Flocks", key="flock_saved_view", selection_keys=("flock_list_grid", "flock_list_row_ids", "flock_delete_pending"))
     selected_index = selected_row_index("flock_list_grid")
     row_ids = st.session_state.get("flock_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
@@ -59,18 +60,16 @@ if view.name == "list":
                     except (ValueError, RepositoryError) as exc: show_data_error(exc)
                 if st.button("Cancel", key="flock_cancel_delete"):
                     st.session_state.pop("flock_delete_pending", None); st.rerun()
-    filters = st.columns([2, 1, 1, 1])
+    filters = st.columns([2, 1, 1])
     keyword = filters[0].text_input("Filter by keyword", placeholder="Flock number or permit", key="flock_filter_keyword")
     account_filter = filters[1].selectbox("Account", ["All", *account_options], key="flock_filter_account")
-    status_filter = filters[2].selectbox("Status", ["All", *FLOCK_STATUSES], key="flock_filter_status")
-    colour_filter = filters[3].selectbox("Egg colour", ["All", *EGG_COLOURS], key="flock_filter_colour")
-    display = flocks.copy()
+    colour_filter = filters[2].selectbox("Egg colour", ["All", *EGG_COLOURS], key="flock_filter_colour")
+    display = repo.get_flocks(statuses=statuses).copy()
     if keyword:
         display = display[display[["FLOCK_NUMBER", "PERMIT_NUMBER"]].fillna("").astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)]
     if account_filter != "All": display = display[display["ACCOUNT_ID"] == account_options[account_filter]]
-    if status_filter != "All": display = display[display["STATUS"] == status_filter]
     if colour_filter != "All": display = display[display["EGG_COLOUR"] == colour_filter]
-    st.caption(f"{len(display):,} flock record(s)")
+    st.caption(f"{len(display):,} flock record(s) in this view")
     if display.empty:
         st.info("No Flocks match the current filters.")
     else:
@@ -102,6 +101,10 @@ else:
                 left.markdown(f"**Flock Number**  \n{current.get('FLOCK_NUMBER')}")
                 left.markdown(f"**Account**  \n{account_names.get(current.get('ACCOUNT_ID'), 'Unknown')}")
                 left.markdown(f"**Facility**  \n{facility_names.get(current.get('FACILITY_ID'), UNASSIGNED_LABEL)}")
+                if current.get("ACCOUNT_ID") and left.button("View Account", key="flock_parent_account", icon=":material/account_circle:"):
+                    open_module("Accounts_&_Facilities", "detail", current["ACCOUNT_ID"])
+                if current.get("FACILITY_ID") and left.button("View Facility", key="flock_parent_facility", icon=":material/domain:"):
+                    open_module("Facilities", "detail", current["FACILITY_ID"])
                 middle.markdown(f"**Permit Number**  \n{current.get('PERMIT_NUMBER')}")
                 middle.markdown(f"**Hatch Date**  \n{current.get('HATCH_DATE')}")
                 middle.markdown(f"**Placement Date**  \n{current.get('PLACEMENT_DATE') or '—'}")
@@ -116,15 +119,10 @@ else:
                 ("Flock Transactions", repo.get_flock_transactions(view.record_id), "FLOCK_TRANSACTION_ID", "TRANSACTION_TYPE", "Flock_Transactions"),
                 ("Salmonella Tests", repo.get_salmonella_tests(flock_id=view.record_id), "SALMONELLA_TEST_ID", "PERMIT_NUMBER", "Salmonella_Tests"),
             ):
-                section_intro(heading)
-                if frame.empty: st.info(f"No related {heading}.")
-                else:
-                    frame = frame.copy(); frame["RECORD"] = frame.apply(lambda row: f"{row.get(label)} · {str(row[key])[:8]}", axis=1)
-                    columns = [column for column in frame.columns if column not in {key, "RECORD", "CREATED_AT", "UPDATED_AT"}][:5]
-                    st.dataframe(frame[["RECORD", *columns]], width="stretch", hide_index=True)
+                related_records_table(heading, frame, id_column=key, label_column=label, page_slug=slug, key=f"flock_related_{slug}")
             production = repo.get_production_records()
             production = production[production["FLOCK_ID"] == view.record_id] if "FLOCK_ID" in production else production.iloc[0:0]
-            section_intro("Matched Production Records")
+            section_intro(f"Matched Production Records ({len(production)})")
             if production.empty: st.info("No matched Production Records.")
             else: st.dataframe(production, width="stretch", hide_index=True)
     else:

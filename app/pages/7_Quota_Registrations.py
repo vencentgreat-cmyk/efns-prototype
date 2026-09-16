@@ -15,7 +15,9 @@ from app.navigation import (
     open_module,
     open_view,
     read_record_view,
+    related_records_table,
     record_command_bar,
+    saved_view_selector,
     selected_row_index,
     timestamp_column,
     view_parameter,
@@ -67,6 +69,7 @@ def get_quota(record_id):
 if view.name == "list":
     page_header("Quota Registrations", "Search and maintain provisional account quota registrations.", "QUOTA MANAGEMENT")
     st.info("Quota types and allocation rules remain provisional. This module does not calculate available quota balance.")
+    statuses, _ = saved_view_selector("QUOTA_REGISTRATION", "Quota Registrations", key="quota_reg_saved_view", selection_keys=("quota_reg_list_grid", "quota_reg_list_row_ids", "quota_reg_delete_pending"))
     selected_index = selected_row_index("quota_reg_list_grid")
     row_ids = st.session_state.get("quota_reg_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
@@ -97,14 +100,13 @@ if view.name == "list":
         st.write("")
         if st.button("Reset Filters", icon=":material/filter_alt_off:", key="quota_reg_reset", width="stretch"):
             clear_widget_prefix("quota_reg_filter_"); st.rerun()
-    filters = st.columns(3)
+    filters = st.columns(2)
     account_filter = filters[0].selectbox("Account", ["All", *account_options], key="quota_reg_filter_account")
-    status_filter = filters[1].selectbox("Status", ["All", *QUOTA_STATUSES], key="quota_reg_filter_status")
-    type_filter = filters[2].selectbox("Quota Type", ["All", *QUOTA_TYPES], key="quota_reg_filter_type")
+    type_filter = filters[1].selectbox("Quota Type", ["All", *QUOTA_TYPES], key="quota_reg_filter_type")
     quotas = repo.get_quota_registrations(
         account_id=account_options.get(account_filter),
-        status=None if status_filter == "All" else status_filter,
         quota_type=None if type_filter == "All" else type_filter,
+        statuses=statuses,
     )
     display = quotas.copy()
     if not display.empty:
@@ -112,7 +114,7 @@ if view.name == "list":
         if keyword:
             columns = ["REGISTRATION_NUMBER", "QUOTA_NAME", "ACCOUNT_NAME"]
             display = display[display[columns].fillna("").astype(str).apply(lambda column: column.str.contains(keyword, case=False, regex=False)).any(axis=1)]
-    st.caption(f"{len(display):,} quota registration(s)")
+    st.caption(f"{len(display):,} quota registration(s) in this view")
     if display.empty:
         st.info("No Quota Registrations match the current filters.")
     else:
@@ -182,9 +184,11 @@ else:
             if transactions.empty:
                 st.info("No Quota Transactions are connected to this registration.")
             else:
-                related_display = transactions.copy()
-                related_display["TRANSACTION"] = related_display.apply(lambda row: f"{row['TRANSACTION_TYPE']} · {str(row['QUOTA_TRANSACTION_ID'])[:8]}", axis=1)
-                st.dataframe(related_display[["TRANSACTION", "TRANSACTION_TYPE", "EFFECTIVE_DATE", "END_DATE", "QUOTA_COUNT", "PRICE", "CREATED_AT"]], width="stretch", hide_index=True, column_config={"TRANSACTION": "Transaction", "CREATED_AT": timestamp_column("Created On")})
+                related_records_table("Quota Transactions", transactions, id_column="QUOTA_TRANSACTION_ID", label_column="TRANSACTION_TYPE", page_slug="Quota_Transactions", key="quota_related_transactions")
+            flocks = repo.get_flocks(account_id=current.get("ACCOUNT_ID"))
+            if not flocks.empty and "QUOTA_ID" in flocks:
+                flocks = flocks[flocks["QUOTA_ID"] == view.record_id]
+            related_records_table("Flocks", flocks, id_column="FLOCK_ID", label_column="FLOCK_NUMBER", page_slug="Flocks", key="quota_related_flocks")
     else:
         current = current or {}
         if accounts.empty:

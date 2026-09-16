@@ -38,6 +38,20 @@ def clean_frames() -> dict[str, pd.DataFrame]:
         "STATUS": "Active",
     } for i in range(1, 51)]
     facilities = []
+    farm_locations = []
+    for i in range(1, 126):
+        account_no = (i - 1) % 50 + 1
+        farm_locations.append({
+            "FARM_LOCATION_ID": identifier("L", i),
+            "ACCOUNT_ID": identifier("A", account_no),
+            "LOCATION_NAME": f"Synthetic Farm Location {i:03d}",
+            "ADDRESS_1": f"{100 + i} Fictional Migration Road",
+            "ADDRESS_2": "" if i % 4 == 0 else f"Synthetic Site {(i-1)%9+1}",
+            "CITY": f"Synthetic City {(account_no-1)%10+1:02d}",
+            "PROVINCE": "NS", "POSTAL_CODE": f"B0B 1A{i%10}",
+            "PHONE": f"902-555-{i:04d}",
+            "STATUS": "Inactive" if i % 10 == 0 else "Active",
+        })
     for i in range(1, 101):
         account_no = (i - 1) // 2 + 1
         facilities.append({
@@ -122,7 +136,7 @@ def clean_frames() -> dict[str, pd.DataFrame]:
             "MATCH_STATUS": "CONFIRMED", "SOURCE_ROW_NUMBER": i + 1,
         })
     return {
-        "ACCOUNT": pd.DataFrame(accounts), "FACILITY": pd.DataFrame(facilities),
+        "ACCOUNT": pd.DataFrame(accounts), "FARM_LOCATION": pd.DataFrame(farm_locations), "FACILITY": pd.DataFrame(facilities),
         "FACILITY_DETAIL": pd.DataFrame(details), "QUOTA_REGISTRATION": pd.DataFrame(quotas),
         "FLOCK": pd.DataFrame(flocks), "FLOCK_TRANSACTION": pd.DataFrame(flock_transactions),
         "QUOTA_TRANSACTION": pd.DataFrame(quota_transactions), "SALMONELLA_TEST": pd.DataFrame(salmonella),
@@ -139,6 +153,14 @@ def edge_frames() -> dict[str, pd.DataFrame]:
         {"ACCOUNT_ID": identifier("A", 90002), "REGISTRATION_NUMBER": "DM-EDGE-REPEAT", "ORGANIZATION_NAME": "Repeated Key", "STATUS": "Active"},
     ])], ignore_index=True)
     frames["ACCOUNT"] = accounts
+    locations = frames["FARM_LOCATION"]
+    locations.loc[0, "ADDRESS_2"] = ""
+    locations.loc[0, "PHONE"] = ""
+    locations.loc[1, "STATUS"] = "Unknown"
+    duplicate_location = locations.iloc[0].to_dict()
+    orphan_location = locations.iloc[0].to_dict()
+    orphan_location.update({"FARM_LOCATION_ID": identifier("L", 90001), "LOCATION_NAME": "Orphan Farm Location", "ACCOUNT_ID": identifier("A", 99999)})
+    frames["FARM_LOCATION"] = pd.concat([locations, pd.DataFrame([duplicate_location, orphan_location])], ignore_index=True)
     frames["FACILITY"].loc[0, "ACTIVATION_DATE"] = "not-a-date"
     frames["FACILITY"].loc[1, "ACCOUNT_ID"] = identifier("A", 99999)
     frames["FACILITY_DETAIL"].loc[1, "FACILITY_ID"] = identifier("F", 99999)

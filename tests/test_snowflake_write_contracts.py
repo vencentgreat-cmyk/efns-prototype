@@ -27,6 +27,7 @@ from data.repositories.snowflake import (
     UTC_NOW_NTZ,
     normalize_date_bind,
     normalize_numeric_bind,
+    normalize_timestamp_bind,
 )
 from data.repositories.mock import MockRepository
 
@@ -223,8 +224,37 @@ def test_update_preserves_created_at_and_advances_only_updated_at():
     assert sql.startswith("UPDATE EFNS_DEV.CORE.ACCOUNT")
     assert "CREATED_AT" not in sql
     assert f"UPDATED_AT = {UTC_NOW_NTZ}" in sql
-    assert params == ("Updated", "account-1", "2026-02-02T12:00:00")
+    assert params == ("Updated", "account-1", dt.datetime(2026, 2, 2, 12, 0))
     assert len(params) == sql.count("%s")
+
+
+def test_optimistic_lock_timestamp_is_connector_compatible_and_canonical_utc():
+    assert normalize_timestamp_bind(pd.Timestamp("2026-09-15T12:34:56")) == dt.datetime(
+        2026, 9, 15, 12, 34, 56
+    )
+    assert normalize_timestamp_bind("2026-09-15T15:34:56+03:00") == dt.datetime(
+        2026, 9, 15, 12, 34, 56
+    )
+    assert normalize_timestamp_bind(pd.NaT) is None
+
+
+@pytest.mark.parametrize("table", list(MODEL))
+def test_every_entity_normalizes_pandas_optimistic_lock_timestamp(table):
+    executor = RecordingExecutor(existing=True)
+    repo = _repo(executor)
+    key, fields = MODEL[table]
+    first_field = fields.split()[0]
+    repo._upsert(
+        table,
+        {
+            key: f"record-{table.lower()}",
+            first_field: "Updated",
+            "EXPECTED_UPDATED_AT": pd.Timestamp("2026-02-02T12:00:00"),
+        },
+    )
+    _, _sql, params = next(call for call in executor.calls if call[0] == "execute")
+    assert params[-1] == dt.datetime(2026, 2, 2, 12, 0)
+    assert type(params[-1]) is dt.datetime
 
 
 def test_unknown_insert_affected_rows_is_verified_and_returned():
@@ -405,6 +435,22 @@ def test_timestamp_display_converts_utc_to_halifax_with_timezone_label():
     )
     assert format_timestamp("2026-07-15T12:00:00Z") == (
         "2026-07-15 09:00 ADT (America/Halifax)"
+    )
+
+
+def test_quota_summary_orders_distinct_results_by_projected_aliases():
+    executor = RecordingExecutor()
+    repo = _repo(executor)
+    repo.get_quota_summary(dt.date(2026, 9, 15), "Egg Production", status="Active")
+    _, sql, params = next(call for call in executor.calls if call[0] == "query")
+    assert "SELECT DISTINCT" in sql
+    assert "ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID" in sql
+    assert "ORDER BY a.ORGANIZATION_NAME" not in sql
+    assert params == (
+        "Egg Production",
+        dt.date(2026, 9, 15),
+        dt.date(2026, 9, 15),
+        "Active",
     )
 
 
