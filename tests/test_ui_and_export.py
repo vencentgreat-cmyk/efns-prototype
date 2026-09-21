@@ -31,6 +31,7 @@ def test_all_navigation_pages_render_without_exception(tmp_path, monkeypatch):
         "pages/8_Quota_Transactions.py",
         "pages/9_Salmonella_Tests.py",
         "pages/10_Salmonella_Report.py",
+        "pages/17_Flock_Quota_Import.py",
     ):
         app.switch_page(page).run()
         assert list(app.exception) == [], page

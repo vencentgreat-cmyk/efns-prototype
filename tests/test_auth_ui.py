@@ -67,6 +67,14 @@ def test_reporting_viewer_cannot_open_import_page_directly(tmp_path, monkeypatch
     assert not any("Production Import" in block.value for block in app.markdown)
 
 
+def test_reporting_viewer_can_open_flock_quota_preview_page(tmp_path, monkeypatch):
+    page = ROOT / "app" / "pages" / "17_Flock_Quota_Import.py"
+    app = authenticated_app(page, tmp_path, monkeypatch, Role.REPORTING_VIEWER)
+    assert list(app.exception) == []
+    assert not any("Access denied" in block.value for block in app.markdown)
+    assert any("Upload and validation never write" in caption.value for caption in app.caption)
+
+
 def test_developer_can_open_audit_but_not_user_management(tmp_path, monkeypatch):
     audit = authenticated_app(
         ROOT / "app" / "pages" / "16_Audit_Log.py", tmp_path, monkeypatch, Role.DEVELOPER

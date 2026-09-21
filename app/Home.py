@@ -168,6 +168,11 @@ pages = {
         ],
         "Production": [
             st.Page(
+                page_file("17_Flock_Quota_Import.py"),
+                title="Flock & Quota Import",
+                icon=":material/upload_file:",
+            ),
+            st.Page(
                 page_file("2_Production_Data.py"),
                 title="Production Data",
                 icon=":material/table_view:",

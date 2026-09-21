@@ -248,6 +248,16 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
+    def import_flock_quota_batch(
+        self,
+        batch: dict,
+        quota_records: list[dict],
+        flock_records: list[dict],
+    ) -> dict:
+        """Persist one validated Flock and Quota batch atomically."""
+        ...
+
+    @abstractmethod
     def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:
         """Preserve source rows and their technical validation state."""
         ...

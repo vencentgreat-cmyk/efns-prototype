@@ -33,6 +33,7 @@ DELETE_METHODS = {
 IMPORT_METHODS = {
     "create_import_batch": "IMPORT_BATCH",
     "import_production_bundle": "IMPORT_BATCH",
+    "import_flock_quota_batch": "FLOCK_QUOTA_IMPORT",
     "insert_raw_rows": "RAW_PRODUCTION",
     "insert_production_records": "PRODUCTION_RECORD",
 }
@@ -105,11 +106,31 @@ class AuthorizedRepository:
         def call(*args, **kwargs):
             self._require(Permission.IMPORT_DATA)
             result = method(*args, **kwargs)
-            entity_id = result[0] if name == "import_production_bundle" and isinstance(result, tuple) else result
+            if isinstance(result, dict):
+                entity_id = result.get("import_id")
+            else:
+                entity_id = result[0] if name == "import_production_bundle" and isinstance(result, tuple) else result
             details = {"operation": name}
             if name == "import_production_bundle" and isinstance(result, tuple) and len(result) > 1:
                 details["record_count"] = int(result[1])
-            self.auth_store.record_action(self.actor, "IMPORT", entity_type, str(entity_id), details)
+            elif name == "import_flock_quota_batch" and isinstance(result, dict):
+                details.update(
+                    {
+                        key: result[key]
+                        for key in ("batch_id", "filename", "file_hash", "total_count", "quota_count", "flock_count", "created_count", "updated_count", "rejected_count", "status")
+                        if key in result
+                    }
+                )
+            if name == "import_flock_quota_batch" and isinstance(result, dict):
+                try:
+                    self.auth_store.record_action(self.actor, "IMPORT", entity_type, str(entity_id), details)
+                    result["audit_recorded"] = True
+                except Exception:
+                    # Core rows are already committed by the repository transaction.
+                    # Audit uses a separate store/transaction and is reported independently.
+                    result["audit_recorded"] = False
+            else:
+                self.auth_store.record_action(self.actor, "IMPORT", entity_type, str(entity_id), details)
             return result
 
         return call

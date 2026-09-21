@@ -14,6 +14,7 @@ import pandas as pd
 from data.repositories.base import BaseRepository, ConcurrencyError
 from data.synthetic import generate_all
 from data.validation import (
+    normalize_flock_dates,
     validate_flock,
     validate_quota_registration,
     validate_quota_transaction,
@@ -251,6 +252,7 @@ class MockRepository(BaseRepository):
         return match.iloc[0].to_dict() if len(match) else None
 
     def upsert_flock(self, record: dict) -> str:
+        record = normalize_flock_dates(record)
         errors = validate_flock(self, record)
         if errors:
             raise ValueError(" ".join(errors))
@@ -521,6 +523,114 @@ class MockRepository(BaseRepository):
             return import_id, count
         except Exception:
             self._import_batches, self._raw_rows, self._production = snapshots
+            raise
+
+    def import_flock_quota_batch(
+        self,
+        batch: dict,
+        quota_records: list[dict],
+        flock_records: list[dict],
+    ) -> dict:
+        """Apply a validated mixed batch with in-memory rollback semantics."""
+        file_hash = batch.get("FILE_HASH")
+        if file_hash and self.find_import_by_hash(file_hash):
+            raise ValueError("This exact file has already been imported.")
+        snapshots = (
+            self._quota_registrations.copy(deep=True),
+            self._flocks.copy(deep=True),
+            [dict(item) for item in self._import_batches],
+        )
+        created_count = 0
+        updated_count = 0
+        try:
+            for source in quota_records:
+                record = dict(source)
+                action = record.pop("ACTION")
+                registration = str(record.get("REGISTRATION_NUMBER") or "").strip()
+                if action not in {"CREATE", "UPDATE"}:
+                    raise ValueError("Unsupported quota import action.")
+                if not registration.startswith("DEV_DEMO_"):
+                    raise ValueError("Quota import is restricted to DEV_DEMO_ identifiers.")
+                matches = self._quota_registrations[
+                    self._quota_registrations["REGISTRATION_NUMBER"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .str.casefold()
+                    == registration.casefold()
+                ]
+                if action == "CREATE" and not matches.empty:
+                    raise ValueError("Registration Number already exists and cannot be created.")
+                if action == "UPDATE" and len(matches) != 1:
+                    raise ValueError("Registration Number does not resolve to one existing record.")
+                if action == "UPDATE" and str(matches.iloc[0]["QUOTA_ID"]) != str(record.get("QUOTA_ID")):
+                    raise ValueError("Quota target changed after validation.")
+                self.upsert_quota_registration(record)
+                created_count += int(action == "CREATE")
+                updated_count += int(action == "UPDATE")
+
+            for source in flock_records:
+                record = dict(source)
+                action = record.pop("ACTION")
+                record.pop("QUOTA_REGISTRATION_NUMBER", None)
+                flock_number = str(record.get("FLOCK_NUMBER") or "").strip()
+                if action not in {"CREATE", "UPDATE"}:
+                    raise ValueError("Unsupported flock import action.")
+                if not flock_number.startswith("DEV_DEMO_"):
+                    raise ValueError("Flock import is restricted to DEV_DEMO_ identifiers.")
+                matches = self._flocks[
+                    self._flocks["FLOCK_NUMBER"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .str.casefold()
+                    == flock_number.casefold()
+                ]
+                if action == "CREATE" and not matches.empty:
+                    raise ValueError("Flock Number already exists and cannot be created.")
+                if action == "UPDATE" and len(matches) != 1:
+                    raise ValueError("Flock Number does not resolve to one existing record.")
+                if action == "UPDATE" and str(matches.iloc[0]["FLOCK_ID"]) != str(record.get("FLOCK_ID")):
+                    raise ValueError("Flock target changed after validation.")
+                permit = str(record.get("PERMIT_NUMBER") or "").strip().casefold()
+                permit_matches = self._flocks[
+                    self._flocks["PERMIT_NUMBER"].fillna("").astype(str).str.strip().str.casefold() == permit
+                ]
+                if action == "UPDATE" and record.get("FLOCK_ID"):
+                    permit_matches = permit_matches[permit_matches["FLOCK_ID"] != record["FLOCK_ID"]]
+                if permit and not permit_matches.empty:
+                    raise ValueError("Permit Number is already used by another Flock.")
+                self.upsert_flock(record)
+                created_count += int(action == "CREATE")
+                updated_count += int(action == "UPDATE")
+
+            total_count = len(quota_records) + len(flock_records)
+            import_id = self.create_import_batch(
+                {
+                    **batch,
+                    "SOURCE": "Flock & Quota Import",
+                    "WORKSHEET_NAME": "Batch Import",
+                    "SOURCE_RECORD_COUNT": total_count,
+                    "ROW_COUNT": total_count,
+                    "ERROR_COUNT": int(batch.get("ERROR_COUNT", 0)),
+                    "STATUS": "Committed",
+                }
+            )
+            return {
+                "import_id": import_id,
+                "batch_id": batch.get("BATCH_ID"),
+                "filename": batch.get("FILENAME"),
+                "file_hash": file_hash,
+                "total_count": total_count,
+                "quota_count": len(quota_records),
+                "flock_count": len(flock_records),
+                "created_count": created_count,
+                "updated_count": updated_count,
+                "rejected_count": int(batch.get("ERROR_COUNT", 0)),
+                "status": "Committed",
+            }
+        except Exception:
+            self._quota_registrations, self._flocks, self._import_batches = snapshots
             raise
 
     def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:

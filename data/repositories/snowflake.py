@@ -12,7 +12,7 @@ import pandas as pd
 
 from data.connection import ConnectorExecutor, SqlExecutor, create_executor
 from data.repositories.base import BaseRepository, ConcurrencyError, RepositoryError
-from data.validation import validate_flock, validate_quota_registration, validate_quota_transaction, validate_salmonella_test
+from data.validation import normalize_flock_dates, validate_flock, validate_quota_registration, validate_quota_transaction, validate_salmonella_test
 
 
 MODEL = {
@@ -122,7 +122,7 @@ class SnowflakeRepository(BaseRepository):
         frame = self._query(f"SELECT * FROM {self._table(table, schema)} WHERE {column} = %s", (value,))
         return frame.iloc[0].to_dict() if not frame.empty else None
 
-    def _upsert(self, table: str, record: dict) -> str:
+    def _upsert_with_executor(self, executor: SqlExecutor, table: str, record: dict) -> str:
         key, allowed_text = MODEL[table]
         expected = record.get("EXPECTED_UPDATED_AT")
         entity_id = record.get(key) or str(uuid.uuid4())
@@ -144,20 +144,23 @@ class SnowflakeRepository(BaseRepository):
             f"INSERT INTO {self._table(table)} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) "
             f"VALUES ({', '.join(['%s'] * len(columns))}, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())"
         )
-        with self._executor().transaction() as tx:
-            affected = tx.execute(update_sql, tuple(update_params))
-            if expected is not None and affected < 0:
-                raise RepositoryError("The active Snowflake runtime did not report an affected-row count; the protected update was not accepted.")
-            if affected == 0:
-                existing = tx.query(f"SELECT UPDATED_AT FROM {self._table(table)} WHERE {key} = %s", (entity_id,))
-                if not existing.empty:
-                    if expected is not None:
-                        raise ConcurrencyError("This record changed after it was opened. Reload it before saving again.")
-                    return entity_id
+        affected = executor.execute(update_sql, tuple(update_params))
+        if expected is not None and affected < 0:
+            raise RepositoryError("The active Snowflake runtime did not report an affected-row count; the protected update was not accepted.")
+        if affected == 0:
+            existing = executor.query(f"SELECT UPDATED_AT FROM {self._table(table)} WHERE {key} = %s", (entity_id,))
+            if not existing.empty:
                 if expected is not None:
-                    raise ConcurrencyError("This record no longer exists. Return to the list and reload.")
-                tx.execute(insert_sql, (entity_id, *values.values()))
+                    raise ConcurrencyError("This record changed after it was opened. Reload it before saving again.")
+                return entity_id
+            if expected is not None:
+                raise ConcurrencyError("This record no longer exists. Return to the list and reload.")
+            executor.execute(insert_sql, (entity_id, *values.values()))
         return entity_id
+
+    def _upsert(self, table: str, record: dict) -> str:
+        with self._executor().transaction() as tx:
+            return self._upsert_with_executor(tx, table, record)
 
     def _delete(self, table, key, entity_id, references=()):
         with self._executor().transaction() as tx:
@@ -206,6 +209,7 @@ class SnowflakeRepository(BaseRepository):
     def get_flocks(self, account_id=None, facility_id=None): return self._filtered("FLOCK", (("ACCOUNT_ID", account_id), ("FACILITY_ID", facility_id)))
     def get_flock(self, flock_id): return self._one("FLOCK", "FLOCK_ID", flock_id)
     def upsert_flock(self, record):
+        record = normalize_flock_dates(record)
         errors = validate_flock(self, record)
         if errors: raise RepositoryError(" ".join(errors))
         return self._upsert("FLOCK", record)
@@ -308,6 +312,138 @@ class SnowflakeRepository(BaseRepository):
             count = self._insert_production(tx, records, import_id)
             tx.execute(f"UPDATE {self._table('IMPORT_BATCH', self.schema_raw)} SET ROW_COUNT = %s, STATUS = %s, UPDATED_AT = CURRENT_TIMESTAMP() WHERE IMPORT_ID = %s", (count, "Committed", import_id))
         return import_id, count
+
+    def import_flock_quota_batch(self, batch, quota_records, flock_records):
+        """Recheck and commit one mixed Flock and Quota batch transactionally."""
+        import_id = batch.get("IMPORT_ID") or str(uuid.uuid4())
+        file_hash = batch.get("FILE_HASH")
+        created_count = 0
+        updated_count = 0
+        with self._executor().transaction() as tx:
+            if file_hash:
+                existing = tx.query(
+                    f"SELECT IMPORT_ID FROM {self._table('IMPORT_BATCH', self.schema_raw)} WHERE FILE_HASH = %s LIMIT 1",
+                    (file_hash,),
+                )
+                if not existing.empty:
+                    raise RepositoryError("This exact file has already been imported.")
+
+            quota_ids: dict[str, str] = {}
+            for source in quota_records:
+                record = dict(source)
+                action = record.pop("ACTION")
+                registration = str(record.get("REGISTRATION_NUMBER") or "").strip()
+                if action not in {"CREATE", "UPDATE"}:
+                    raise RepositoryError("Unsupported quota import action.")
+                if not registration.startswith("DEV_DEMO_"):
+                    raise RepositoryError("Quota import is restricted to DEV_DEMO_ identifiers.")
+                matches = tx.query(
+                    f"SELECT * FROM {self._table('QUOTA_REGISTRATION')} WHERE UPPER(TRIM(REGISTRATION_NUMBER)) = UPPER(TRIM(%s))",
+                    (registration,),
+                )
+                if action == "CREATE" and not matches.empty:
+                    raise RepositoryError("Registration Number already exists and cannot be created.")
+                if action == "UPDATE" and len(matches) != 1:
+                    raise RepositoryError("Registration Number does not resolve to one existing record.")
+                if action == "UPDATE" and str(matches.iloc[0]["QUOTA_ID"]) != str(record.get("QUOTA_ID")):
+                    raise RepositoryError("Quota target changed after validation.")
+                account = tx.query(
+                    f"SELECT ACCOUNT_ID FROM {self._table('ACCOUNT')} WHERE ACCOUNT_ID = %s",
+                    (record.get("ACCOUNT_ID"),),
+                )
+                if account.empty:
+                    raise RepositoryError("Account no longer exists.")
+                quota_id = self._upsert_with_executor(tx, "QUOTA_REGISTRATION", record)
+                quota_ids[registration.casefold()] = quota_id
+                created_count += int(action == "CREATE")
+                updated_count += int(action == "UPDATE")
+
+            for source in flock_records:
+                record = dict(source)
+                action = record.pop("ACTION")
+                quota_registration = str(record.pop("QUOTA_REGISTRATION_NUMBER", "") or "").strip()
+                if quota_registration and quota_registration.casefold() in quota_ids:
+                    record["QUOTA_ID"] = quota_ids[quota_registration.casefold()]
+                record = normalize_flock_dates(record)
+                flock_number = str(record.get("FLOCK_NUMBER") or "").strip()
+                if action not in {"CREATE", "UPDATE"}:
+                    raise RepositoryError("Unsupported flock import action.")
+                if not flock_number.startswith("DEV_DEMO_"):
+                    raise RepositoryError("Flock import is restricted to DEV_DEMO_ identifiers.")
+                matches = tx.query(
+                    f"SELECT FLOCK_ID FROM {self._table('FLOCK')} WHERE UPPER(TRIM(FLOCK_NUMBER)) = UPPER(TRIM(%s))",
+                    (flock_number,),
+                )
+                if action == "CREATE" and not matches.empty:
+                    raise RepositoryError("Flock Number already exists and cannot be created.")
+                if action == "UPDATE" and len(matches) != 1:
+                    raise RepositoryError("Flock Number does not resolve to one existing record.")
+                if action == "UPDATE" and str(matches.iloc[0]["FLOCK_ID"]) != str(record.get("FLOCK_ID")):
+                    raise RepositoryError("Flock target changed after validation.")
+                if record.get("HATCH_DATE") is None:
+                    raise RepositoryError("Hatch Date is required.")
+                permit = str(record.get("PERMIT_NUMBER") or "").strip()
+                permit_matches = tx.query(
+                    f"SELECT FLOCK_ID FROM {self._table('FLOCK')} WHERE UPPER(TRIM(PERMIT_NUMBER)) = UPPER(TRIM(%s))",
+                    (permit,),
+                )
+                if record.get("FLOCK_ID") and not permit_matches.empty:
+                    permit_matches = permit_matches[permit_matches["FLOCK_ID"].astype(str) != str(record["FLOCK_ID"])]
+                if not permit_matches.empty:
+                    raise RepositoryError("Permit Number is already used by another Flock.")
+                facility = tx.query(
+                    f"SELECT ACCOUNT_ID FROM {self._table('FACILITY')} WHERE FACILITY_ID = %s",
+                    (record.get("FACILITY_ID"),),
+                )
+                if facility.empty or str(facility.iloc[0]["ACCOUNT_ID"]) != str(record.get("ACCOUNT_ID")):
+                    raise RepositoryError("Facility no longer belongs to the selected Account.")
+                detail_id = record.get("FACILITY_DETAIL_ID")
+                if detail_id:
+                    detail = tx.query(
+                        f"SELECT FACILITY_ID FROM {self._table('FACILITY_DETAIL')} WHERE FACILITY_DETAIL_ID = %s",
+                        (detail_id,),
+                    )
+                    if detail.empty or str(detail.iloc[0]["FACILITY_ID"]) != str(record.get("FACILITY_ID")):
+                        raise RepositoryError("Facility Detail no longer belongs to the selected Facility.")
+                quota_id = record.get("QUOTA_ID")
+                if quota_id:
+                    quota = tx.query(
+                        f"SELECT ACCOUNT_ID FROM {self._table('QUOTA_REGISTRATION')} WHERE QUOTA_ID = %s",
+                        (quota_id,),
+                    )
+                    if quota.empty or str(quota.iloc[0]["ACCOUNT_ID"]) != str(record.get("ACCOUNT_ID")):
+                        raise RepositoryError("Quota Registration no longer belongs to the selected Account.")
+                self._upsert_with_executor(tx, "FLOCK", record)
+                created_count += int(action == "CREATE")
+                updated_count += int(action == "UPDATE")
+
+            total_count = len(quota_records) + len(flock_records)
+            self._insert_batch(
+                tx,
+                import_id,
+                {
+                    **batch,
+                    "SOURCE": "Flock & Quota Import",
+                    "WORKSHEET_NAME": "Batch Import",
+                    "SOURCE_RECORD_COUNT": total_count,
+                    "ROW_COUNT": total_count,
+                    "ERROR_COUNT": int(batch.get("ERROR_COUNT", 0)),
+                    "STATUS": "Committed",
+                },
+            )
+        return {
+            "import_id": import_id,
+            "batch_id": batch.get("BATCH_ID"),
+            "filename": batch.get("FILENAME"),
+            "file_hash": file_hash,
+            "total_count": len(quota_records) + len(flock_records),
+            "quota_count": len(quota_records),
+            "flock_count": len(flock_records),
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "rejected_count": int(batch.get("ERROR_COUNT", 0)),
+            "status": "Committed",
+        }
 
     def get_production_records(self, reporting_year=None, reporting_week=None, grader_number=None, barn_identity=None, egg_colour=None): return self._filtered("VW_PRODUCTION_SUMMARY", (("REPORTING_YEAR", reporting_year), ("REPORTING_WEEK", reporting_week), ("GRADER_NUMBER", grader_number), ("BARN_IDENTITY", barn_identity), ("EGG_COLOUR", egg_colour)), self.schema_reporting)
     def get_production_summary_metrics(self):
