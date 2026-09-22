@@ -1,0 +1,3 @@
+FACILITY_DETAIL_ID,FACILITY_ID,DETAIL_NAME,DETAIL_TYPE,STATUS,COMMENTS
+DEV_MIGRATION_D_00001,DEV_MIGRATION_F_00001,Synthetic Barn 001,Barn,Active,Fully fictional migration fixture.
+DEV_MIGRATION_D_00002,DEV_MIGRATION_F_99999,Synthetic Barn 002,Barn,Active,Fully fictional migration fixture.

@@ -126,13 +126,15 @@ class SnowflakeAuthStore(AuthStore):
         user_id = str(uuid4())
         assigned_role = Role(role)
         with self.executor.transaction() as tx:
-            tx.execute(
+            affected = tx.execute(
                 f"INSERT INTO {self.user_table} "
                 "(USER_ID, EMAIL, DISPLAY_NAME, ROLE, ACTIVE, CREATED_AT, UPDATED_AT) "
                 "VALUES (%s, %s, %s, %s, TRUE, "
                 "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()), CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()))",
                 (user_id, normalized, name, assigned_role.value),
             )
+            if affected == 0:
+                raise RepositoryError("Snowflake did not create the application user.")
             self._insert_audit(
                 tx, actor, "CREATE_USER", "USER", user_id,
                 {"email": normalized, "role": assigned_role.value},
@@ -162,12 +164,14 @@ class SnowflakeAuthStore(AuthStore):
         if current.role == Role.ADMIN and current.active and (assigned_role != Role.ADMIN or not active):
             self._ensure_another_active_admin(user_id)
         with self.executor.transaction() as tx:
-            tx.execute(
+            affected = tx.execute(
                 f"UPDATE {self.user_table} SET ROLE = %s, ACTIVE = %s, "
                 "UPDATED_AT = CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()) "
                 "WHERE USER_ID = %s",
                 (assigned_role.value, bool(active), user_id),
             )
+            if affected == 0:
+                raise RepositoryError("Snowflake did not update the application user.")
             self._insert_audit(
                 tx, actor, "UPDATE_USER", "USER", user_id,
                 {"email": current.email, "role": assigned_role.value, "active": bool(active)},
@@ -188,7 +192,11 @@ class SnowflakeAuthStore(AuthStore):
             self._ensure_another_active_admin(user_id)
         with self.executor.transaction() as tx:
             self._insert_audit(tx, actor, "DELETE_USER", "USER", user_id, {"email": current.email})
-            tx.execute(f"DELETE FROM {self.user_table} WHERE USER_ID = %s", (user_id,))
+            affected = tx.execute(f"DELETE FROM {self.user_table} WHERE USER_ID = %s", (user_id,))
+            if affected == 0:
+                raise RepositoryError("Snowflake did not delete the application user.")
+            if affected < 0 and self._one("USER_ID", user_id, tx) is not None:
+                raise RepositoryError("Snowflake could not confirm deletion of the application user.")
 
     def reset_temporary_password(self, actor: User, user_id: str) -> str:
         require_permission(actor, Permission.MANAGE_USERS)
@@ -221,16 +229,29 @@ class SnowflakeAuthStore(AuthStore):
         entity_id: str | None = None,
         details: dict | None = None,
     ) -> None:
-        executor.execute(
+        audit_id = str(uuid4())
+        # Always bind valid JSON text. An untyped NULL passed to PARSE_JSON can
+        # fail Snowpark bind inference after the business write has succeeded.
+        details_json = json.dumps(details or {}, sort_keys=True)
+        affected = executor.execute(
             f"INSERT INTO {self.audit_table} "
             "(AUDIT_ID, ACTOR_USER_ID, ACTOR_EMAIL, ACTION, ENTITY_TYPE, ENTITY_ID, DETAILS, OCCURRED_AT) "
-            "VALUES (%s, %s, %s, %s, %s, %s, PARSE_JSON(%s), "
-            "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()))",
+            "SELECT %s, %s, %s, %s, %s, %s, PARSE_JSON(%s), "
+            "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())",
             (
-                str(uuid4()), actor.user_id, actor.email, str(action), str(entity_type),
-                entity_id, json.dumps(details, sort_keys=True) if details else None,
+                audit_id, actor.user_id, actor.email, str(action), str(entity_type),
+                entity_id, details_json,
             ),
         )
+        if affected == 0:
+            raise RepositoryError("Snowflake did not append the audit event.")
+        if affected < 0:
+            confirmation = executor.query(
+                f"SELECT AUDIT_ID FROM {self.audit_table} WHERE AUDIT_ID = %s LIMIT 1",
+                (audit_id,),
+            )
+            if confirmation.empty:
+                raise RepositoryError("Snowflake could not confirm the audit event.")
 
     def list_audit(self, actor: User, limit: int = 1000) -> list[AuditEvent]:
         require_permission(actor, Permission.VIEW_AUDIT)

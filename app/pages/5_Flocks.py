@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import current_page_url, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
+from app.navigation import format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, related_records_table, saved_view_selector, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import EGG_COLOURS, FLOCK_QUOTA_TYPES, FLOCK_STATUSES, UNASSIGNED_LABEL
 from data.repositories import get_repository
@@ -39,11 +39,13 @@ def label_for_id(mapping, value, default=None):
 
 
 if view.name == "list":
-    page_header("Active Flocks", "Search, filter and maintain validated Flock records.", "FLOCK MANAGEMENT")
+    page_header("Flocks", "Search, filter and maintain validated Flock records.", "FLOCK MANAGEMENT")
+    statuses, _ = saved_view_selector("FLOCK", "Flocks", key="flock_saved_view", selection_keys=("flock_list_grid", "flock_list_row_ids", "flock_delete_pending"))
     selected_index = selected_row_index("flock_list_grid")
     row_ids = st.session_state.get("flock_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("flock_list", selected=bool(selected_id))
+    if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "new": open_view("new")
     if action == "refresh": clear_widget_prefix("flock_filter_"); st.rerun()
     if action == "delete" and selected_id: st.session_state.flock_delete_pending = selected_id
@@ -58,27 +60,24 @@ if view.name == "list":
                     except (ValueError, RepositoryError) as exc: show_data_error(exc)
                 if st.button("Cancel", key="flock_cancel_delete"):
                     st.session_state.pop("flock_delete_pending", None); st.rerun()
-    filters = st.columns([2, 1, 1, 1])
+    filters = st.columns([2, 1, 1])
     keyword = filters[0].text_input("Filter by keyword", placeholder="Flock number or permit", key="flock_filter_keyword")
     account_filter = filters[1].selectbox("Account", ["All", *account_options], key="flock_filter_account")
-    status_filter = filters[2].selectbox("Status", ["All", *FLOCK_STATUSES], key="flock_filter_status")
-    colour_filter = filters[3].selectbox("Egg colour", ["All", *EGG_COLOURS], key="flock_filter_colour")
-    display = flocks.copy()
+    colour_filter = filters[2].selectbox("Egg colour", ["All", *EGG_COLOURS], key="flock_filter_colour")
+    display = repo.get_flocks(statuses=statuses).copy()
     if keyword:
         display = display[display[["FLOCK_NUMBER", "PERMIT_NUMBER"]].fillna("").astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)]
     if account_filter != "All": display = display[display["ACCOUNT_ID"] == account_options[account_filter]]
-    if status_filter != "All": display = display[display["STATUS"] == status_filter]
     if colour_filter != "All": display = display[display["EGG_COLOUR"] == colour_filter]
-    st.caption(f"{len(display):,} flock record(s)")
+    st.caption(f"{len(display):,} flock record(s) in this view")
     if display.empty:
         st.info("No Flocks match the current filters.")
     else:
         display = display.reset_index(drop=True)
-        display["FLOCK_LINK"] = display.apply(lambda row: current_page_url(row["FLOCK_ID"], row["FLOCK_NUMBER"]), axis=1)
-        display["ACCOUNT_LINK"] = display.apply(lambda row: module_url("Accounts_&_Facilities", row["ACCOUNT_ID"], account_names.get(row["ACCOUNT_ID"], "Unknown")), axis=1)
-        display["FACILITY_LINK"] = display.apply(lambda row: module_url("Facilities", row["FACILITY_ID"], facility_names.get(row["FACILITY_ID"], UNASSIGNED_LABEL)), axis=1)
+        display["ACCOUNT_NAME"] = display["ACCOUNT_ID"].map(account_names).fillna("Unknown")
+        display["FACILITY_NAME"] = display["FACILITY_ID"].map(facility_names).fillna(UNASSIGNED_LABEL)
         st.session_state.flock_list_row_ids = display["FLOCK_ID"].tolist()
-        st.dataframe(display[["FLOCK_LINK", "ACCOUNT_LINK", "FACILITY_LINK", "PERMIT_NUMBER", "BIRD_COUNT", "HATCH_DATE", "EGG_COLOUR", "STATUS", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_list_grid", column_config={"FLOCK_LINK": st.column_config.LinkColumn("Flock Number", display_text=r".*#(.*)$"), "ACCOUNT_LINK": st.column_config.LinkColumn("Account", display_text=r".*#(.*)$"), "FACILITY_LINK": st.column_config.LinkColumn("Facility", display_text=r".*#(.*)$"), "CREATED_AT": st.column_config.DatetimeColumn("Created On", format="YYYY-MM-DD HH:mm")})
+        st.dataframe(display[["FLOCK_NUMBER", "ACCOUNT_NAME", "FACILITY_NAME", "PERMIT_NUMBER", "BIRD_COUNT", "HATCH_DATE", "EGG_COLOUR", "STATUS", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_list_grid", column_config={"FLOCK_NUMBER": "Flock Number", "ACCOUNT_NAME": "Account", "FACILITY_NAME": "Facility", "CREATED_AT": timestamp_column("Created On")})
 else:
     current = repo.get_flock(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -102,6 +101,10 @@ else:
                 left.markdown(f"**Flock Number**  \n{current.get('FLOCK_NUMBER')}")
                 left.markdown(f"**Account**  \n{account_names.get(current.get('ACCOUNT_ID'), 'Unknown')}")
                 left.markdown(f"**Facility**  \n{facility_names.get(current.get('FACILITY_ID'), UNASSIGNED_LABEL)}")
+                if current.get("ACCOUNT_ID") and left.button("View Account", key="flock_parent_account", icon=":material/account_circle:"):
+                    open_module("Accounts_&_Facilities", "detail", current["ACCOUNT_ID"])
+                if current.get("FACILITY_ID") and left.button("View Facility", key="flock_parent_facility", icon=":material/domain:"):
+                    open_module("Facilities", "detail", current["FACILITY_ID"])
                 middle.markdown(f"**Permit Number**  \n{current.get('PERMIT_NUMBER')}")
                 middle.markdown(f"**Hatch Date**  \n{current.get('HATCH_DATE')}")
                 middle.markdown(f"**Placement Date**  \n{current.get('PLACEMENT_DATE') or '—'}")
@@ -109,21 +112,17 @@ else:
                 right.markdown(f"**Egg Colour**  \n{current.get('EGG_COLOUR') or '—'}")
                 right.markdown(f"**Status**  \n{current.get('STATUS')}")
         with details:
-            st.dataframe(pd.DataFrame({"Field": [key.replace("_", " ").title() for key in current], "Value": [str(value) if value is not None else "—" for value in current.values()]}), width="stretch", hide_index=True)
+            detail_fields = [key for key in current if key not in {"CREATED_AT", "UPDATED_AT"}]
+            st.dataframe(pd.DataFrame({"Field": [key.replace("_", " ").title() for key in detail_fields], "Value": [str(current[key]) if current[key] is not None else "—" for key in detail_fields]}), width="stretch", hide_index=True)
         with related:
             for heading, frame, key, label, slug in (
                 ("Flock Transactions", repo.get_flock_transactions(view.record_id), "FLOCK_TRANSACTION_ID", "TRANSACTION_TYPE", "Flock_Transactions"),
                 ("Salmonella Tests", repo.get_salmonella_tests(flock_id=view.record_id), "SALMONELLA_TEST_ID", "PERMIT_NUMBER", "Salmonella_Tests"),
             ):
-                section_intro(heading)
-                if frame.empty: st.info(f"No related {heading}.")
-                else:
-                    frame = frame.copy(); frame["RECORD_LINK"] = frame.apply(lambda row: module_url(slug, row[key], f"{row.get(label)} · {str(row[key])[:8]}"), axis=1)
-                    columns = [column for column in frame.columns if column not in {key, "RECORD_LINK", "CREATED_AT", "UPDATED_AT"}][:5]
-                    st.dataframe(frame[["RECORD_LINK", *columns]], width="stretch", hide_index=True, column_config={"RECORD_LINK": st.column_config.LinkColumn("Record", display_text=r".*#(.*)$")})
+                related_records_table(heading, frame, id_column=key, label_column=label, page_slug=slug, key=f"flock_related_{slug}")
             production = repo.get_production_records()
             production = production[production["FLOCK_ID"] == view.record_id] if "FLOCK_ID" in production else production.iloc[0:0]
-            section_intro("Matched Production Records")
+            section_intro(f"Matched Production Records ({len(production)})")
             if production.empty: st.info("No matched Production Records.")
             else: st.dataframe(production, width="stretch", hide_index=True)
     else:

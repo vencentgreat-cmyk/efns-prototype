@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from urllib.parse import quote, urlencode, urlsplit, urlunsplit
+import inspect
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -13,26 +14,66 @@ from app.security import Permission
 
 
 VALID_VIEWS = {"list", "new", "detail", "edit"}
+DISPLAY_TIMEZONE = "America/Halifax"
+DISPLAY_TIMEZONE_LABEL = "America/Halifax"
+_ACTIVE_SCOPE_KEY = "_efns_active_record_scope"
+_PAGE_FILES = {
+    "Accounts_&_Facilities": "3_Accounts_Facilities_Flocks.py",
+    "Facilities": "11_Facilities.py",
+    "Facility_Details": "13_Facility_Details.py",
+    "Farm_Locations": "18_Farm_Locations.py",
+    "Flocks": "5_Flocks.py",
+    "Flock_Transactions": "6_Flock_Transactions.py",
+    "Quota_Registrations": "7_Quota_Registrations.py",
+    "Quota_Transactions": "8_Quota_Transactions.py",
+    "Salmonella_Tests": "9_Salmonella_Tests.py",
+}
 
 
-def _module_path(current_path: str, page_slug: str) -> str:
-    """Preserve Snowflake's /!/ multipage prefix when building record links."""
-    encoded = quote(page_slug, safe="_&-")
-    if "/!/" in current_path:
-        app_root = current_path.split("/!/", 1)[0]
-        return f"{app_root}/!/{encoded}"
-    return f"/{encoded}"
+def saved_view_selector(
+    entity: str,
+    plural_label: str,
+    *,
+    key: str,
+    role_views=(),
+    selection_keys=(),
+) -> tuple[tuple[str, ...] | None, str | None]:
+    """Render one reusable Active/Inactive/All selector.
+
+    Returns the selected status tuple and optional Account role field.  A view
+    change clears page-provided row-selection keys before the table is read.
+    """
+    from data.constants import SAVED_VIEW_STATUS_GROUPS
+
+    groups = SAVED_VIEW_STATUS_GROUPS[entity]
+    options = [f"Active {plural_label}", f"Inactive {plural_label}", f"All {plural_label}"]
+    role_by_label = {f"Active {label}": field for field, label in role_views}
+    options.extend(role_by_label)
+    selected = st.selectbox("View", options, key=key)
+    marker = f"{key}_applied"
+    if st.session_state.get(marker) != selected:
+        for state_key in selection_keys:
+            st.session_state.pop(state_key, None)
+        st.session_state[marker] = selected
+    if selected == f"All {plural_label}":
+        return None, None
+    if selected == f"Inactive {plural_label}":
+        return tuple(groups["inactive"]), None
+    return tuple(groups["active"]), role_by_label.get(selected)
 
 
-def _url_query(current_path: str, values: dict[str, str]) -> str:
-    """Encode manual Snowflake links with its browser query-key prefix."""
-    prefix = "streamlit-" if "/!/" in current_path else ""
-    return urlencode({f"{prefix}{key}": value for key, value in values.items()})
+def _caller_scope() -> str:
+    frame = inspect.currentframe()
+    while frame:
+        filename = Path(frame.f_code.co_filename)
+        if filename.parent.name == "pages":
+            return filename.stem
+        frame = frame.f_back
+    return "application"
 
 
-def _snowflake_fragment_route(parsed) -> str | None:
-    route = str(parsed.fragment or "").split("?", 1)[0].split("#", 1)[0]
-    return route if "/!/" in route else None
+def _view_key(scope: str, name: str) -> str:
+    return f"_efns_record_{scope}_{name}"
 
 
 @dataclass(frozen=True)
@@ -42,25 +83,33 @@ class RecordView:
 
 
 def read_record_view() -> RecordView:
-    """Read a stable list/new/detail/edit state from the current URL."""
-    name = str(st.query_params.get("view", "list")).lower()
+    """Read page-local record state without constructing browser routes."""
+    scope = _caller_scope()
+    st.session_state[_ACTIVE_SCOPE_KEY] = scope
+    name = str(st.session_state.get(_view_key(scope, "view"), "list")).lower()
     if name not in VALID_VIEWS:
         name = "list"
-    record_id = st.query_params.get("id")
+    record_id = st.session_state.get(_view_key(scope, "id"))
     if name in {"detail", "edit"} and not record_id:
         name = "list"
     return RecordView(name, str(record_id) if record_id else None)
 
 
 def open_view(name: str, record_id: str | None = None, **parameters) -> None:
-    """Navigate within the current module and preserve the state on refresh."""
-    st.query_params.clear()
-    st.query_params["view"] = name if name in VALID_VIEWS else "list"
+    """Navigate inside the registered page using session state only."""
+    scope = st.session_state.get(_ACTIVE_SCOPE_KEY) or _caller_scope()
+    selected_view = name if name in VALID_VIEWS else "list"
+    st.session_state[_view_key(scope, "view")] = selected_view
     if record_id:
-        st.query_params["id"] = str(record_id)
+        st.session_state[_view_key(scope, "id")] = str(record_id)
+    else:
+        st.session_state.pop(_view_key(scope, "id"), None)
+    parameter_prefix = _view_key(scope, "parameter_")
+    for key in [key for key in st.session_state if key.startswith(parameter_prefix)]:
+        st.session_state.pop(key, None)
     for key, value in parameters.items():
         if value is not None and value != "":
-            st.query_params[key] = str(value)
+            st.session_state[f"{parameter_prefix}{key}"] = value
     st.rerun()
 
 
@@ -68,56 +117,35 @@ def back_to_list() -> None:
     open_view("list")
 
 
-def current_page_url(record_id: str, label: str, view: str = "detail") -> str:
-    """Build an absolute link to a record on the current Streamlit page."""
-    raw_url = str(getattr(st.context, "url", "") or "")
-    parsed = urlsplit(raw_url)
-    fragment_route = _snowflake_fragment_route(parsed)
-    display_label = str(label or record_id).replace("#", " ")
-    if fragment_route:
-        query = _url_query(fragment_route, {"view": view, "id": str(record_id)})
-        fragment = f"{fragment_route}?{query}#{display_label}"
-        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, fragment))
-    base = raw_url.split("?", 1)[0].split("#", 1)[0]
-    if not base or base.lower() == "none":
-        base = "http://localhost:8501"
-    query = _url_query(urlsplit(base).path, {"view": view, "id": str(record_id)})
-    return f"{base}?{query}#{display_label}"
+def view_parameter(name: str, default=None):
+    """Return a page-local parameter set by an internal registered-page action."""
+    scope = st.session_state.get(_ACTIVE_SCOPE_KEY) or _caller_scope()
+    return st.session_state.get(f"{_view_key(scope, 'parameter_')}{name}", default)
 
 
-def module_url(page_slug: str, record_id: str, label: str) -> str:
-    """Build an absolute record URL for another registered st.navigation page."""
-    raw_url = str(getattr(st.context, "url", "") or "http://localhost:8501")
-    parsed = urlsplit(raw_url)
-    if not parsed.scheme or not parsed.netloc:
-        parsed = urlsplit("http://localhost:8501")
-    display_label = str(label or record_id).replace("#", " ")
-    fragment_route = _snowflake_fragment_route(parsed)
-    if fragment_route:
-        path = _module_path(fragment_route, page_slug)
-        query = _url_query(fragment_route, {"view": "detail", "id": str(record_id)})
-        fragment = f"{path}?{query}#{display_label}"
-        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, fragment))
-    path = _module_path(parsed.path, page_slug)
-    query = _url_query(parsed.path, {"view": "detail", "id": str(record_id)})
-    return urlunsplit((parsed.scheme, parsed.netloc, path, query, display_label))
-
-
-def module_view_url(page_slug: str, view: str, record_id: str | None = None, **parameters) -> str:
-    """Build an absolute list/new/detail/edit URL for another module."""
-    raw_url = str(getattr(st.context, "url", "") or "http://localhost:8501")
-    parsed = urlsplit(raw_url)
-    if not parsed.scheme or not parsed.netloc:
-        parsed = urlsplit("http://localhost:8501")
-    query = {"view": view if view in VALID_VIEWS else "list"}
+def open_module(
+    page_slug: str,
+    view: str = "list",
+    record_id: str | None = None,
+    **parameters,
+) -> None:
+    """Switch registered pages without creating a browser URL or href."""
+    filename = _PAGE_FILES.get(page_slug)
+    if not filename:
+        raise ValueError("Unknown application page.")
+    scope = Path(filename).stem
+    st.session_state[_view_key(scope, "view")] = view if view in VALID_VIEWS else "list"
     if record_id:
-        query["id"] = str(record_id)
-    query.update({key: str(value) for key, value in parameters.items() if value is not None and value != ""})
-    fragment_route = _snowflake_fragment_route(parsed)
-    if fragment_route:
-        fragment = f"{_module_path(fragment_route, page_slug)}?{_url_query(fragment_route, query)}"
-        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, fragment))
-    return urlunsplit((parsed.scheme, parsed.netloc, _module_path(parsed.path, page_slug), _url_query(parsed.path, query), ""))
+        st.session_state[_view_key(scope, "id")] = str(record_id)
+    else:
+        st.session_state.pop(_view_key(scope, "id"), None)
+    parameter_prefix = _view_key(scope, "parameter_")
+    for key in [key for key in st.session_state if key.startswith(parameter_prefix)]:
+        st.session_state.pop(key, None)
+    for key, value in parameters.items():
+        if value is not None and value != "":
+            st.session_state[f"{parameter_prefix}{key}"] = value
+    st.switch_page(f"pages/{filename}")
 
 
 def ensure_record_form_state(prefix: str, record_id: str | None) -> None:
@@ -131,9 +159,37 @@ def ensure_record_form_state(prefix: str, record_id: str | None) -> None:
         st.session_state[marker] = identity
 
 
+def to_display_timestamp(value):
+    """Interpret persisted timestamps as UTC and convert them for EFNS users."""
+    converted = pd.to_datetime(value, errors="coerce", utc=True)
+    return converted if pd.isna(converted) else converted.tz_convert(DISPLAY_TIMEZONE)
+
+
 def format_timestamp(value) -> str:
-    converted = pd.to_datetime(value, errors="coerce")
-    return "Not available" if pd.isna(converted) else converted.strftime("%Y-%m-%d %H:%M")
+    converted = to_display_timestamp(value)
+    if pd.isna(converted):
+        return "Not available"
+    return f"{converted.strftime('%Y-%m-%d %H:%M %Z')} ({DISPLAY_TIMEZONE_LABEL})"
+
+
+def timestamp_column(label: str):
+    """Use an explicit timezone and label for every timestamp data column."""
+    return st.column_config.DatetimeColumn(
+        f"{label} ({DISPLAY_TIMEZONE_LABEL})",
+        format="YYYY-MM-DD HH:mm",
+        timezone=DISPLAY_TIMEZONE,
+    )
+
+
+def timestamp_columns(columns) -> dict:
+    """Build explicit Halifax display configuration for timestamp fields."""
+    configured = {}
+    for column in columns:
+        name = str(column)
+        if name.endswith(("_AT", "_ON", " At", " On")) or name == "UPLOAD_TIMESTAMP":
+            label = name.replace("_", " ").title()
+            configured[name] = timestamp_column(label)
+    return configured
 
 
 def selected_row_index(key: str) -> int | None:
@@ -144,12 +200,44 @@ def selected_row_index(key: str) -> int | None:
     return int(rows[0]) if rows else None
 
 
+def related_records_table(
+    title: str,
+    frame: pd.DataFrame,
+    *,
+    id_column: str,
+    label_column: str,
+    page_slug: str,
+    key: str,
+) -> None:
+    """Show a deduplicated related table with registered-page navigation."""
+    st.markdown(f"**{title} ({len(frame.drop_duplicates(id_column)) if id_column in frame else 0})**")
+    if frame.empty or id_column not in frame:
+        st.info(f"No related {title}.")
+        return
+    display = frame.drop_duplicates(id_column).copy().reset_index(drop=True)
+    display["RECORD"] = display.apply(
+        lambda row: row.get(label_column) or str(row[id_column]), axis=1
+    )
+    visible = [column for column in display.columns if column not in {id_column, "RECORD", "CREATED_AT", "UPDATED_AT"}][:5]
+    st.dataframe(
+        display[["RECORD", *visible]], width="stretch", hide_index=True,
+        on_select="rerun", selection_mode="single-row", key=key,
+    )
+    index = selected_row_index(key)
+    if index is not None and index < len(display):
+        if st.button(f"View selected {title}", key=f"{key}_open", icon=":material/visibility:"):
+            open_module(page_slug, "detail", str(display.iloc[index][id_column]))
+
+
 def list_command_bar(prefix: str, selected: bool = False) -> str | None:
     """Render a Dynamics-like list command bar and return the chosen action."""
+    st.caption("Select a record to view its details.")
     action = None
     with st.container(border=True, horizontal=True, vertical_alignment="center"):
         if st.button("New", icon=":material/add:", type="primary", key=f"{prefix}_new", disabled=not can_current(Permission.CREATE_DATA)):
             action = "new"
+        if st.button("View", icon=":material/visibility:", key=f"{prefix}_view", disabled=not selected):
+            action = "view"
         if st.button("Delete", icon=":material/delete:", disabled=not selected or not can_current(Permission.DELETE_DATA), key=f"{prefix}_delete"):
             action = "delete"
         if st.button("Refresh", icon=":material/refresh:", key=f"{prefix}_refresh"):

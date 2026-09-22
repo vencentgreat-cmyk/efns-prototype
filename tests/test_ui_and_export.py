@@ -31,7 +31,7 @@ def test_all_navigation_pages_render_without_exception(tmp_path, monkeypatch):
         "pages/8_Quota_Transactions.py",
         "pages/9_Salmonella_Tests.py",
         "pages/10_Salmonella_Report.py",
-        "pages/17_Flock_Quota_Import.py",
+        "pages/19_Flock_Quota_Import.py",
     ):
         app.switch_page(page).run()
         assert list(app.exception) == [], page
@@ -88,4 +88,7 @@ def test_primary_workflows_expose_clear_controls(tmp_path, monkeypatch):
     assert "Add New Flock" not in source
 
     app.switch_page("pages/4_Reports.py").run()
-    assert any("Selected fields: 0" in caption.value for caption in app.caption)
+    assert any(radio.label == "Report Center section" for radio in app.radio)
+    report_source = (Path(__file__).parents[1] / "app" / "pages" / "4_Reports.py").read_text(encoding="utf-8")
+    assert '["Report Library", "Customize Report", "Saved Reports"]' in report_source
+    assert "LinkColumn" not in report_source

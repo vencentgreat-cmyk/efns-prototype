@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import require_operational_page
-from app.navigation import current_page_url, ensure_record_form_state, format_timestamp, list_command_bar, module_url, open_view, read_record_view, record_command_bar, selected_row_index
+from app.navigation import ensure_record_form_state, format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column, view_parameter
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import QUOTA_LEASE_TYPES, QUOTA_TRANSACTION_TYPES, QUOTA_TYPES, UNASSIGNED_LABEL
 from data.repositories import get_repository
@@ -22,8 +22,6 @@ if "repo" not in st.session_state:
     st.session_state.repo = get_repository()
 repo = st.session_state.repo
 
-if st.query_params.get("transaction_id") and not st.query_params.get("view"):
-    open_view("detail", str(st.query_params["transaction_id"]))
 view = read_record_view()
 accounts = repo.get_accounts()
 quotas = repo.get_quota_registrations()
@@ -69,6 +67,7 @@ if view.name == "list":
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("quota_tx_list", selected=bool(selected_id))
     if action == "new": open_view("new")
+    if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": st.rerun()
     if action == "delete" and selected_id: st.session_state.quota_tx_delete_pending = selected_id
     pending_delete = st.session_state.get("quota_tx_delete_pending")
@@ -118,12 +117,9 @@ if view.name == "list":
         st.info("No Quota Transactions match the current filters.")
     else:
         display = display.reset_index(drop=True)
-        display["TRANSACTION_LINK"] = display.apply(lambda row: current_page_url(row["QUOTA_TRANSACTION_ID"], transaction_title(row)), axis=1)
-        display["QUOTA_LINK"] = display.apply(lambda row: module_url("Quota_Registrations", row["QUOTA_ID"], row["QUOTA_NAME"] or row["QUOTA_ID"]), axis=1)
-        display["OWNER_LINK"] = display.apply(lambda row: module_url("Accounts_&_Facilities", row["OWNER_ACCOUNT_ID"], row["OWNER_NAME"] or "Unknown"), axis=1)
-        display["RELATED_ACCOUNT_LINK"] = display.apply(lambda row: module_url("Accounts_&_Facilities", row["RELATED_ACCOUNT_ID"], row["RELATED_NAME"] or "Unknown") if row.get("RELATED_ACCOUNT_ID") else None, axis=1)
+        display["TRANSACTION"] = display.apply(lambda row: transaction_title(row), axis=1)
         st.session_state.quota_tx_list_row_ids = display["QUOTA_TRANSACTION_ID"].tolist()
-        st.dataframe(display[["TRANSACTION_LINK", "QUOTA_LINK", "OWNER_LINK", "RELATED_ACCOUNT_LINK", "TRANSACTION_TYPE", "EFFECTIVE_DATE", "QUOTA_COUNT", "PRICE", "CREATED_AT"]], width="stretch", height=520, hide_index=True, on_select="rerun", selection_mode="single-row", key="quota_tx_list_grid", column_config={"TRANSACTION_LINK": st.column_config.LinkColumn("Quota Transaction", display_text=r".*#(.*)$"), "QUOTA_LINK": st.column_config.LinkColumn("Quota Registration", display_text=r".*#(.*)$"), "OWNER_LINK": st.column_config.LinkColumn("Owner Account", display_text=r".*#(.*)$"), "RELATED_ACCOUNT_LINK": st.column_config.LinkColumn("Related Account", display_text=r".*#(.*)$"), "EFFECTIVE_DATE": st.column_config.DateColumn("Effective Date", format="YYYY-MM-DD"), "QUOTA_COUNT": st.column_config.NumberColumn("Quota Count", format="%.0f"), "PRICE": st.column_config.NumberColumn("Price", format="$%.2f"), "CREATED_AT": st.column_config.DatetimeColumn("Created On", format="YYYY-MM-DD HH:mm")})
+        st.dataframe(display[["TRANSACTION", "QUOTA_NAME", "OWNER_NAME", "RELATED_NAME", "TRANSACTION_TYPE", "EFFECTIVE_DATE", "QUOTA_COUNT", "PRICE", "CREATED_AT"]], width="stretch", height=520, hide_index=True, on_select="rerun", selection_mode="single-row", key="quota_tx_list_grid", column_config={"TRANSACTION": "Quota Transaction", "QUOTA_NAME": "Quota Registration", "OWNER_NAME": "Owner Account", "RELATED_NAME": "Related Account", "EFFECTIVE_DATE": st.column_config.DateColumn("Effective Date", format="YYYY-MM-DD"), "QUOTA_COUNT": st.column_config.NumberColumn("Quota Count", format="%.0f"), "PRICE": st.column_config.NumberColumn("Price", format="$%.2f"), "CREATED_AT": timestamp_column("Created On")})
 else:
     current = repo.get_quota_transaction(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -171,19 +167,21 @@ else:
         with relationships:
             with st.container(border=True):
                 if quota:
-                    st.markdown(f"**Quota Registration**  \n[{quota_names.get(quota['QUOTA_ID'], quota['QUOTA_ID'])}]({module_url('Quota_Registrations', quota['QUOTA_ID'], quota_names.get(quota['QUOTA_ID'], quota['QUOTA_ID']))})")
+                    st.markdown(f"**Quota Registration**  \n{quota_names.get(quota['QUOTA_ID'], quota['QUOTA_ID'])}")
+                    if st.button("Open Quota Registration", icon=":material/visibility:"):
+                        open_module("Quota_Registrations", "detail", quota["QUOTA_ID"])
                 if owner_id:
-                    st.markdown(f"**Owner Account**  \n[{account_names.get(owner_id, 'Unknown')}]({module_url('Accounts_&_Facilities', owner_id, account_names.get(owner_id, 'Unknown'))})")
+                    st.markdown(f"**Owner Account**  \n{account_names.get(owner_id, 'Unknown')}")
                 if related_account_id:
-                    st.markdown(f"**Related Account**  \n[{account_names.get(related_account_id, 'Unknown')}]({module_url('Accounts_&_Facilities', related_account_id, account_names.get(related_account_id, 'Unknown'))})")
+                    st.markdown(f"**Related Account**  \n{account_names.get(related_account_id, 'Unknown')}")
                 else: st.markdown("**Related Account**  \n—")
                 if related_quota:
                     label = quota_names.get(related_quota["QUOTA_ID"], related_quota["QUOTA_ID"])
-                    st.markdown(f"**Related Quota**  \n[{label}]({module_url('Quota_Registrations', related_quota['QUOTA_ID'], label)})")
+                    st.markdown(f"**Related Quota**  \n{label}")
                 else: st.markdown("**Related Quota**  \n—")
                 if related_transaction:
                     label = transaction_title(related_transaction)
-                    st.markdown(f"**Related Transaction**  \n[{label}]({current_page_url(related_transaction['QUOTA_TRANSACTION_ID'], label)})")
+                    st.markdown(f"**Related Transaction**  \n{label}")
                 else: st.markdown("**Related Transaction**  \n—")
     else:
         current = current or {}
@@ -192,7 +190,7 @@ else:
         ensure_record_form_state("quota_tx_form_", view.record_id)
         expected_key = f"quota_tx_form_expected_{view.record_id}"
         if view.name == "edit": st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
-        requested_quota = st.query_params.get("quota_id")
+        requested_quota = view_parameter("quota_id")
         selected_quota_id = current.get("QUOTA_ID") or (str(requested_quota) if requested_quota in set(quota_options.values()) else None)
         optional_accounts = {UNASSIGNED_LABEL: None, **account_options}
         optional_quotas = {UNASSIGNED_LABEL: None, **quota_options}

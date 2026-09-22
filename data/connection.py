@@ -13,15 +13,85 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 import os
 import re
+import tempfile
 from typing import Callable, Iterable, Iterator, Sequence
 
 import pandas as pd
 
-from data.repositories.base import RepositoryConfigurationError, RepositoryConnectionError, RepositoryError
+from data.repositories.base import (
+    RepositoryConfigurationError,
+    RepositoryConnectionError,
+    RepositoryError,
+    RepositoryOperationError,
+)
 
 
 Params = Sequence[object] | None
 ParamRows = Iterable[Sequence[object]]
+
+
+_SQL_OPERATION = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|MERGE|BEGIN|COMMIT|ROLLBACK)\b", re.IGNORECASE)
+_SQL_ENTITY = re.compile(
+    r"\b(?:FROM|INTO|UPDATE|MERGE\s+INTO)\s+([A-Za-z_][A-Za-z0-9_$.]*)",
+    re.IGNORECASE,
+)
+_BULK_INSERT_SELECT = re.compile(
+    r"^(\s*INSERT\s+INTO\s+.+?\))\s+(SELECT\s+.+?)(\s*;?\s*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+_SAFE_REFERENCE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+def _safe_reference(value) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if _SAFE_REFERENCE.fullmatch(text) else None
+
+
+def _operation_context(sql: str) -> tuple[str, str]:
+    operation_match = _SQL_OPERATION.search(sql or "")
+    entity_match = _SQL_ENTITY.search(sql or "")
+    operation = operation_match.group(1).upper() if operation_match else "SQL"
+    entity = entity_match.group(1).split(".")[-1].upper() if entity_match else "TRANSACTION"
+    return operation, entity
+
+
+def _operation_error(exc: Exception, sql: str, cursor=None) -> RepositoryOperationError:
+    operation, entity = _operation_context(sql)
+    query_id = next(
+        (
+            _safe_reference(getattr(source, attribute, None))
+            for source in (exc, cursor)
+            for attribute in ("query_id", "sfqid")
+            if _safe_reference(getattr(source, attribute, None))
+        ),
+        None,
+    )
+    error_code = next(
+        (
+            _safe_reference(getattr(exc, attribute, None))
+            for attribute in ("errno", "sql_error_code")
+            if _safe_reference(getattr(exc, attribute, None))
+        ),
+        None,
+    )
+    sql_state = next(
+        (
+            _safe_reference(getattr(exc, attribute, None))
+            for attribute in ("sqlstate", "sql_state")
+            if _safe_reference(getattr(exc, attribute, None))
+        ),
+        None,
+    )
+    return RepositoryOperationError(
+        operation,
+        entity,
+        query_id=query_id,
+        error_code=error_code,
+        sql_state=sql_state,
+        error_type=type(exc).__name__,
+    )
 
 
 def _rewrite_placeholders(sql: str, source: str, target: str | None = None) -> tuple[str, int]:
@@ -169,6 +239,11 @@ class SqlExecutor(ABC):
     def check_connection(self) -> None:
         self.query("SELECT CURRENT_VERSION() AS VERSION")
 
+    def put_stream(self, stream, stage_path: str) -> None:
+        raise RepositoryConfigurationError(
+            "The active Snowflake runtime does not support migration stage uploads."
+        )
+
 
 class ConnectorExecutor(SqlExecutor):
     runtime_name = "Connector"
@@ -198,8 +273,8 @@ class ConnectorExecutor(SqlExecutor):
         except RepositoryError:
             raise
         except Exception as exc:
-            raise RepositoryError(
-                "Snowflake operation failed. Check SQL compatibility and assigned privileges."
+            raise RepositoryConnectionError(
+                "Snowflake could not open a SQL cursor for this operation."
             ) from exc
         finally:
             if cursor is not None:
@@ -207,7 +282,12 @@ class ConnectorExecutor(SqlExecutor):
 
     def query(self, sql: str, params: Params = None) -> pd.DataFrame:
         with self._cursor() as cursor:
-            cursor.execute(sql, tuple(params or ()))
+            try:
+                cursor.execute(sql, tuple(params or ()))
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql, cursor) from exc
             rows = cursor.fetchall()
             columns = [column[0] for column in (cursor.description or [])]
             # Some lightweight offline cursor doubles expose only fetchone.
@@ -220,16 +300,39 @@ class ConnectorExecutor(SqlExecutor):
 
     def execute(self, sql: str, params: Params = None) -> int:
         with self._cursor() as cursor:
-            cursor.execute(sql, tuple(params or ()))
+            try:
+                cursor.execute(sql, tuple(params or ()))
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql, cursor) from exc
             return int(cursor.rowcount if cursor.rowcount is not None else -1)
 
     def executemany(self, sql: str, rows: ParamRows, *, batch_size: int = 500) -> int:
-        del batch_size
         values = _validated_rows(sql, rows, "%s")
         if not values:
             return 0
+        select_match = _BULK_INSERT_SELECT.match(sql.strip())
         with self._cursor() as cursor:
-            cursor.executemany(sql, values)
+            try:
+                if select_match:
+                    if batch_size < 1:
+                        raise RepositoryError("Connector bulk-write batch size must be at least one.")
+                    prefix, select_group, suffix = select_match.groups()
+                    total = 0
+                    for start in range(0, len(values), batch_size):
+                        batch = values[start : start + batch_size]
+                        statement = prefix + " " + " UNION ALL ".join([select_group] * len(batch)) + suffix
+                        parameters = tuple(value for row in batch for value in row)
+                        cursor.execute(statement, parameters)
+                        affected = cursor.rowcount
+                        total += len(batch) if affected is None or affected < 0 else int(affected)
+                    return total
+                cursor.executemany(sql, values)
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql, cursor) from exc
             rowcount = cursor.rowcount
             return len(values) if rowcount is None or rowcount < 0 else int(rowcount)
 
@@ -249,6 +352,23 @@ class ConnectorExecutor(SqlExecutor):
         except Exception as exc:
             raise RepositoryError("Snowflake could not roll back the transaction.") from exc
 
+    def put_stream(self, stream, stage_path: str) -> None:
+        try:
+            stage_directory, filename = stage_path.rsplit("/", 1)
+            with tempfile.TemporaryDirectory(prefix="efns-migration-") as directory:
+                temporary_path = os.path.join(directory, filename)
+                with open(temporary_path, "wb") as temporary:
+                    temporary.write(stream.read())
+                escaped = temporary_path.replace("\\", "/").replace("'", "''")
+                with self._cursor() as cursor:
+                    cursor.execute(
+                        f"PUT 'file://{escaped}' {stage_directory}/ AUTO_COMPRESS=FALSE OVERWRITE=FALSE"
+                    )
+        except RepositoryError:
+            raise
+        except Exception as exc:
+            raise _operation_error(exc, "PUT_STREAM EIMS_MIGRATION_FILE") from exc
+
     @contextmanager
     def transaction(self) -> Iterator["ConnectorExecutor"]:
         try:
@@ -265,6 +385,61 @@ def _qmark(sql: str) -> str:
     return _rewrite_placeholders(sql, "%s", "?")[0]
 
 
+def _literalize_null_bindings(
+    sql: str,
+    params: Sequence[object],
+    marker: str = "?",
+) -> tuple[str, list[object]]:
+    """Render Python ``None`` as SQL NULL while keeping other values bound.
+
+    Snowpark warehouse-runtime binding can serialize ``None`` as the text
+    ``"None"`` in an expanded multi-row statement. This scanner replaces only
+    the corresponding unquoted bind marker with the SQL NULL literal. Values
+    are never interpolated, and bind-looking text inside quoted SQL remains
+    unchanged.
+    """
+    values = list(params)
+    bound: list[object] = []
+    output: list[str] = []
+    value_index = 0
+    index = 0
+    quote: str | None = None
+    while index < len(sql):
+        char = sql[index]
+        if quote:
+            output.append(char)
+            if char == quote:
+                if index + 1 < len(sql) and sql[index + 1] == quote:
+                    output.append(sql[index + 1])
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            output.append(char)
+            index += 1
+            continue
+        if sql.startswith(marker, index):
+            if value_index >= len(values):
+                raise RepositoryError("SQL bind count exceeds the supplied parameter count.")
+            value = values[value_index]
+            value_index += 1
+            if value is None:
+                output.append("NULL")
+            else:
+                output.append(marker)
+                bound.append(value)
+            index += len(marker)
+            continue
+        output.append(char)
+        index += 1
+    if value_index != len(values):
+        raise RepositoryError("Supplied parameter count exceeds the SQL bind count.")
+    return "".join(output), bound
+
+
 def _affected_rows(rows: list[object]) -> int:
     if not rows:
         return 0
@@ -273,8 +448,9 @@ def _affected_rows(rows: list[object]) -> int:
     total = 0
     found = False
     for key, value in values.items():
-        normalized = str(key).lower().replace("_", " ")
-        if "number of rows" in normalized and any(word in normalized for word in ("insert", "update", "delete", "merge")):
+        normalized = str(key).lower().replace("_", " ").replace('"', "")
+        row_count_label = "number of rows" in normalized or "rows affected" in normalized
+        if row_count_label and any(word in normalized for word in ("insert", "update", "delete", "merge", "affect")):
             total += int(value or 0)
             found = True
     return total if found else -1
@@ -283,6 +459,10 @@ def _affected_rows(rows: list[object]) -> int:
 class SnowparkExecutor(SqlExecutor):
     runtime_name = "Warehouse Session"
     _VALUES = re.compile(r"^(.*?\bVALUES\s*)(\(.*\))(\s*;?\s*)$", re.IGNORECASE | re.DOTALL)
+    _SELECT = re.compile(
+        r"^(\s*INSERT\s+INTO\s+.+?\))\s+(SELECT\s+.+?)(\s*;?\s*)$",
+        re.IGNORECASE | re.DOTALL,
+    )
 
     def __init__(self, session, runtime_name: str | None = None):
         self.session = session
@@ -295,9 +475,7 @@ class SnowparkExecutor(SqlExecutor):
         except RepositoryError:
             raise
         except Exception as exc:
-            raise RepositoryError(
-                "Snowflake operation failed. Check SQL compatibility and assigned privileges."
-            ) from exc
+            raise _operation_error(exc, sql) from exc
 
     def query(self, sql: str, params: Params = None) -> pd.DataFrame:
         try:
@@ -307,9 +485,7 @@ class SnowparkExecutor(SqlExecutor):
         except RepositoryError:
             raise
         except Exception as exc:
-            raise RepositoryError(
-                "Snowflake operation failed. Check SQL compatibility and assigned privileges."
-            ) from exc
+            raise _operation_error(exc, sql) from exc
         if not rows:
             return pd.DataFrame(columns=columns)
         dictionaries = [row.as_dict() if hasattr(row, "as_dict") else dict(row) for row in rows]
@@ -325,17 +501,24 @@ class SnowparkExecutor(SqlExecutor):
         values = _validated_rows(qmark_sql, rows, "?")
         if not values:
             return 0
-        match = self._VALUES.match(qmark_sql.strip())
-        if not match:
+        values_match = self._VALUES.match(qmark_sql.strip())
+        select_match = self._SELECT.match(qmark_sql.strip())
+        if not values_match and not select_match:
             raise RepositoryError(
-                "Snowpark bulk writes require an INSERT statement with a VALUES clause; row-by-row fallback is disabled."
+                "Snowpark bulk writes require an INSERT statement with a VALUES or SELECT clause; row-by-row fallback is disabled."
             )
-        prefix, group, suffix = match.groups()
+        prefix, group, suffix = (values_match or select_match).groups()
         total = 0
         for start in range(0, len(values), batch_size):
             batch = values[start : start + batch_size]
-            statement = prefix + ", ".join([group] * len(batch)) + suffix
-            parameters = [value for row in batch for value in row]
+            separator = ", " if values_match else " UNION ALL "
+            groups: list[str] = []
+            parameters: list[object] = []
+            for row in batch:
+                null_safe_group, bound = _literalize_null_bindings(group, row)
+                groups.append(null_safe_group)
+                parameters.extend(bound)
+            statement = prefix + ("" if values_match else " ") + separator.join(groups) + suffix
             affected = self.execute(statement, parameters)
             total += len(batch) if affected < 0 else affected
         return total
@@ -345,6 +528,12 @@ class SnowparkExecutor(SqlExecutor):
 
     def rollback(self) -> None:
         self._collect("ROLLBACK")
+
+    def put_stream(self, stream, stage_path: str) -> None:
+        try:
+            self.session.file.put_stream(stream, stage_path, auto_compress=False, overwrite=False)
+        except Exception as exc:
+            raise _operation_error(exc, "PUT_STREAM EIMS_MIGRATION_FILE") from exc
 
     @contextmanager
     def transaction(self) -> Iterator["SnowparkExecutor"]:
@@ -444,6 +633,7 @@ class LazySqlExecutor(SqlExecutor):
     def executemany(self, sql, rows, *, batch_size=500): return self.resolved.executemany(sql, rows, batch_size=batch_size)
     def commit(self): self.resolved.commit()
     def rollback(self): self.resolved.rollback()
+    def put_stream(self, stream, stage_path): return self.resolved.put_stream(stream, stage_path)
 
     @contextmanager
     def transaction(self):

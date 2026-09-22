@@ -10,6 +10,7 @@ from data.repositories.base import RepositoryError
 
 UPSERT_METHODS = {
     "upsert_account": ("ACCOUNT", "ACCOUNT_ID"),
+    "upsert_farm_location": ("FARM_LOCATION", "FARM_LOCATION_ID"),
     "upsert_facility": ("FACILITY", "FACILITY_ID"),
     "upsert_facility_detail": ("FACILITY_DETAIL", "FACILITY_DETAIL_ID"),
     "upsert_flock": ("FLOCK", "FLOCK_ID"),
@@ -21,6 +22,7 @@ UPSERT_METHODS = {
 
 DELETE_METHODS = {
     "delete_account": "ACCOUNT",
+    "delete_farm_location": "FARM_LOCATION",
     "delete_facility": "FACILITY",
     "delete_facility_detail": "FACILITY_DETAIL",
     "delete_flock": "FLOCK",
@@ -28,6 +30,7 @@ DELETE_METHODS = {
     "delete_quota_registration": "QUOTA_REGISTRATION",
     "delete_quota_transaction": "QUOTA_TRANSACTION",
     "delete_salmonella_test": "SALMONELLA_TEST",
+    "cleanup_synthetic_migration": "MIGRATION_BATCH",
 }
 
 IMPORT_METHODS = {
@@ -36,6 +39,9 @@ IMPORT_METHODS = {
     "import_flock_quota_batch": "FLOCK_QUOTA_IMPORT",
     "insert_raw_rows": "RAW_PRODUCTION",
     "insert_production_records": "PRODUCTION_RECORD",
+    "stage_migration_file": "MIGRATION_FILE",
+    "prepare_migration_batch": "MIGRATION_BATCH",
+    "commit_migration_batch": "MIGRATION_BATCH",
 }
 
 
@@ -106,10 +112,14 @@ class AuthorizedRepository:
         def call(*args, **kwargs):
             self._require(Permission.IMPORT_DATA)
             result = method(*args, **kwargs)
-            if isinstance(result, dict):
+            if name == "import_flock_quota_batch" and isinstance(result, dict):
                 entity_id = result.get("import_id")
+            elif name == "commit_migration_batch" and isinstance(result, dict):
+                entity_id = result.get("batch_id")
+            elif name == "import_production_bundle" and isinstance(result, tuple):
+                entity_id = result[0]
             else:
-                entity_id = result[0] if name == "import_production_bundle" and isinstance(result, tuple) else result
+                entity_id = result
             details = {"operation": name}
             if name == "import_production_bundle" and isinstance(result, tuple) and len(result) > 1:
                 details["record_count"] = int(result[1])

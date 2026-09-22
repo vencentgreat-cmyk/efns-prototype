@@ -41,6 +41,8 @@ class Role(StrEnum):
 class Permission(StrEnum):
     VIEW_DATA = "view_data"
     VIEW_REPORTS = "view_reports"
+    USE_REPORT_BUILDER = "use_report_builder"
+    EXPORT_REPORT = "export_report"
     IMPORT_DATA = "import_data"
     CREATE_DATA = "create_data"
     UPDATE_DATA = "update_data"
@@ -58,18 +60,22 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
         {
             Permission.VIEW_DATA,
             Permission.VIEW_REPORTS,
+            Permission.USE_REPORT_BUILDER,
+            Permission.EXPORT_REPORT,
             Permission.IMPORT_DATA,
             Permission.CREATE_DATA,
             Permission.UPDATE_DATA,
         }
     ),
     Role.REPORTING_VIEWER: frozenset(
-        {Permission.VIEW_DATA, Permission.VIEW_REPORTS}
+        {Permission.VIEW_DATA, Permission.VIEW_REPORTS, Permission.USE_REPORT_BUILDER, Permission.EXPORT_REPORT}
     ),
     Role.DEVELOPER: frozenset(
         {
             Permission.VIEW_DATA,
             Permission.VIEW_REPORTS,
+            Permission.USE_REPORT_BUILDER,
+            Permission.EXPORT_REPORT,
             Permission.USE_PROFILER,
             Permission.VIEW_DIAGNOSTICS,
             Permission.VIEW_AUDIT,

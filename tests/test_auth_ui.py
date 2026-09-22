@@ -68,7 +68,7 @@ def test_reporting_viewer_cannot_open_import_page_directly(tmp_path, monkeypatch
 
 
 def test_reporting_viewer_can_open_flock_quota_preview_page(tmp_path, monkeypatch):
-    page = ROOT / "app" / "pages" / "17_Flock_Quota_Import.py"
+    page = ROOT / "app" / "pages" / "19_Flock_Quota_Import.py"
     app = authenticated_app(page, tmp_path, monkeypatch, Role.REPORTING_VIEWER)
     assert list(app.exception) == []
     assert not any("Access denied" in block.value for block in app.markdown)

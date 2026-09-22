@@ -1,0 +1,6 @@
+ACCOUNT_ID,REGISTRATION_NUMBER,ORGANIZATION_NAME,CITY,PROVINCE,CONTACT_EMAIL,PRODUCER_ROLE,STATUS
+DEV_MIGRATION_A_00001,DM-A-00001,Fictional Migration Producer 001,Synthetic City 01,NS,producer001@example.invalid,True,Active
+DEV_MIGRATION_A_00002,DM-A-00002,Fictional Migration Producer 002,Synthetic City 02,NS,producer002@example.invalid,True,Active
+DEV_MIGRATION_A_00001,DM-A-00001,Duplicate Source ID,Synthetic City 01,NS,producer001@example.invalid,True,Active
+DEV_MIGRATION_A_90001,DM-EDGE-REPEAT,,,,,,Unknown
+DEV_MIGRATION_A_90002,DM-EDGE-REPEAT,Repeated Key,,,,,Active

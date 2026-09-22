@@ -125,6 +125,15 @@ def test_snowflake_audit_uses_bound_viewer_email_and_utc_database_timestamp():
     assert write[2][5] == "batch-1"
 
 
+def test_snowflake_audit_binds_valid_json_when_details_are_omitted():
+    executor = QueueExecutor()
+    store = SnowflakeAuthStore(executor)
+    store.record_action(user(), "CREATE", "ACCOUNT", "account-1")
+    write = next(call for call in executor.calls if call[0] == "execute")
+    assert "PARSE_JSON(%s)" in write[1]
+    assert write[2][-1] == "{}"
+
+
 def test_snowflake_user_update_delete_and_password_boundary():
     target = user_frame(user_id="u-target", role="Data Editor")
     updated = user_frame(user_id="u-target", role="Reporting Viewer", active=False)

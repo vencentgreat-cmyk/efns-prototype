@@ -1,0 +1,286 @@
+{
+  "datasets": {
+    "clean": {
+      "expected_reconciliation": [
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 50,
+          "READY_ROWS": 50,
+          "REJECTED_ROWS": 0,
+          "SOURCE_ENTITY": "ACCOUNT",
+          "SOURCE_ROWS": 50,
+          "UNMATCHED_ROWS": 0
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 125,
+          "READY_ROWS": 125,
+          "REJECTED_ROWS": 0,
+          "SOURCE_ENTITY": "FARM_LOCATION",
+          "SOURCE_ROWS": 125,
+          "UNMATCHED_ROWS": 0
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 100,
+          "READY_ROWS": 100,
+          "REJECTED_ROWS": 0,
+          "SOURCE_ENTITY": "FACILITY",
+          "SOURCE_ROWS": 100,
+          "UNMATCHED_ROWS": 0
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 150,
+          "READY_ROWS": 150,
+          "REJECTED_ROWS": 0,
+          "SOURCE_ENTITY": "FACILITY_DETAIL",
+          "SOURCE_ROWS": 150,
+          "UNMATCHED_ROWS": 0
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 100,
+          "READY_ROWS": 100,
+          "REJECTED_ROWS": 0,
+          "SOURCE_ENTITY": "QUOTA_REGISTRATION",
+          "SOURCE_ROWS": 100,
+          "UNMATCHED_ROWS": 0
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 500,
+          "READY_ROWS": 500,
+          "REJECTED_ROWS": 0,
+          "SOURCE_ENTITY": "FLOCK",
+          "SOURCE_ROWS": 500,
+          "UNMATCHED_ROWS": 0
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 2000,
+          "READY_ROWS": 2000,
+          "REJECTED_ROWS": 0,
+          "SOURCE_ENTITY": "FLOCK_TRANSACTION",
+          "SOURCE_ROWS": 2000,
+          "UNMATCHED_ROWS": 0
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 300,
+          "READY_ROWS": 300,
+          "REJECTED_ROWS": 0,
+          "SOURCE_ENTITY": "QUOTA_TRANSACTION",
+          "SOURCE_ROWS": 300,
+          "UNMATCHED_ROWS": 0
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 250,
+          "READY_ROWS": 250,
+          "REJECTED_ROWS": 0,
+          "SOURCE_ENTITY": "SALMONELLA_TEST",
+          "SOURCE_ROWS": 250,
+          "UNMATCHED_ROWS": 0
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 5000,
+          "READY_ROWS": 5000,
+          "REJECTED_ROWS": 0,
+          "SOURCE_ENTITY": "PRODUCTION_RECORD",
+          "SOURCE_ROWS": 5000,
+          "UNMATCHED_ROWS": 0
+        }
+      ],
+      "files": {
+        "accounts.csv": {
+          "rows": 50,
+          "sha256": "6fd145d35c76d9d0ae8e131b573fb28d464c9403aeabc0ab5e40014f74ee6976"
+        },
+        "facilities.csv": {
+          "rows": 100,
+          "sha256": "3094066544cc274cae6f2e051fcbce9f11ec7e67e216741f9292f169cdf7093a"
+        },
+        "facility_details.csv": {
+          "rows": 150,
+          "sha256": "efd595d057adcd05864aa6d8b9a72ae9fc39af0b34b434f62fc2b5213010de54"
+        },
+        "farm_locations.csv": {
+          "rows": 125,
+          "sha256": "429f6000254619193f723e38f5f2c7d6beeaae4f4d4dad75d122f302626f4ff5"
+        },
+        "flock_transactions.csv": {
+          "rows": 2000,
+          "sha256": "865dc0e70057e9d310bb5b187aa1d5c659ec2402c9f697ddcc5142057619e80e"
+        },
+        "flocks.csv": {
+          "rows": 500,
+          "sha256": "20e2d100fd1562c90ea3b69271d8cdb70634e2e1248d643d16f21704ce9485e7"
+        },
+        "production.xlsx": {
+          "rows": 5000,
+          "sha256": "013203f2b8d3c181698f10b981248c953f0b6d33735e25abe43441b2a5e37a7f"
+        },
+        "quota_registrations.csv": {
+          "rows": 100,
+          "sha256": "f30b435805859dd565c87f16ea3176c134dd3cc69666aa0e2ac883fab232a9cb"
+        },
+        "quota_transactions.csv": {
+          "rows": 300,
+          "sha256": "bb809bd0e643d5b472f3ed0b77d018eaece26f4416a0331a7328345373408d66"
+        },
+        "salmonella_tests.csv": {
+          "rows": 250,
+          "sha256": "ac8eab37edd3b2eb6e1219c8a4eced06ffc9fda2a532c941ae29f01187fcefc9"
+        }
+      },
+      "package_hash": "411d48cad73cd8452892a9a43d4c79f7549726377023fd972076182dfa19bed5",
+      "ready_rows": 8575,
+      "rejected_rows": 0
+    },
+    "edge_cases": {
+      "expected_reconciliation": [
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 5,
+          "READY_ROWS": 1,
+          "REJECTED_ROWS": 4,
+          "SOURCE_ENTITY": "ACCOUNT",
+          "SOURCE_ROWS": 5,
+          "UNMATCHED_ROWS": 4
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 4,
+          "READY_ROWS": 0,
+          "REJECTED_ROWS": 4,
+          "SOURCE_ENTITY": "FARM_LOCATION",
+          "SOURCE_ROWS": 4,
+          "UNMATCHED_ROWS": 4
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 2,
+          "READY_ROWS": 0,
+          "REJECTED_ROWS": 2,
+          "SOURCE_ENTITY": "FACILITY",
+          "SOURCE_ROWS": 2,
+          "UNMATCHED_ROWS": 2
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 2,
+          "READY_ROWS": 0,
+          "REJECTED_ROWS": 2,
+          "SOURCE_ENTITY": "FACILITY_DETAIL",
+          "SOURCE_ROWS": 2,
+          "UNMATCHED_ROWS": 2
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 2,
+          "READY_ROWS": 0,
+          "REJECTED_ROWS": 2,
+          "SOURCE_ENTITY": "QUOTA_REGISTRATION",
+          "SOURCE_ROWS": 2,
+          "UNMATCHED_ROWS": 2
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 3,
+          "READY_ROWS": 0,
+          "REJECTED_ROWS": 3,
+          "SOURCE_ENTITY": "FLOCK",
+          "SOURCE_ROWS": 3,
+          "UNMATCHED_ROWS": 3
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 2,
+          "READY_ROWS": 0,
+          "REJECTED_ROWS": 2,
+          "SOURCE_ENTITY": "FLOCK_TRANSACTION",
+          "SOURCE_ROWS": 2,
+          "UNMATCHED_ROWS": 2
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 2,
+          "READY_ROWS": 0,
+          "REJECTED_ROWS": 2,
+          "SOURCE_ENTITY": "QUOTA_TRANSACTION",
+          "SOURCE_ROWS": 2,
+          "UNMATCHED_ROWS": 2
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 2,
+          "READY_ROWS": 0,
+          "REJECTED_ROWS": 2,
+          "SOURCE_ENTITY": "SALMONELLA_TEST",
+          "SOURCE_ROWS": 2,
+          "UNMATCHED_ROWS": 2
+        },
+        {
+          "COMMITTED_ROWS": 0,
+          "RAW_ROWS": 3,
+          "READY_ROWS": 0,
+          "REJECTED_ROWS": 3,
+          "SOURCE_ENTITY": "PRODUCTION_RECORD",
+          "SOURCE_ROWS": 3,
+          "UNMATCHED_ROWS": 3
+        }
+      ],
+      "files": {
+        "accounts.csv": {
+          "rows": 5,
+          "sha256": "3e2a02a59a6d0c345a17695d2c8f763169612900f82d8250847704f3c7f3a8df"
+        },
+        "facilities.csv": {
+          "rows": 2,
+          "sha256": "0c2ea11702bef39ee3992bada05b4854c32d341492bc38067c60c1432b6f1a8b"
+        },
+        "facility_details.csv": {
+          "rows": 2,
+          "sha256": "f07a377cd7bcce8e1285a0e4b0e2f350d2c6c169001e03874879a6daa2ff9e13"
+        },
+        "farm_locations.csv": {
+          "rows": 4,
+          "sha256": "3e3c62608198b419a4714c5ef540b54ec2b0c4ab489bd89a4a3c7d7cee410206"
+        },
+        "flock_transactions.csv": {
+          "rows": 2,
+          "sha256": "3ec3254eaf05a69d2d24bd244ae504d85715052b628a793ff0fc7e7477d6ccd4"
+        },
+        "flocks.csv": {
+          "rows": 3,
+          "sha256": "9f665807657a77b98f88d7cc7142f1aae09203f783ba5bc2786ef0edef870e52"
+        },
+        "production.xlsx": {
+          "rows": 3,
+          "sha256": "20f23a4c2f4457a69ef3cb4bc12a2eb1080a40af76587256ff9ee3a16ba32c90"
+        },
+        "quota_registrations.csv": {
+          "rows": 2,
+          "sha256": "4f541921de985abf3441da609971b340ca4b8ab9cd0c3c40f7ddba69d19b0b18"
+        },
+        "quota_transactions.csv": {
+          "rows": 2,
+          "sha256": "36d34078fd5b081af5c1817c97ed13e2d6018e97ad2ea01df175c56b683c862d"
+        },
+        "salmonella_tests.csv": {
+          "rows": 2,
+          "sha256": "7ac66cc825b1ffad1ea621f735d658346b697f4c9e7f8e958ec8203d072e4e34"
+        }
+      },
+      "package_hash": "2c37610deabd9d16979fc807ad56ba04a8aea80dca912b8dbdf67c120a134e49",
+      "ready_rows": 1,
+      "rejected_rows": 26
+    }
+  },
+  "generation_time_utc": "2026-09-15T00:00:00Z",
+  "random_seed": 20260915,
+  "schema_version": "EFNS-EIMS-PROVISIONAL-2",
+  "synthetic_only": true
+}

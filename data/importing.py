@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal, InvalidOperation
+import re
 from typing import BinaryIO
 
 import pandas as pd
@@ -15,6 +17,32 @@ from data.constants import (
     MATCH_STATUS_UNMATCHED,
     SOURCE_TYPE_EIMS_IMPORT,
 )
+
+
+_NULL_NUMERIC_TEXT = frozenset({"", "none", "nan", "nat", "null"})
+_NUMERIC_TEXT = re.compile(r"^[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$")
+
+
+def _source_number(value):
+    """Preserve invalid source text so validation cannot silently drop it."""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, str):
+        text = value.strip()
+        if text.casefold() in _NULL_NUMERIC_TEXT:
+            return None
+        if not _NUMERIC_TEXT.fullmatch(text):
+            return text
+        value = text.replace(",", "")
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return value
 
 
 def read_eims_workbook(file: BinaryIO) -> pd.DataFrame:
@@ -63,7 +91,7 @@ def normalize_eims_records(raw: pd.DataFrame) -> pd.DataFrame:
 
     for column in EIMS_NUMERIC_COLUMNS:
         if column in normalized.columns:
-            normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
+            normalized[column] = normalized[column].map(_source_number)
 
     normalized = normalized.rename(columns=EIMS_COLUMN_MAPPING)
     normalized["PRODUCTION_ID"] = [str(uuid.uuid4()) for _ in range(len(normalized))]
@@ -102,7 +130,11 @@ def validate_eims_records(raw: pd.DataFrame) -> tuple[list[str], list[str]]:
         for source_column, target_column in EIMS_COLUMN_MAPPING.items():
             if source_column in EIMS_NUMERIC_COLUMNS:
                 value = row.get(target_column)
-                if pd.notna(value) and value < 0:
+                if isinstance(value, str):
+                    errors.append(
+                        f"Excel row {source_row}: {source_column} must contain a valid number."
+                    )
+                elif pd.notna(value) and value < 0:
                     errors.append(
                         f"Excel row {source_row}: {source_column} cannot be negative."
                     )

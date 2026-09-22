@@ -51,6 +51,7 @@ in this repository.
    snow sql --connection efns-dev --filename sql/04_reporting_views.sql
    snow sql --connection efns-dev --filename sql/05_security_tables.sql
    snow sql --connection efns-dev --filename sql/06_least_privilege_grants.sql
+   snow sql --connection efns-dev --filename sql/11_eims_migration_foundation.sql
    ```
 
 4. Grant `EFNS_DEV_DEPLOYER` directly to the approved deployment user, then use
@@ -76,11 +77,29 @@ in this repository.
    snow streamlit deploy efns_dev --connection efns-dev --replace --prune
    ```
 
-7. As SECURITYADMIN, apply viewer grants after the Streamlit object exists:
+7. After **every** deployment, run the mandatory post-deployment script using an
+   operator that can use `EFNS_DEV_DEPLOYER` and `SECURITYADMIN`:
 
    ```powershell
    snow sql --connection efns-dev --filename sql/08_post_deploy_grants.sql
    ```
+
+   The script first runs the following as `EFNS_DEV_DEPLOYER`, then switches to
+   `SECURITYADMIN` for the viewer grants:
+
+   ```sql
+   ALTER STREAMLIT EFNS_DEV.APP.EFNS_INTERNAL_APP
+       SET RUNTIME_NAME = 'SYSTEM$WAREHOUSE_RUNTIME';
+   ```
+
+   Treat the deploy and this script as one release procedure. Do not open the
+   application to viewers until both steps succeed.
+
+   This application release changes runtime write behavior. Fresh tables
+   created from `02_core_tables.sql` and `03_production_tables.sql` also receive
+   UTC defaults. Those `CREATE TABLE IF NOT EXISTS` scripts do not alter defaults
+   on existing tables, so do not rerun them expecting a migration. Current app
+   inserts and updates explicitly use Snowflake's server-side UTC expression.
 
 8. Grant one of the four viewer account roles to each approved Snowflake user.
    Add each real email to `SECURITY.APP_USER` through the EFNS User Management
@@ -88,6 +107,23 @@ in this repository.
    role must both be present.
 9. Complete every item in `SNOWFLAKE_SMOKE_TEST.md` with synthetic data before
    allowing operational use.
+
+The migration foundation uses `SYSADMIN` to create the encrypted internal stage
+and four RAW migration-control tables because that role owns the schemas from
+`01_setup.sql`; it then uses `SECURITYADMIN` for exact object grants. The app
+owner receives migration-table writes, stage READ/WRITE, and only `USAGE` on an
+owner-rights cleanup procedure that rejects non-`DEV_MIGRATION_` batch IDs and
+deletes through that batch's ID map. It receives no new direct DELETE on
+production or import-batch tables.
+Ordinary account roles receive no direct stage or table access. Re-run it after
+review when the provisional migration tables change, before deploying an
+application revision that depends on them.
+
+The current DEV business tables are owned by `ACCOUNTADMIN`, so that role owns
+the fixed-body cleanup procedure as well. The application cannot submit SQL to
+the procedure and receives no owner role. A future clean environment should
+assign object ownership to a dedicated database-owner role; update the procedure
+owner at the same time after validating COPY GRANTS and rollback behavior.
 
 ## Authentication behavior
 
@@ -110,16 +146,19 @@ and future table/view grants, then grants only the objects queried by the curren
 repositories. This cleanup matters when upgrading a DEV environment created from
 an earlier draft of the script.
 
-The deployment definition explicitly selects `SYSTEM$WAREHOUSE_RUNTIME`; Python
-3.11 and Streamlit 1.52.2 are resolved from `environment.yml`. The DEV monitor
-notifies at 75% of 10 credits and suspends the warehouse at 100%.
+The deployment definition selects `SYSTEM$WAREHOUSE_RUNTIME`, and the mandatory
+post-deployment SQL enforces it again. Snowflake supplies the warehouse runtime's
+default Python 3.11; `environment.yml` intentionally omits Python while pinning
+Streamlit 1.52.2 and the remaining reviewed packages. The DEV monitor notifies
+at 75% of 10 credits and suspends the warehouse at 100%.
 
 ## Rollback
 
 For a bad application release, redeploy the last reviewed Git revision using
-the same `snow streamlit deploy ... --replace --prune` command. Preserve data
-tables and audit events. If access must stop immediately, revoke USAGE on the
-Streamlit object from the four viewer roles; re-grant after remediation.
+the same `snow streamlit deploy ... --replace --prune` command, then rerun
+`sql/08_post_deploy_grants.sql`. Preserve data tables and audit events. If access
+must stop immediately, revoke USAGE on the Streamlit object from the four viewer
+roles; re-grant after remediation.
 
 For a bad schema migration, stop application access, restore affected DEV tables
 with the account's available Time Travel/clone procedure, validate counts and
@@ -132,10 +171,20 @@ they do not drop tables or use `CREATE OR REPLACE TABLE`.
   identity. Do not fall back to `CURRENT_USER()`, which can identify the app owner.
 - **Access not provisioned:** confirm exact normalized email, `ACTIVE=TRUE`, one
   supported role value, and an account-role grant allowing Streamlit USAGE.
-- **Package resolution:** check the Snowsight package picker for Python 3.11 and
-  the pinned package versions. Change `environment.yml` only after review/tests.
+- **Package resolution:** confirm the application uses the warehouse runtime's
+  default Python 3.11 and check the Snowsight package picker for the pinned
+  package versions. Do not add Python to `environment.yml`; change package pins
+  only after review and tests.
+- **Unexpected container runtime:** rerun `sql/08_post_deploy_grants.sql`, then
+  confirm the Streamlit object's `RUNTIME_NAME` is `SYSTEM$WAREHOUSE_RUNTIME`.
 - **SQL permission error:** verify the Streamlit owner/deployer role inheritance
   and grants from `06_least_privilege_grants.sql`; do not add broad account grants.
+- **DATE conversion error (100040):** redeploy the current application bundle
+  and verify optional Flock dates save as SQL `NULL`. Correlate the sanitized
+  query ID with Query History. Do not make the date required or widen grants.
+- **Old synthetic timestamps:** remove only `DEV_SYNTH` data with
+  `sql/10_dev_synthetic_cleanup.sql`, then rerun `sql/09_dev_synthetic_seed.sql`.
+  The seed will not overwrite existing creation timestamps by design.
 - **Import failure:** verify the transaction rollback across IMPORT_BATCH, RAW,
   and PRODUCTION_RECORD, then correlate sanitized UI time with query history.
 - **Unexpected cost:** suspend `EFNS_DEV_WH`, inspect warehouse history and the

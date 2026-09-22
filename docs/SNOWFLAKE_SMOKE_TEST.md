@@ -2,28 +2,121 @@
 
 Use synthetic data only. Record the Snowflake query ID and UTC time for failures.
 
-1. **Connection and viewer identity:** open System Status as each test user,
+## Load the reviewed synthetic fixture
+
+After the DEV tables and reporting views from `sql/02_core_tables.sql`,
+`sql/03_production_tables.sql`, and `sql/04_reporting_views.sql` exist, load the
+connected fixture with a CLI connection that can use `SYSADMIN`:
+
+```powershell
+snow sql --connection efns-dev --filename sql/09_dev_synthetic_seed.sql
+```
+
+The script inserts only deterministic `DEV_SYNTH` records and can be run more
+than once without duplicates. Review all three result sets at the end: actual
+counts must equal expected counts, and every broken-relationship and repository
+semantic-mismatch count must be zero.
+It creates 5 accounts, 10 Farm Locations, 8 facilities, 12 flocks, 20 flock transactions, 6 quota
+registrations, 10 quota transactions, 10 salmonella tests, one synthetic import
+batch, and 100 production records. It does not create application users, audit
+events, raw EIMS rows, or security objects.
+
+If the fixture was loaded by an older revision with the fixed
+`2026-01-01 00:00:00` timestamp, run the targeted cleanup before loading it
+again. The idempotent seed deliberately does not overwrite an existing row's
+creation timestamp.
+
+To remove only the fixture and other deliberately `DEV_SYNTH`-prefixed records,
+run the dependency-safe cleanup script:
+
+```powershell
+snow sql --connection efns-dev --filename sql/10_dev_synthetic_cleanup.sql
+```
+
+All cleanup verification counts must be zero. Both scripts use a transaction
+with an exception handler that rolls back on failure. Neither script changes a
+schema or uses `DROP` or `TRUNCATE`.
+
+## Checks
+
+1. **Deployment runtime:** immediately after deployment, run
+   `sql/08_post_deploy_grants.sql`. Inspect the Streamlit object and confirm
+   `RUNTIME_NAME` is `SYSTEM$WAREHOUSE_RUNTIME`, the application starts, the
+   runtime supplies Python 3.11, and Streamlit reports version 1.52.2.
+2. **Connection and viewer identity:** open System Status as each test user,
    confirm the repository is Snowflake, authentication is Snowflake viewer, the
    displayed viewer email is correct, and `Check connection` succeeds.
-2. **Authorization:** verify Admin, Data Editor, Reporting Viewer, and Developer
+3. **Authorization:** verify Admin, Data Editor, Reporting Viewer, and Developer
    navigation and direct-page guards against the documented permission matrix.
    Confirm an inactive `APP_USER` cannot enter the application.
-3. **Reads:** open Accounts, Facilities, Flocks, Quota, Salmonella, Production,
-   and Reports. Apply filters and confirm bounded result sets and links.
-4. **Creates/updates:** as Data Editor create and update one synthetic Account,
-   Facility, Flock, Quota, and Salmonella record. Verify IDs, timestamps, and
-   relationships in Snowflake. Attempt a stale edit from a second browser and
-   confirm the first saved value is not overwritten.
-5. **Permission enforcement:** as Reporting Viewer attempt direct new/edit URLs
-   and service mutations. Confirm the repository rejects writes. Confirm only an
+4. **Reads and record navigation:** open Accounts, Farm Locations, Facilities, Flocks, Quota,
+   Salmonella, Production, and Reports. Apply filters, select a row, and use
+   View. Switch Active, Inactive and All saved views and Account role views;
+   confirm counts, combined search and stale-selection reset. Confirm detail/edit remains inside the registered page, Back clears the
+   selection, no new browser tab opens, and a deleted/stale Account returns to
+   the list with a warning.
+5. **Creates/updates:** as Data Editor create and update one synthetic Account,
+   Facility, Flock, Quota, and Salmonella record. Create a Flock with Estimated
+   Disposal Date, Permit Date, Date Ordered, Placement Date and Disposal Date
+   unset. Confirm each optional DATE is SQL `NULL`, not the text `None`/`NaT`,
+   and the save succeeds. Verify new IDs and UTC `CREATED_AT`/`UPDATED_AT` values
+   against `CURRENT_TIMESTAMP()`. Confirm the UI shows the corresponding
+   `America/Halifax` time and timezone label. Update the record and confirm
+   `CREATED_AT` is unchanged while `UPDATED_AT` advances. Attempt a stale edit
+   from a second browser and confirm the first saved value is not overwritten.
+6. **Permission enforcement:** as Reporting Viewer attempt New/Edit actions and
+   service mutations. Confirm the repository rejects writes. Confirm only an
    Admin can manage users and only Admin/Developer can read audit events.
-6. **Production import:** upload a small synthetic workbook, verify one import
+7. **Production import:** upload a small synthetic workbook containing blank
+   numeric cells and a comma-formatted number such as `1,234.50`. Verify one import
    batch, source rows, normalized rows, source hash, and `UNMATCHED` status.
+   Confirm blank numeric cells are SQL `NULL`, `FLOCK_AGE` is NUMBER-compatible,
+   and the comma-formatted value retains its numeric value. In query history,
+   confirm the expanded warehouse-runtime statement contains `NULL` at missing
+   positions and does not report `Numeric value 'None' is not recognized`.
    Re-upload it and confirm duplicate detection blocks it unless override is used.
-7. **Rollback:** use a deliberately invalid normalized row in DEV. Confirm the
-   batch, RAW rows, and normalized rows all roll back and an error is safely shown.
-8. **Audit:** verify create, update, delete, import, and user-management events
-   contain the actual `st.user.email` and a UTC `OCCURRED_AT` timestamp.
-9. **Cost/operations:** confirm X-Small size, 60-second auto-suspend, resource
+8. **Rollback:** use a deliberately invalid non-empty numeric value in a
+   normalized DEV row. Confirm the batch, RAW rows, and normalized rows all roll
+   back and the UI identifies only the field and source row, without showing the
+   uploaded value.
+9. **Audit:** verify create, update, delete, import, and user-management events
+   contain the actual `st.user.email` and a UTC `OCCURRED_AT` timestamp. For any
+   failure, record the sanitized operation, entity, query ID, error code and
+   SQLSTATE shown by the app; confirm no bound value or credential is displayed.
+10. **Cost/operations:** confirm X-Small size, 60-second auto-suspend, resource
    monitor assignment, query warehouse, event logging, and no plaintext secrets
    in the stage or Streamlit source.
+11. **Report Center:** open the registered Report Center as each role. Confirm the
+    catalog has only the documented report names, search/category/type filters
+    work, and no action opens another browser tab. Run Quota Summary for one
+    Quota Type and as-of date; confirm one row per Quota Registration, distinct
+    producer count, deterministic Farm Location address selection, Halifax-labeled
+    execution time, and blank/pending Issuance and mortality. Run a custom report
+    with Account, Farm Location and date/type filters, reorder columns, group and
+    aggregate an approved numeric field, and verify CSV/XLSX contents exactly
+    match the displayed table. Confirm run/export/save actions appear in Audit Log
+    and a stale session-saved configuration disappears with the session.
+
+For a controlled lower-path verification that writes only `DEV_VERIFY_` records
+inside a transaction and always rolls them back, run:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/verify_snowpark_null_binding.py --confirm-dev-dml
+```
+
+## Historical EIMS migration workflow
+
+Generate the fully fictional package locally and verify its manifest before upload:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/generate_fake_eims_export.py --output sample_data/fake_eims_export
+snow sql --connection efns-dev --filename sql/11_eims_migration_foundation.sql
+snow streamlit deploy efns_dev --connection efns-dev --replace --prune
+snow sql --connection efns-dev --filename sql/08_post_deploy_grants.sql
+```
+
+As an application Admin or Data Editor, open **Historical EIMS Migration**, upload every file under `sample_data/fake_eims_export/clean`, validate, stage, prepare, review reconciliation, and explicitly commit. For V2 confirm counts of 50 Accounts, 125 Farm Locations, 100 Facilities, 150 Facility Details, 100 Quota Registrations, 500 Flocks, 2,000 Flock Transactions, 300 Quota Transactions, 250 Salmonella Tests, and 5,000 Production Records (8,575 total). Re-upload must be rejected by package hash; retrying an already committed batch must not duplicate CORE rows.
+
+Historical evidence: V1 batch `DEV_MIGRATION_6202ef6e6b1c03f4600b74` completed with 8,450 RAW rows and matching counts for its nine CORE entities; restricted cleanup was also completed. V1 remains accepted only through `EFNS-EIMS-PROVISIONAL-1`; new ten-file packages use explicit V2.
+
+Upload `edge_cases` separately and confirm rejected rows name the source file, row and field rule without exposing the value. Confirm invalid rows never reach CORE. To finish the DEV exercise, an Admin selects that exact `DEV_MIGRATION_` batch in the page cleanup control and verifies only its mapped rows and migration history are removed in dependency-safe order.

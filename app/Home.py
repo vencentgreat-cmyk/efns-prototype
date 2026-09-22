@@ -1,11 +1,12 @@
 """EFNS application entry point and grouped navigation."""
 
 from __future__ import annotations
-
+from pathlib import Path
 import streamlit as st
 import os
 
 from app.auth import ensure_authorized_repository, render_user_sidebar, require_authenticated
+from app.navigation import timestamp_column
 from app.security import Permission, has_permission
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.connection import LazySqlExecutor
@@ -20,8 +21,7 @@ st.set_page_config(
 
 
 def page_file(filename: str) -> str:
-    prefix = os.getenv("EFNS_PAGE_PREFIX", "pages").strip("/")
-    return f"{prefix}/{filename}"
+    return str(Path(__file__).resolve().parent / "pages" / filename)
 
 
 apply_theme()
@@ -115,10 +115,10 @@ def dashboard() -> None:
             "Open Production Data",
         ),
         (
-            "Build a report",
-            "Choose fields from the provisional account, flock, facility, and production model.",
+            "Open Report Center",
+            "Run curated reports or customize an allowlisted operational dataset.",
             "4_Reports.py",
-            "Open Custom Reports",
+            "Open Report Center",
         ),
     ))
     next_columns = st.columns(len(next_actions))
@@ -153,6 +153,7 @@ def dashboard() -> None:
                 imports.sort_values("UPLOAD_TIMESTAMP", ascending=False)[columns].head(10),
                 width="stretch",
                 hide_index=True,
+                column_config={"UPLOAD_TIMESTAMP": timestamp_column("Uploaded On")},
             )
 
 
@@ -168,7 +169,7 @@ pages = {
         ],
         "Production": [
             st.Page(
-                page_file("17_Flock_Quota_Import.py"),
+                page_file("19_Flock_Quota_Import.py"),
                 title="Flock & Quota Import",
                 icon=":material/upload_file:",
             ),
@@ -183,6 +184,11 @@ pages = {
                 page_file("3_Accounts_Facilities_Flocks.py"),
                 title="Accounts & Facilities",
                 icon=":material/account_tree:",
+            ),
+            st.Page(
+                page_file("18_Farm_Locations.py"),
+                title="Farm Locations",
+                icon=":material/location_on:",
             ),
             st.Page(
                 page_file("11_Facilities.py"),
@@ -207,7 +213,7 @@ pages = {
         "Reporting": [
             st.Page(
                 page_file("4_Reports.py"),
-                title="Custom Reports",
+                title="Report Center",
                 icon=":material/analytics:",
             ),
             st.Page(page_file("10_Salmonella_Report.py"), title="Salmonella Test Report", icon=":material/lab_profile:"),
@@ -216,6 +222,9 @@ pages = {
 
 if has_permission(user, Permission.IMPORT_DATA):
     pages["Production"].insert(0, st.Page(page_file("1_Production_Import.py"), title="Production Import", icon=":material/upload_file:"))
+    pages["Migration"] = [
+        st.Page(page_file("17_Migration_Import.py"), title="Migration Import", icon=":material/move_to_inbox:")
+    ]
 
 administration = []
 if has_permission(user, Permission.VIEW_DIAGNOSTICS):

@@ -7,17 +7,18 @@ import streamlit as st
 
 from app.auth import require_operational_page
 from app.navigation import (
-    current_page_url,
     format_timestamp,
     list_command_bar,
-    module_url,
+    open_module,
     open_view,
     read_record_view,
     record_command_bar,
+    saved_view_selector,
     selected_row_index,
+    timestamp_column,
 )
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
-from data.constants import ACCOUNT_STATUSES
+from data.constants import ACCOUNT_ROLE_FIELDS, ACCOUNT_STATUSES
 from data.repositories import get_repository
 from data.repositories.base import RepositoryError
 
@@ -68,15 +69,28 @@ accounts = repo.get_accounts()
 
 
 if view.name == "list":
-    page_header("Active Accounts", "Search and maintain organization, registration, contact, address and role records.", "ACCOUNT MANAGEMENT")
+    page_header("Accounts", "Search and maintain organization, registration, contact, address and role records.", "ACCOUNT MANAGEMENT")
+    warning = st.session_state.pop("account_list_warning", None)
+    if warning:
+        st.warning(warning)
 
+    statuses, role_view = saved_view_selector(
+        "ACCOUNT", "Accounts", key="account_saved_view", role_views=ACCOUNT_ROLE_FIELDS,
+        selection_keys=("account_list_grid", "account_list_row_ids", "account_selected_id", "account_delete_pending"),
+    )
     selected_index = selected_row_index("account_list_grid")
     selected_id = None
     prior_rows = st.session_state.get("account_list_row_ids", [])
     if selected_index is not None and selected_index < len(prior_rows):
         selected_id = prior_rows[selected_index]
+    if selected_id:
+        st.session_state["account_selected_id"] = selected_id
+    else:
+        st.session_state.pop("account_selected_id", None)
 
     action = list_command_bar("account_list", selected=bool(selected_id))
+    if action == "view" and selected_id:
+        open_view("detail", selected_id)
     if action == "new":
         open_view("new")
     if action == "refresh":
@@ -103,19 +117,12 @@ if view.name == "list":
                         st.session_state.pop("account_delete_pending", None)
                         st.rerun()
 
-    filter_columns = st.columns([2, 1, 1])
+    filter_columns = st.columns([2, 1])
     keyword = filter_columns[0].text_input("Filter by keyword", placeholder="Name, registration, city, phone or email", key="account_filter_keyword")
-    status_filter = filter_columns[1].selectbox("Status", ["All", *ACCOUNT_STATUSES], key="account_filter_status")
     role_options = ["All", *[label for _, label in ROLE_FIELDS]]
-    role_filter = filter_columns[2].selectbox("Role", role_options, key="account_filter_role")
+    role_filter = filter_columns[1].selectbox("Additional role filter", role_options, key="account_filter_role")
 
-    filtered = accounts.copy()
-    if keyword:
-        searchable = [column for column in ("ORGANIZATION_NAME", "REGISTRATION_NUMBER", "CITY", "CONTACT_PHONE", "CONTACT_EMAIL") if column in filtered]
-        mask = filtered[searchable].fillna("").astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)
-        filtered = filtered[mask]
-    if status_filter != "All":
-        filtered = filtered[filtered["STATUS"] == status_filter]
+    filtered = repo.get_accounts(statuses=statuses, role_field=role_view, keyword=keyword or None)
     if role_filter != "All":
         role_column = next(field for field, label in ROLE_FIELDS if label == role_filter)
         if role_column in filtered:
@@ -125,11 +132,10 @@ if view.name == "list":
         st.info("No Accounts match the current filters.")
     else:
         display = filtered.copy().reset_index(drop=True)
-        display["ACCOUNT_LINK"] = display.apply(lambda row: current_page_url(row["ACCOUNT_ID"], row["ORGANIZATION_NAME"]), axis=1)
         st.session_state.account_list_row_ids = display["ACCOUNT_ID"].tolist()
-        st.caption(f"{len(display):,} Account(s) · Select a row to enable Delete, or open the blue Account Name.")
+        st.caption(f"{len(display):,} Account(s) in this view")
         st.dataframe(
-            display[["ACCOUNT_LINK", "REGISTRATION_NUMBER", "CITY", "PROVINCE", "POSTAL_CODE", "CONTACT_PHONE", "CONTACT_EMAIL", "STATUS", "CREATED_AT"]],
+            display[["ORGANIZATION_NAME", "REGISTRATION_NUMBER", "CITY", "PROVINCE", "POSTAL_CODE", "CONTACT_PHONE", "CONTACT_EMAIL", "STATUS", "CREATED_AT"]],
             width="stretch",
             height=540,
             hide_index=True,
@@ -137,21 +143,20 @@ if view.name == "list":
             selection_mode="single-row",
             key="account_list_grid",
             column_config={
-                "ACCOUNT_LINK": st.column_config.LinkColumn("Account Name", display_text=r".*#(.*)$", width="large"),
+                "ORGANIZATION_NAME": st.column_config.TextColumn("Account Name", width="large"),
                 "REGISTRATION_NUMBER": "Registration Number",
                 "CONTACT_PHONE": "Main Phone",
                 "CONTACT_EMAIL": "Email",
-                "CREATED_AT": st.column_config.DatetimeColumn("Created On", format="YYYY-MM-DD HH:mm"),
+                "CREATED_AT": timestamp_column("Created On"),
             },
         )
 
 else:
     current = repo.get_account(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
-        st.error("The requested Account could not be found.")
-        if st.button("Back to Accounts", icon=":material/arrow_back:"):
-            open_view("list")
-        st.stop()
+        st.session_state["account_list_warning"] = "The selected Account no longer exists. The list has been refreshed."
+        st.session_state.pop("account_selected_id", None)
+        open_view("list")
 
     is_form = view.name in {"new", "edit"}
     title = "New Account" if view.name == "new" else current["ORGANIZATION_NAME"]
@@ -159,6 +164,9 @@ else:
     page_header(title, subtitle, "ACCOUNT RECORD")
     action = record_command_bar("account_record", view.name)
     if action in {"back", "cancel"}:
+        if action == "back":
+            st.session_state.pop("account_selected_id", None)
+            st.session_state.pop("account_list_grid", None)
         open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "edit":
         clear_widget_prefix("account_form_")
@@ -212,17 +220,13 @@ else:
                 st.write(current["DESCRIPTION"])
 
         with related_tab:
+            farm_locations = repo.get_farm_locations(account_id=view.record_id)
             facilities = repo.get_facilities(account_id=view.record_id)
-            facility_ids = set(facilities.get("FACILITY_ID", []))
-            facility_details = repo.get_facility_details()
-            if not facility_details.empty:
-                facility_details = facility_details[facility_details["FACILITY_ID"].isin(facility_ids)]
+            facility_details = repo.get_facility_details(account_id=view.record_id)
             flocks = repo.get_flocks(account_id=view.record_id)
-            flock_ids = set(flocks.get("FLOCK_ID", []))
-            flock_transactions = repo.get_flock_transactions()
-            if not flock_transactions.empty:
-                flock_transactions = flock_transactions[flock_transactions["FLOCK_ID"].isin(flock_ids)]
+            flock_transactions = repo.get_flock_transactions(account_id=view.record_id)
             related = (
+                ("Farm Locations", farm_locations, "FARM_LOCATION_ID", "LOCATION_NAME", "Farm_Locations"),
                 ("Facilities", facilities, "FACILITY_ID", "FACILITY_NAME", "Facilities"),
                 ("Facility Details", facility_details, "FACILITY_DETAIL_ID", "DETAIL_NAME", "Facility_Details"),
                 ("Flocks", flocks, "FLOCK_ID", "FLOCK_NUMBER", "Flocks"),
@@ -232,20 +236,21 @@ else:
                 ("Salmonella Tests", repo.get_salmonella_tests(account_id=view.record_id), "SALMONELLA_TEST_ID", "PERMIT_NUMBER", "Salmonella_Tests"),
             )
             for heading, frame, id_column, label_column, slug in related:
-                section_intro(heading)
+                section_intro(f"{heading} ({len(frame.drop_duplicates(id_column)) if id_column in frame else 0})")
                 if frame.empty:
                     st.info(f"No related {heading}.")
                 else:
-                    related_display = frame.copy()
-                    related_display["RECORD_LINK"] = related_display.apply(lambda row: module_url(slug, row[id_column], row.get(label_column) or row[id_column]), axis=1)
-                    columns = ["RECORD_LINK", *[column for column in frame.columns if column not in {id_column, "CREATED_AT", "UPDATED_AT"}][:5]]
-                    st.dataframe(related_display[columns], width="stretch", hide_index=True, column_config={"RECORD_LINK": st.column_config.LinkColumn("Record", display_text=r".*#(.*)$")})
-            production = repo.get_production_records()
-            if "PRODUCER_ACCOUNT_ID" in production:
-                production = production[production["PRODUCER_ACCOUNT_ID"] == view.record_id]
-            else:
-                production = production.iloc[0:0]
-            section_intro("Matched Production Records")
+                    related_display = frame.drop_duplicates(id_column).copy().reset_index(drop=True)
+                    related_display["RECORD"] = related_display.apply(lambda row: row.get(label_column) or row[id_column], axis=1)
+                    columns = ["RECORD", *[column for column in frame.columns if column not in {id_column, "CREATED_AT", "UPDATED_AT"}][:5]]
+                    grid_key = f"account_related_{slug}"
+                    st.dataframe(related_display[columns], width="stretch", hide_index=True, on_select="rerun", selection_mode="single-row", key=grid_key)
+                    related_index = selected_row_index(grid_key)
+                    if related_index is not None and related_index < len(related_display):
+                        if st.button(f"View selected {heading[:-1] if heading.endswith('s') else heading}", key=f"account_related_open_{slug}"):
+                            open_module(slug, "detail", str(related_display.iloc[related_index][id_column]))
+            production = repo.get_production_records(account_id=view.record_id).drop_duplicates("PRODUCTION_ID")
+            section_intro(f"Matched Production Records ({len(production)})")
             if production.empty:
                 st.info("No matched Production Records.")
             else:

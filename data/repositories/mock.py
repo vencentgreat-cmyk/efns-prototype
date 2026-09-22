@@ -15,6 +15,7 @@ from data.repositories.base import BaseRepository, ConcurrencyError
 from data.synthetic import generate_all
 from data.validation import (
     normalize_flock_dates,
+    validate_farm_location,
     validate_flock,
     validate_quota_registration,
     validate_quota_transaction,
@@ -47,6 +48,7 @@ class MockRepository(BaseRepository):
     def __init__(self, seed: int = 42):
         data = generate_all(seed=seed)
         self._accounts = data["accounts"].copy()
+        self._farm_locations = data["farm_locations"].copy()
         self._facilities = data["facilities"].copy()
         self._facility_details = data["facility_details"].copy()
         self._flocks = data["flocks"].copy()
@@ -59,6 +61,10 @@ class MockRepository(BaseRepository):
         self._size_breakdown = data["size_breakdown"].copy()
         self._import_batches: list[dict] = []
         self._raw_rows: list[dict] = []
+        self._migration_batches: list[dict] = []
+        self._migration_files: list[dict] = []
+        self._migration_raw_rows: list[dict] = []
+        self._migration_id_map: list[dict] = []
         # Link production to a synthetic import batch
         self._ensure_default_batch()
 
@@ -70,9 +76,9 @@ class MockRepository(BaseRepository):
             "SOURCE": "Synthetic Generator",
             "REPORTING_YEAR": dt.date.today().year,
             "REPORTING_WEEK": 1,
-            "UPLOAD_TIMESTAMP": dt.datetime.now(),
-            "CREATED_AT": dt.datetime.now(),
-            "UPDATED_AT": dt.datetime.now(),
+            "UPLOAD_TIMESTAMP": dt.datetime.now(dt.timezone.utc),
+            "CREATED_AT": dt.datetime.now(dt.timezone.utc),
+            "UPDATED_AT": dt.datetime.now(dt.timezone.utc),
             "STATUS": "Committed",
             "ROW_COUNT": len(self._production),
             "ERROR_COUNT": 0,
@@ -98,13 +104,13 @@ class MockRepository(BaseRepository):
                 raise ConcurrencyError(
                     "This record changed after it was opened. Reload it before saving again."
                 )
-            values["UPDATED_AT"] = dt.datetime.now()
+            values["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
             for column, value in values.items():
                 frame.loc[index, column] = value
         else:
             if expected is not None:
                 raise ConcurrencyError("This record no longer exists. Return to the list and reload.")
-            now = dt.datetime.now()
+            now = dt.datetime.now(dt.timezone.utc)
             values.setdefault("CREATED_AT", now)
             values["UPDATED_AT"] = now
             frame = pd.concat([frame, pd.DataFrame([values])], ignore_index=True)
@@ -115,8 +121,21 @@ class MockRepository(BaseRepository):
     # Accounts
     # ------------------------------------------------------------------
 
-    def get_accounts(self) -> pd.DataFrame:
-        return self._accounts.copy()
+    def get_accounts(self, statuses=None, role_field=None, keyword=None) -> pd.DataFrame:
+        frame = self._accounts.copy()
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
+        if role_field:
+            from data.constants import ACCOUNT_ROLE_FIELDS
+            if role_field not in {field for field, _ in ACCOUNT_ROLE_FIELDS}:
+                raise ValueError("Unknown Account role view.")
+            frame = frame[frame[role_field].fillna(False).astype(bool)]
+        if keyword:
+            mask = frame[["ORGANIZATION_NAME", "REGISTRATION_NUMBER", "CITY", "CONTACT_PHONE", "CONTACT_EMAIL"]].fillna("").astype(str).apply(
+                lambda column: column.str.contains(keyword, case=False, regex=False)
+            ).any(axis=1)
+            frame = frame[mask]
+        return frame.drop_duplicates("ACCOUNT_ID").copy()
 
     def get_account(self, account_id: str) -> Optional[dict]:
         match = self._accounts[self._accounts["ACCOUNT_ID"] == account_id]
@@ -173,6 +192,7 @@ class MockRepository(BaseRepository):
         )
         references = (
             lookup_reference
+            or not self.get_farm_locations(account_id=account_id).empty
             or not self.get_facilities(account_id=account_id).empty
             or not self.get_flocks(account_id=account_id).empty
             or not self.get_quota_registrations(account_id=account_id).empty
@@ -184,14 +204,53 @@ class MockRepository(BaseRepository):
         self._accounts = self._accounts[self._accounts["ACCOUNT_ID"] != account_id]
         return len(self._accounts) < before
 
+    # Farm Locations / Dynamics "Other Addresses" (provisional)
+
+    def get_farm_locations(self, farm_location_id=None, account_id=None, statuses=None, keyword=None) -> pd.DataFrame:
+        frame = self._farm_locations.copy()
+        if farm_location_id:
+            frame = frame[frame["FARM_LOCATION_ID"] == farm_location_id]
+        if account_id:
+            frame = frame[frame["ACCOUNT_ID"] == account_id]
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
+        if keyword:
+            account_names = self._accounts.set_index("ACCOUNT_ID")["ORGANIZATION_NAME"]
+            searchable = frame.assign(ACCOUNT_NAME=frame["ACCOUNT_ID"].map(account_names))
+            fields = ["LOCATION_NAME", "ACCOUNT_NAME", "CITY", "POSTAL_CODE", "PHONE"]
+            mask = searchable[fields].fillna("").astype(str).apply(
+                lambda column: column.str.contains(keyword, case=False, regex=False)
+            ).any(axis=1)
+            frame = frame[mask]
+        return frame.drop_duplicates("FARM_LOCATION_ID").copy()
+
+    def get_farm_location(self, farm_location_id: str) -> Optional[dict]:
+        matches = self._farm_locations[self._farm_locations["FARM_LOCATION_ID"] == farm_location_id]
+        return matches.iloc[0].to_dict() if not matches.empty else None
+
+    def upsert_farm_location(self, record: dict) -> str:
+        errors = validate_farm_location(self, record)
+        if errors:
+            raise ValueError(" ".join(errors))
+        return self._upsert_frame("_farm_locations", "FARM_LOCATION_ID", record)
+
+    def delete_farm_location(self, farm_location_id: str) -> bool:
+        before = len(self._farm_locations)
+        self._farm_locations = self._farm_locations[
+            self._farm_locations["FARM_LOCATION_ID"] != farm_location_id
+        ]
+        return len(self._farm_locations) < before
+
     # ------------------------------------------------------------------
     # Facilities
     # ------------------------------------------------------------------
 
-    def get_facilities(self, account_id: Optional[str] = None) -> pd.DataFrame:
+    def get_facilities(self, account_id: Optional[str] = None, statuses=None) -> pd.DataFrame:
         df = self._facilities.copy()
         if account_id:
             df = df[df["ACCOUNT_ID"] == account_id]
+        if statuses is not None:
+            df = df[df["STATUS"].isin(statuses)]
         return df
 
     def upsert_facility(self, record: dict) -> str:
@@ -204,10 +263,15 @@ class MockRepository(BaseRepository):
         self._facilities = self._facilities[self._facilities["FACILITY_ID"] != facility_id]
         return len(self._facilities) < before
 
-    def get_facility_details(self, facility_id: Optional[str] = None) -> pd.DataFrame:
+    def get_facility_details(self, facility_id: Optional[str] = None, account_id=None, statuses=None) -> pd.DataFrame:
         frame = self._facility_details.copy()
         if facility_id:
             frame = frame[frame["FACILITY_ID"] == facility_id]
+        if account_id:
+            facility_ids = set(self._facilities.loc[self._facilities["ACCOUNT_ID"] == account_id, "FACILITY_ID"])
+            frame = frame[frame["FACILITY_ID"].isin(facility_ids)]
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
         return frame
 
     def get_facility_detail(self, detail_id: str) -> Optional[dict]:
@@ -238,13 +302,18 @@ class MockRepository(BaseRepository):
     # ------------------------------------------------------------------
 
     def get_flocks(
-        self, account_id: Optional[str] = None, facility_id: Optional[str] = None
+        self, account_id: Optional[str] = None, facility_id: Optional[str] = None,
+        facility_detail_id=None, statuses=None,
     ) -> pd.DataFrame:
         df = self._flocks.copy()
         if account_id:
             df = df[df["ACCOUNT_ID"] == account_id]
         if facility_id:
             df = df[df["FACILITY_ID"] == facility_id]
+        if facility_detail_id:
+            df = df[df["FACILITY_DETAIL_ID"] == facility_detail_id]
+        if statuses is not None:
+            df = df[df["STATUS"].isin(statuses)]
         return df
 
     def get_flock(self, flock_id: str) -> Optional[dict]:
@@ -275,10 +344,18 @@ class MockRepository(BaseRepository):
     # Flock Transactions
     # ------------------------------------------------------------------
 
-    def get_flock_transactions(self, flock_id: Optional[str] = None) -> pd.DataFrame:
+    def get_flock_transactions(self, flock_id: Optional[str] = None, account_id=None, transaction_type=None, date_from=None, date_to=None) -> pd.DataFrame:
         df = self._flock_transactions.copy()
         if flock_id:
             df = df[df["FLOCK_ID"] == flock_id]
+        if account_id:
+            flock_ids = set(self._flocks.loc[self._flocks["ACCOUNT_ID"] == account_id, "FLOCK_ID"])
+            df = df[df["FLOCK_ID"].isin(flock_ids)]
+        if transaction_type:
+            df = df[df["TRANSACTION_TYPE"] == transaction_type]
+        dates = pd.to_datetime(df["TRANSACTION_DATE"], errors="coerce")
+        if date_from is not None: df = df[dates >= pd.Timestamp(date_from)]
+        if date_to is not None: df = df[dates <= pd.Timestamp(date_to)]
         return df
 
     def upsert_flock_transaction(self, record: dict) -> str:
@@ -305,12 +382,15 @@ class MockRepository(BaseRepository):
         status: Optional[str] = None,
         quota_type: Optional[str] = None,
         active_only: bool = False,
+        statuses=None,
     ) -> pd.DataFrame:
         frame = self._quota_registrations.copy()
         if account_id:
             frame = frame[frame["ACCOUNT_ID"] == account_id]
         if status:
             frame = frame[frame["STATUS"] == status]
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
         if quota_type:
             frame = frame[frame["QUOTA_TYPE"] == quota_type]
         if active_only:
@@ -389,6 +469,35 @@ class MockRepository(BaseRepository):
         quota = self.get_quota_registration(record["QUOTA_ID"])
         stored = dict(record, OWNER_ACCOUNT_ID=quota["ACCOUNT_ID"])
         return self._upsert_frame("_quota_transactions", "QUOTA_TRANSACTION_ID", stored)
+
+    def get_quota_summary(self, as_of_date, quota_type, account_id=None, status="Active") -> pd.DataFrame:
+        as_of = pd.Timestamp(as_of_date)
+        quotas = self.get_quota_registrations(account_id=account_id, status=status, quota_type=quota_type).copy()
+        if quotas.empty:
+            return pd.DataFrame(columns=["QUOTA_ID", "ACCOUNT_ID", "REGISTRATION_NUMBER", "ACCOUNT_NAME", "ADDRESS", "CITY", "PROVINCE", "POSTAL_CODE", "PHONE", "FAX", "PRODUCER_ROLE", "ISSUANCE"])
+        effective = pd.to_datetime(quotas["EFFECTIVE_DATE"], errors="coerce")
+        end = pd.to_datetime(quotas["END_DATE"], errors="coerce")
+        quotas = quotas[(effective.isna() | (effective <= as_of)) & (end.isna() | (end >= as_of))]
+        accounts = self._accounts.set_index("ACCOUNT_ID")
+        locations = self._farm_locations.copy()
+        locations["_ACTIVE_RANK"] = locations["STATUS"].ne("Active").astype(int)
+        locations = locations.sort_values(["ACCOUNT_ID", "_ACTIVE_RANK", "FARM_LOCATION_ID"]).drop_duplicates("ACCOUNT_ID")
+        locations = locations.set_index("ACCOUNT_ID")
+        rows = []
+        for quota in quotas.drop_duplicates("QUOTA_ID").itertuples():
+            account = accounts.loc[quota.ACCOUNT_ID] if quota.ACCOUNT_ID in accounts.index else {}
+            location = locations.loc[quota.ACCOUNT_ID] if quota.ACCOUNT_ID in locations.index else {}
+            rows.append({
+                "QUOTA_ID": quota.QUOTA_ID, "ACCOUNT_ID": quota.ACCOUNT_ID,
+                "REGISTRATION_NUMBER": account.get("REGISTRATION_NUMBER"),
+                "ACCOUNT_NAME": account.get("ORGANIZATION_NAME"),
+                "ADDRESS": location.get("ADDRESS_1"), "CITY": location.get("CITY"),
+                "PROVINCE": location.get("PROVINCE"), "POSTAL_CODE": location.get("POSTAL_CODE"),
+                "PHONE": location.get("PHONE") or account.get("CONTACT_PHONE"),
+                "FAX": account.get("FAX"), "PRODUCER_ROLE": bool(account.get("PRODUCER_ROLE", False)),
+                "ISSUANCE": None,
+            })
+        return pd.DataFrame(rows)
 
     def get_quota_transaction(self, transaction_id: str) -> Optional[dict]:
         matches = self._quota_transactions[
@@ -483,9 +592,9 @@ class MockRepository(BaseRepository):
         """Create an import batch record. Returns import_id."""
         import_id = record.get("IMPORT_ID", str(uuid.uuid4()))
         record["IMPORT_ID"] = import_id
-        record.setdefault("UPLOAD_TIMESTAMP", dt.datetime.now())
-        record.setdefault("CREATED_AT", dt.datetime.now())
-        record.setdefault("UPDATED_AT", dt.datetime.now())
+        record.setdefault("UPLOAD_TIMESTAMP", dt.datetime.now(dt.timezone.utc))
+        record.setdefault("CREATED_AT", dt.datetime.now(dt.timezone.utc))
+        record.setdefault("UPDATED_AT", dt.datetime.now(dt.timezone.utc))
         record.setdefault("STATUS", "Uploaded")
         record.setdefault("ROW_COUNT", 0)
         record.setdefault("ERROR_COUNT", 0)
@@ -648,11 +757,115 @@ class MockRepository(BaseRepository):
         rows = [row for row in self._raw_rows if row["IMPORT_ID"] == import_id]
         return pd.DataFrame(rows)
 
+    def find_migration_by_hash(self, package_hash: str) -> Optional[dict]:
+        return next((dict(row) for row in self._migration_batches if row.get("PACKAGE_HASH") == package_hash), None)
+
+    def get_migration_batches(self) -> pd.DataFrame:
+        return pd.DataFrame(self._migration_batches)
+
+    def get_migration_raw_rows(self, batch_id: str) -> pd.DataFrame:
+        return pd.DataFrame([dict(row) for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id])
+
+    def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:
+        from data.migration import migration_stage_path
+        del content
+        return migration_stage_path(batch_id, filename)
+
+    def prepare_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:
+        package_hash = batch.get("PACKAGE_HASH")
+        if package_hash and self.find_migration_by_hash(package_hash):
+            raise ValueError("This exact migration package has already been prepared.")
+        batch_id = batch["MIGRATION_BATCH_ID"]
+        now = dt.datetime.now(dt.timezone.utc)
+        stored = {**batch, "STATUS": batch.get("STATUS", "READY"), "CREATED_AT": now, "UPDATED_AT": now}
+        self._migration_batches.append(stored)
+        for file in files:
+            self._migration_files.append({**{k: v for k, v in file.items() if k != "CONTENT"}, "MIGRATION_BATCH_ID": batch_id})
+        for row in raw_rows:
+            item = {**row, "MIGRATION_BATCH_ID": batch_id, "CREATED_AT": now, "UPDATED_AT": now}
+            self._migration_raw_rows.append(item)
+            if item.get("VALIDATION_STATUS") == "READY" and item.get("TARGET_ID"):
+                self._migration_id_map.append({
+                    "MIGRATION_BATCH_ID": batch_id, "SOURCE_ENTITY": item["SOURCE_ENTITY"],
+                    "SOURCE_ID": item.get("SOURCE_ID"), "TARGET_ID": item["TARGET_ID"], "STATUS": "READY",
+                })
+        return batch_id
+
+    def commit_migration_batch(self, batch_id: str) -> dict:
+        batch = next((row for row in self._migration_batches if row["MIGRATION_BATCH_ID"] == batch_id), None)
+        if not batch:
+            raise ValueError("Migration batch was not found.")
+        if batch.get("STATUS") == "COMMITTED":
+            return {"batch_id": batch_id, "counts": dict(batch.get("COMMITTED_COUNTS", {})), "idempotent": True}
+        attributes = ["_accounts", "_farm_locations", "_facilities", "_facility_details", "_quota_registrations", "_flocks", "_flock_transactions", "_quota_transactions", "_salmonella_tests", "_production"]
+        snapshots = {name: getattr(self, name).copy(deep=True) for name in attributes}
+        import_snapshot = [dict(row) for row in self._import_batches]
+        methods = {
+            "ACCOUNT": ("ACCOUNT_ID", self.upsert_account), "FARM_LOCATION": ("FARM_LOCATION_ID", self.upsert_farm_location), "FACILITY": ("FACILITY_ID", self.upsert_facility),
+            "FACILITY_DETAIL": ("FACILITY_DETAIL_ID", self.upsert_facility_detail),
+            "QUOTA_REGISTRATION": ("QUOTA_ID", self.upsert_quota_registration), "FLOCK": ("FLOCK_ID", self.upsert_flock),
+            "FLOCK_TRANSACTION": ("FLOCK_TRANSACTION_ID", self.upsert_flock_transaction),
+            "QUOTA_TRANSACTION": ("QUOTA_TRANSACTION_ID", self.upsert_quota_transaction),
+            "SALMONELLA_TEST": ("SALMONELLA_TEST_ID", self.upsert_salmonella_test),
+        }
+        counts = {}
+        try:
+            from data.migration import load_mapping_for_version
+            rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id and row["VALIDATION_STATUS"] == "READY"]
+            for entity in load_mapping_for_version(batch.get("SCHEMA_VERSION"))["entity_order"]:
+                records = [dict(row["NORMALIZED_DATA"]) for row in rows if row["SOURCE_ENTITY"] == entity]
+                if entity == "PRODUCTION_RECORD":
+                    if not any(item.get("IMPORT_ID") == batch_id for item in self._import_batches):
+                        self.create_import_batch({"IMPORT_ID": batch_id, "FILENAME": "Synthetic EIMS migration", "SOURCE": "EIMS_MIGRATION", "STATUS": "Validated"})
+                    existing = set(self._production.get("PRODUCTION_ID", pd.Series(dtype=str)).astype(str))
+                    pending = [record for record in records if str(record["PRODUCTION_ID"]) not in existing]
+                    counts[entity] = self.insert_production_records(pd.DataFrame(pending), batch_id) if pending else 0
+                else:
+                    key, method = methods[entity]
+                    attribute = attributes[list(methods).index(entity)]
+                    existing = set(getattr(self, attribute)[key].astype(str))
+                    counts[entity] = 0
+                    for record in records:
+                        if str(record[key]) not in existing:
+                            method(record); counts[entity] += 1
+            batch["STATUS"] = "COMMITTED"; batch["COMMITTED_COUNTS"] = counts; batch["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
+            for row in self._migration_id_map:
+                if row["MIGRATION_BATCH_ID"] == batch_id: row["STATUS"] = "COMMITTED"
+            return {"batch_id": batch_id, "counts": counts, "idempotent": False}
+        except Exception:
+            for name, frame in snapshots.items(): setattr(self, name, frame)
+            self._import_batches = import_snapshot
+            batch["STATUS"] = "FAILED"; batch["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
+            raise
+
+    def cleanup_synthetic_migration(self, batch_id: str) -> bool:
+        if not str(batch_id).startswith("DEV_MIGRATION_"):
+            raise ValueError("Cleanup is restricted to DEV_MIGRATION_ batches.")
+        maps = [row for row in self._migration_id_map if row["MIGRATION_BATCH_ID"] == batch_id]
+        targets = {}
+        for row in maps: targets.setdefault(row["SOURCE_ENTITY"], set()).add(row["TARGET_ID"])
+        frame_map = {
+            "ACCOUNT": ("_accounts", "ACCOUNT_ID"), "FARM_LOCATION": ("_farm_locations", "FARM_LOCATION_ID"), "FACILITY": ("_facilities", "FACILITY_ID"),
+            "FACILITY_DETAIL": ("_facility_details", "FACILITY_DETAIL_ID"), "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
+            "FLOCK": ("_flocks", "FLOCK_ID"), "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
+            "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"), "SALMONELLA_TEST": ("_salmonella_tests", "SALMONELLA_TEST_ID"),
+            "PRODUCTION_RECORD": ("_production", "PRODUCTION_ID"),
+        }
+        for entity in reversed(list(frame_map)):
+            attribute, key = frame_map[entity]; frame = getattr(self, attribute)
+            if key in frame: setattr(self, attribute, frame[~frame[key].isin(targets.get(entity, set()))].copy())
+        self._import_batches = [row for row in self._import_batches if row.get("IMPORT_ID") != batch_id]
+        self._migration_batches = [row for row in self._migration_batches if row["MIGRATION_BATCH_ID"] != batch_id]
+        self._migration_files = [row for row in self._migration_files if row["MIGRATION_BATCH_ID"] != batch_id]
+        self._migration_raw_rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] != batch_id]
+        self._migration_id_map = [row for row in self._migration_id_map if row["MIGRATION_BATCH_ID"] != batch_id]
+        return True
+
     def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:
         """Insert production records. Returns count inserted."""
         records = records.copy()
         records["IMPORT_ID"] = import_id
-        now = dt.datetime.now()
+        now = dt.datetime.now(dt.timezone.utc)
         if "CREATED_AT" not in records.columns:
             records["CREATED_AT"] = now
         else:
@@ -684,6 +897,7 @@ class MockRepository(BaseRepository):
         grader_number: Optional[str] = None,
         barn_identity: Optional[str] = None,
         egg_colour: Optional[str] = None,
+        account_id: Optional[str] = None,
     ) -> pd.DataFrame:
         # Join production to import batches for year/week
         ib = pd.DataFrame(self._import_batches)
@@ -717,6 +931,11 @@ class MockRepository(BaseRepository):
             df = df[df["BARN_IDENTITY"] == barn_identity]
         if egg_colour:
             df = df[df["EGG_COLOUR"] == egg_colour]
+        if account_id:
+            if "PRODUCER_ACCOUNT_ID" in df.columns:
+                df = df[df["PRODUCER_ACCOUNT_ID"] == account_id]
+            else:
+                df = df.iloc[0:0]
         return df
 
     def get_production_summary_metrics(self) -> dict:

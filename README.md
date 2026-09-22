@@ -30,12 +30,12 @@ tracked by Git.
 
 | Feature | Status |
 |---------|--------|
-| Logical data model (ACCOUNT, FACILITY, FLOCK, PRODUCTION) | PROVISIONAL |
+| Logical data model (ACCOUNT, FARM_LOCATION, FACILITY, FLOCK, PRODUCTION) | PROVISIONAL |
 | EIMS workbook ingestion (RAW → normalized union model) | Working (mock) |
 | Production data search/filter | Working |
 | Accounts/Facilities/Facility Details record workflows | Working |
-| Flock, transaction, Quota and Salmonella record workflows | Working (provisional rules) |
-| Customizable report builder with CSV & Excel export | Working |
+| Farm Location, Flock, transaction, Quota and Salmonella record workflows | Working (provisional rules) |
+| Internal Report Center, Quota Summary and curated custom builder with CSV/XLSX export | Working (provisional report rules) |
 | Snowflake SQL (RAW, CORE, REPORTING, SECURITY, APP) | Reviewed DEV foundation; not executed |
 | Synthetic data generator (deterministic, seeded) | Working |
 | Modular repository pattern (Mock ↔ Snowflake) | Shared executor, parameterized CRUD/import adapter; DEV integration pending |
@@ -66,7 +66,8 @@ efns-prototype/
 │       ├── export.py             # Spreadsheet-safe exports
 │       ├── authorized_repository.py # Permission/audit repository proxy
 │       ├── profiling_export.py   # Profile-only CSV/Excel exports
-│       └── report_builder.py     # Dynamic report assembly
+│       ├── report_builder.py     # Legacy joined report assembly
+│       └── report_center.py      # Catalog, safe custom builder and Quota Summary
 │
 ├── data/
 │   ├── constants.py              # EIMS import constants and mappings
@@ -135,8 +136,9 @@ Snowflake runtime selection is lazy and ordered: Streamlit named connection,
 active warehouse Snowpark session, then Python connector. See
 `docs/CONNECTION_ARCHITECTURE.md` for authentication and deployment details.
 
-The application floor and Snowflake warehouse pin are Streamlit `1.52.2` on
-Python 3.11. Newer compatible Streamlit versions remain usable in local mode.
+The application floor and Snowflake warehouse pin are Streamlit `1.52.2` on the
+warehouse runtime's default Python 3.11. `environment.yml` intentionally leaves
+Python unpinned. Newer compatible Streamlit versions remain usable in local mode.
 
 ### Source Data Profiler
 
@@ -144,6 +146,22 @@ The Administration profiler reads CSV, XLSX and XLSM source files in memory,
 profiles every worksheet, and suggests possible keys and relationship-shaped
 columns. Suggestions are advisory and contain no EIMS mappings. Downloads contain
 profile summaries and limited sample values rather than the complete source data.
+
+### Report Center
+
+The registered Report Center contains an internal allowlisted catalog, a
+parameter-bound Quota Summary report, the existing Salmonella report entry, and
+a custom builder across ten curated repository datasets. Saved configurations
+are session-only and contain no SQL. See `docs/REPORT_CENTER.md` for confirmed
+behavior and the report rules that still require stakeholder input.
+
+### Historical EIMS migration
+
+`scripts/generate_fake_eims_export.py` creates a deterministic, fully fictional
+clean package plus controlled rejected-row cases. The separate Migration Import
+workspace stages source files, preserves RAW JSON, validates the versioned
+provisional contract, and commits Ready records to CORE in dependency order.
+Generated samples are intentionally excluded from the Snowflake app artifact.
 
 ### Prototype authentication and authorization
 
@@ -182,6 +200,14 @@ EIMS Workbook → Python Ingestion → RAW source rows (MockRepository)
                                REPORTING (Views, Report Builder)
                                        ↓
                                Streamlit Report / Export
+```
+
+Historical exports follow a separate path:
+
+```
+Uploaded package → encrypted internal stage → migration RAW rows → validation
+                 → Ready / Rejected → atomic dependency-ordered CORE commit
+                 → reconciliation and reporting
 ```
 
 ### Schema

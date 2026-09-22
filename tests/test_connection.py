@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import datetime as dt
+from decimal import Decimal
 import sys
 from types import SimpleNamespace
 
@@ -14,6 +16,7 @@ from data.repositories.base import (
     RepositoryConfigurationError,
     RepositoryConnectionError,
     RepositoryError,
+    RepositoryOperationError,
 )
 
 
@@ -175,6 +178,27 @@ def test_connector_wraps_operation_and_connection_failures():
     assert captured.value is original
 
 
+def test_connector_operation_error_exposes_only_safe_correlation_fields():
+    class DriverFailure(RuntimeError):
+        sfqid = "01b12345-0000-abcd-0000-000000000001"
+        errno = 2003
+        sqlstate = "42501"
+
+    cursor = FakeCursor(failure=DriverFailure("password=never-display bound-value=secret"))
+    executor = connection.ConnectorExecutor(lambda: FakeConnection(cursor))
+    with pytest.raises(RepositoryOperationError) as captured:
+        executor.execute("INSERT INTO EFNS_DEV.CORE.ACCOUNT (ACCOUNT_ID) VALUES (%s)", ("secret-id",))
+    error = captured.value
+    assert error.operation == "INSERT"
+    assert error.entity == "ACCOUNT"
+    assert error.query_id == DriverFailure.sfqid
+    assert error.error_code == "2003"
+    assert error.sql_state == "42501"
+    assert "01b12345-0000-abcd-0000-000000000001" in str(error)
+    assert "password" not in str(error)
+    assert "secret-id" not in str(error)
+
+
 @pytest.mark.parametrize(
     "rows",
     [
@@ -271,7 +295,7 @@ def test_snowpark_preserves_repository_errors_and_wraps_other_errors():
         connection.SnowparkExecutor(FakeSession(lambda sql, params: (_ for _ in ()).throw(existing))).query("SELECT 1")
     assert captured.value is existing
 
-    with pytest.raises(RepositoryError, match="operation failed"):
+    with pytest.raises(RepositoryError, match="Snowflake SELECT failed"):
         connection.SnowparkExecutor(FakeSession(lambda sql, params: (_ for _ in ()).throw(RuntimeError("secret")))).query("SELECT 1")
 
 
@@ -292,6 +316,150 @@ def test_snowpark_executemany_batches_nested_values():
     assert len(session.calls) == 2
     assert session.calls[0][1] == [1, '{"a":1}', 2, '{"a":2}']
     assert session.calls[1][1] == [3, '{"a":3}']
+
+
+def test_snowpark_executemany_batches_insert_select_for_variant_values():
+    def respond(sql, params):
+        count = sql.count("SELECT ?, PARSE_JSON(?)")
+        return FakeStatement([FakeRow(**{"number of rows inserted": count})], [])
+
+    session = FakeSession(respond)
+    executor = connection.SnowparkExecutor(session)
+    rows = [(1, '{"a":1}'), (2, '{"a":2}'), (3, '{"a":3}')]
+    result = executor.executemany(
+        "INSERT INTO T (ID, RAW) SELECT %s, PARSE_JSON(%s)",
+        rows,
+        batch_size=2,
+    )
+    assert result == 3
+    assert "SELECT ?, PARSE_JSON(?) UNION ALL SELECT ?, PARSE_JSON(?)" in session.calls[0][0]
+    assert session.calls[0][1] == [1, '{"a":1}', 2, '{"a":2}']
+
+
+def test_snowpark_values_bulk_renders_single_null_integer_as_sql_null():
+    session = FakeSession(
+        lambda sql, params: FakeStatement(
+            [FakeRow(**{"number of rows inserted": 1})], []
+        )
+    )
+    executor = connection.SnowparkExecutor(session)
+
+    assert executor.executemany(
+        "INSERT INTO T (ID, FLOCK_AGE) VALUES (%s, %s)",
+        [("production-1", None)],
+    ) == 1
+    assert session.calls == [
+        ("INSERT INTO T (ID, FLOCK_AGE) VALUES (?, NULL)", ["production-1"])
+    ]
+
+
+def test_snowpark_values_bulk_supports_different_null_positions_and_types():
+    session = FakeSession(
+        lambda sql, params: FakeStatement(
+            [FakeRow(**{"number of rows inserted": 2})], []
+        )
+    )
+    executor = connection.SnowparkExecutor(session)
+    day = dt.date(2026, 9, 14)
+
+    assert executor.executemany(
+        "INSERT INTO T (I, N, D, S, OPTIONAL_N) VALUES (%s, %s, %s, %s, %s)",
+        [
+            (1, Decimal("12.50"), day, "first", None),
+            (2, None, day, "second", Decimal("3.25")),
+        ],
+    ) == 2
+    sql, params = session.calls[0]
+    assert sql.endswith(
+        "VALUES (?, ?, ?, ?, NULL), (?, NULL, ?, ?, ?)"
+    )
+    assert params == [
+        1, Decimal("12.50"), day, "first",
+        2, day, "second", Decimal("3.25"),
+    ]
+    assert None not in params and "None" not in params
+
+
+def test_snowpark_values_bulk_supports_all_null_optional_numbers():
+    session = FakeSession(
+        lambda sql, params: FakeStatement(
+            [FakeRow(**{"number of rows inserted": 2})], []
+        )
+    )
+    executor = connection.SnowparkExecutor(session)
+    executor.executemany(
+        "INSERT INTO T (ID, A, B) VALUES (%s, %s, %s)",
+        [(1, None, None), (2, None, None)],
+    )
+    assert session.calls[0] == (
+        "INSERT INTO T (ID, A, B) VALUES (?, NULL, NULL), (?, NULL, NULL)",
+        [1, 2],
+    )
+
+
+def test_snowpark_insert_select_bulk_renders_row_specific_nulls():
+    session = FakeSession(
+        lambda sql, params: FakeStatement(
+            [FakeRow(**{"number of rows inserted": 2})], []
+        )
+    )
+    executor = connection.SnowparkExecutor(session)
+    executor.executemany(
+        "INSERT INTO T (ID, RAW, OPTIONAL_N) SELECT %s, PARSE_JSON(%s), %s",
+        [(1, '{"a":1}', None), (2, None, Decimal("4.5"))],
+    )
+    assert session.calls[0] == (
+        "INSERT INTO T (ID, RAW, OPTIONAL_N) SELECT ?, PARSE_JSON(?), NULL "
+        "UNION ALL SELECT ?, PARSE_JSON(NULL), ?",
+        [1, '{"a":1}', 2, Decimal("4.5")],
+    )
+
+
+def test_null_literalization_is_quote_aware_and_keeps_non_nulls_bound():
+    sql, params = connection._literalize_null_bindings(
+        "(?, '?' || ?, \"?\", '%s')",
+        [None, "bound-value"],
+    )
+    assert sql == "(NULL, '?' || ?, \"?\", '%s')"
+    assert params == ["bound-value"]
+
+
+def test_complete_production_insert_keeps_flock_age_null_out_of_snowpark_binds():
+    from data.repositories.snowflake import (
+        PRODUCTION_COLUMNS,
+        PRODUCTION_DECIMAL_COLUMNS,
+        PRODUCTION_INTEGER_COLUMNS,
+        SnowflakeRepository,
+    )
+
+    session = FakeSession(
+        lambda sql, params: FakeStatement(
+            [FakeRow(**{"number of rows inserted": 1})], []
+        )
+    )
+    executor = connection.SnowparkExecutor(session)
+    repo = SnowflakeRepository.__new__(SnowflakeRepository)
+    repo.database = "EFNS_DEV"
+    repo.schema_core = "CORE"
+    repo.schema_raw = "RAW"
+    repo.schema_reporting = "REPORTING"
+    record = {column: "value" for column in PRODUCTION_COLUMNS}
+    record.update({column: 1 for column in PRODUCTION_INTEGER_COLUMNS})
+    record.update({column: Decimal("1.25") for column in PRODUCTION_DECIMAL_COLUMNS})
+    record.update({
+        "PRODUCTION_ID": "DEV_VERIFY_PRODUCTION_NULL_1",
+        "FLOCK_AGE": None,
+        "SOURCE_TYPE": "EIMS_IMPORT",
+        "MATCH_STATUS": "UNMATCHED",
+        "SOURCE_ROW_NUMBER": 14,
+    })
+
+    assert repo._insert_production(executor, [record], "DEV_VERIFY_IMPORT_NULL_1") == 1
+    sql, params = session.calls[0]
+    assert "INSERT INTO EFNS_DEV.CORE.PRODUCTION_RECORD" in sql
+    assert sql.count("NULL") == 1
+    assert None not in params and "None" not in params
+    assert len(params) == sql.count("?")
 
 
 def test_snowpark_executemany_rejects_invalid_input_without_execution():
@@ -315,6 +483,8 @@ def test_snowpark_executemany_rejects_invalid_input_without_execution():
         ([FakeRow(**{"number of rows updated": 3})], 3),
         ([FakeRow(**{"number of rows deleted": 4})], 4),
         ([FakeRow(**{"number of rows inserted": 2, "number of rows updated": 3})], 5),
+        ([FakeRow(**{"ROWS_AFFECTED": 6})], 6),
+        ([FakeRow(**{'"number of rows deleted"': 7})], 7),
         ([FakeRow(status="ok")], -1),
     ],
 )

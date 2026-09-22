@@ -22,6 +22,44 @@ class RepositoryConnectionError(RepositoryError):
     """Raised when a configured data service cannot be reached safely."""
 
 
+class RepositoryOperationError(RepositoryError):
+    """Safe, correlatable Snowflake operation failure.
+
+    Bound values and raw server messages are deliberately excluded. Snowflake's
+    query ID, error code, and SQLSTATE are safe operational references that an
+    administrator can correlate with query history.
+    """
+
+    def __init__(
+        self,
+        operation: str,
+        entity: str,
+        *,
+        query_id: str | None = None,
+        error_code: str | None = None,
+        sql_state: str | None = None,
+        error_type: str | None = None,
+    ) -> None:
+        self.operation = str(operation or "SQL").upper()
+        self.entity = str(entity or "Snowflake object").upper()
+        self.query_id = query_id
+        self.error_code = error_code
+        self.sql_state = sql_state
+        self.error_type = error_type
+        references = []
+        if query_id:
+            references.append(f"query ID {query_id}")
+        if error_code:
+            references.append(f"code {error_code}")
+        if sql_state:
+            references.append(f"SQLSTATE {sql_state}")
+        suffix = f" Reference: {', '.join(references)}." if references else ""
+        super().__init__(
+            f"Snowflake {self.operation} failed for {self.entity}.{suffix} "
+            "Ask an administrator to correlate this reference with Snowflake query history."
+        )
+
+
 class ConcurrencyError(RepositoryError):
     """Raised when a record changed since the editor last loaded it.
 
@@ -41,7 +79,10 @@ class BaseRepository(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def get_accounts(self) -> pd.DataFrame:
+    def get_accounts(
+        self, statuses: tuple[str, ...] | None = None,
+        role_field: str | None = None, keyword: str | None = None,
+    ) -> pd.DataFrame:
         """Return all accounts."""
         ...
 
@@ -67,12 +108,38 @@ class BaseRepository(ABC):
         """Soft or hard delete. Returns True if deleted."""
         ...
 
+    # Farm Locations / Dynamics "Other Addresses" (provisional)
+
+    @abstractmethod
+    def get_farm_locations(
+        self, farm_location_id: Optional[str] = None,
+        account_id: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
+        keyword: str | None = None,
+    ) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def get_farm_location(self, farm_location_id: str) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    def upsert_farm_location(self, record: dict) -> str:
+        ...
+
+    @abstractmethod
+    def delete_farm_location(self, farm_location_id: str) -> bool:
+        ...
+
     # ------------------------------------------------------------------
     # Facilities
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def get_facilities(self, account_id: Optional[str] = None) -> pd.DataFrame:
+    def get_facilities(
+        self, account_id: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
+    ) -> pd.DataFrame:
         ...
 
     @abstractmethod
@@ -84,7 +151,11 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
-    def get_facility_details(self, facility_id: Optional[str] = None) -> pd.DataFrame:
+    def get_facility_details(
+        self, facility_id: Optional[str] = None,
+        account_id: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
+    ) -> pd.DataFrame:
         ...
 
     @abstractmethod
@@ -105,7 +176,9 @@ class BaseRepository(ABC):
 
     @abstractmethod
     def get_flocks(
-        self, account_id: Optional[str] = None, facility_id: Optional[str] = None
+        self, account_id: Optional[str] = None, facility_id: Optional[str] = None,
+        facility_detail_id: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
     ) -> pd.DataFrame:
         ...
 
@@ -126,7 +199,10 @@ class BaseRepository(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def get_flock_transactions(self, flock_id: Optional[str] = None) -> pd.DataFrame:
+    def get_flock_transactions(
+        self, flock_id: Optional[str] = None, account_id: Optional[str] = None,
+        transaction_type: Optional[str] = None, date_from=None, date_to=None,
+    ) -> pd.DataFrame:
         ...
 
     @abstractmethod
@@ -145,6 +221,7 @@ class BaseRepository(ABC):
         status: Optional[str] = None,
         quota_type: Optional[str] = None,
         active_only: bool = False,
+        statuses: tuple[str, ...] | None = None,
     ) -> pd.DataFrame:
         ...
 
@@ -174,6 +251,14 @@ class BaseRepository(ABC):
 
     @abstractmethod
     def get_quota_transaction(self, transaction_id: str) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    def get_quota_summary(
+        self, as_of_date, quota_type: str,
+        account_id: Optional[str] = None, status: Optional[str] = "Active",
+    ) -> pd.DataFrame:
+        """Return one row per qualifying Quota Registration."""
         ...
 
     @abstractmethod
@@ -267,6 +352,36 @@ class BaseRepository(ABC):
         """Return source rows stored for one import batch."""
         ...
 
+    # Historical EIMS migration (provisional metadata contract)
+
+    @abstractmethod
+    def find_migration_by_hash(self, package_hash: str) -> Optional[dict]:
+        ...
+
+    @abstractmethod
+    def get_migration_batches(self) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def get_migration_raw_rows(self, batch_id: str) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:
+        ...
+
+    @abstractmethod
+    def prepare_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:
+        ...
+
+    @abstractmethod
+    def commit_migration_batch(self, batch_id: str) -> dict:
+        ...
+
+    @abstractmethod
+    def cleanup_synthetic_migration(self, batch_id: str) -> bool:
+        ...
+
     @abstractmethod
     def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:
         """Insert production records. Returns count inserted."""
@@ -280,6 +395,7 @@ class BaseRepository(ABC):
         grader_number: Optional[str] = None,
         barn_identity: Optional[str] = None,
         egg_colour: Optional[str] = None,
+        account_id: Optional[str] = None,
     ) -> pd.DataFrame:
         ...
 

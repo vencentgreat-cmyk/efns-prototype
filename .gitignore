@@ -40,3 +40,4 @@ htmlcov/
 *.log
 hermes-debug.log
 .local/
+/output/

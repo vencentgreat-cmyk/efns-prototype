@@ -41,3 +41,6 @@ Preferred authentication is a named connection, SSO/external browser, or a priva
 - **Container runtime:** use connector configuration supplied by the platform secret manager. Do not bake credentials or keys into the image.
 
 Run all schema scripts manually against a dedicated DEV database only after reviewing provisional identifiers. Real account validation, grants, affected-row response shapes, SSO/key-pair setup, and Streamlit deployment packaging remain pending.
+# Historical migration boundary
+
+The Historical EIMS Migration page calls only public repository methods. Uploaded files use the executor's `put_stream` capability to reach `@EFNS_DEV.RAW.EIMS_MIGRATION_FILES`; validation runs against the versioned provisional JSON mapping before any CORE write. Snowflake persists raw JSON, normalized JSON, validation results and source-to-target mappings. A separate transaction writes Ready rows in parent-first order and marks the batch committed only after the CORE transaction succeeds. Daily Production Import continues to use its existing atomic Import Batch/RAW/Production path.

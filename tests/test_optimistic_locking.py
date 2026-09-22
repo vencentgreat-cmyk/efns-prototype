@@ -4,6 +4,7 @@ These run fully offline against the mock repository plus a stubbed
 Snowflake cursor, so no real Snowflake credentials are required.
 """
 
+import datetime as dt
 import time
 
 import pandas as pd
@@ -118,6 +119,13 @@ class _FakeCursor:
     def execute(self, sql, params=None):
         self.calls.append((sql, params))
 
+    def fetchall(self):
+        if self.calls and self.calls[-1][0].startswith("SELECT CREATED_AT"):
+            self.description = [("CREATED_AT",), ("UPDATED_AT",)]
+            return [("2025-01-01T00:00:00", "2026-01-01T00:00:00")]
+        self.description = []
+        return []
+
     def fetchone(self):
         return (0,)
 
@@ -155,11 +163,11 @@ def test_snowflake_update_binds_expected_stamp_in_where_clause():
         }
     )
 
-    update_sql, update_params = cursor.calls[0]
+    update_sql, update_params = next(call for call in cursor.calls if call[0].startswith("UPDATE"))
     assert "WHERE ACCOUNT_ID = %s AND UPDATED_AT = %s" in update_sql
     # The stamp is bound as a parameter, never interpolated into the SQL text.
     assert "2026-01-01T00:00:00" not in update_sql
-    assert update_params[-1] == "2026-01-01T00:00:00"
+    assert update_params[-1] == dt.datetime(2026, 1, 1)
 
 
 def test_snowflake_update_without_stamp_has_no_lock_clause():
@@ -170,5 +178,5 @@ def test_snowflake_update_without_stamp_has_no_lock_clause():
         {"ACCOUNT_ID": "a1", "ORGANIZATION_NAME": "X", "REGISTRATION_NUMBER": "R1"}
     )
 
-    update_sql, _ = cursor.calls[0]
+    update_sql, _ = next(call for call in cursor.calls if call[0].startswith("UPDATE"))
     assert "AND UPDATED_AT = %s" not in update_sql
