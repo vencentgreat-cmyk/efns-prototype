@@ -48,6 +48,7 @@ class MockRepository(BaseRepository):
     def __init__(self, seed: int = 42):
         data = generate_all(seed=seed)
         self._accounts = data["accounts"].copy()
+        self._contacts = pd.DataFrame(columns=["CONTACT_ID", "ACCOUNT_ID", "FULL_NAME", "STATUS"])
         self._farm_locations = data["farm_locations"].copy()
         self._facilities = data["facilities"].copy()
         self._facility_details = data["facility_details"].copy()
@@ -55,10 +56,12 @@ class MockRepository(BaseRepository):
         self._flock_transactions = data["flock_transactions"].copy()
         self._quota_registrations = data["quota_registrations"].copy()
         self._quota_transactions = data["quota_transactions"].copy()
+        self._quota_allocations = pd.DataFrame(columns=["QUOTA_ALLOCATION_ID", "QUOTA_TYPE", "PROVINCE", "STATUS"])
         self._salmonella_tests = data["salmonella_tests"].copy()
         self._salmonella_test_samples = data["salmonella_test_samples"].copy()
         self._production = data["production"].copy()
         self._size_breakdown = data["size_breakdown"].copy()
+        self._efc_dates = pd.DataFrame(columns=["DAY", "ELEMENT_CODE", "ELEMENT_CODES"])
         self._import_batches: list[dict] = []
         self._raw_rows: list[dict] = []
         self._migration_batches: list[dict] = []
@@ -203,6 +206,20 @@ class MockRepository(BaseRepository):
         before = len(self._accounts)
         self._accounts = self._accounts[self._accounts["ACCOUNT_ID"] != account_id]
         return len(self._accounts) < before
+
+    def get_contacts(self, account_id=None, statuses=None, keyword=None) -> pd.DataFrame:
+        frame = self._contacts.copy()
+        if account_id:
+            frame = frame[frame["ACCOUNT_ID"] == account_id]
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
+        if keyword and not frame.empty:
+            fields = [field for field in ("FULL_NAME", "EMAIL", "PHONE", "JOB_TITLE") if field in frame]
+            mask = frame[fields].fillna("").astype(str).apply(
+                lambda column: column.str.contains(keyword, case=False, regex=False)
+            ).any(axis=1)
+            frame = frame[mask]
+        return frame.copy()
 
     # Farm Locations / Dynamics "Other Addresses" (provisional)
 
@@ -516,6 +533,16 @@ class MockRepository(BaseRepository):
         ]
         return len(self._quota_transactions) < before
 
+    def get_quota_allocations(self, quota_type=None, province=None, statuses=None) -> pd.DataFrame:
+        frame = self._quota_allocations.copy()
+        if quota_type:
+            frame = frame[frame["QUOTA_TYPE"] == quota_type]
+        if province:
+            frame = frame[frame["PROVINCE"] == province]
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
+        return frame.copy()
+
     # ------------------------------------------------------------------
     # Salmonella tests
     # ------------------------------------------------------------------
@@ -797,37 +824,49 @@ class MockRepository(BaseRepository):
             raise ValueError("Migration batch was not found.")
         if batch.get("STATUS") == "COMMITTED":
             return {"batch_id": batch_id, "counts": dict(batch.get("COMMITTED_COUNTS", {})), "idempotent": True}
-        attributes = ["_accounts", "_farm_locations", "_facilities", "_facility_details", "_quota_registrations", "_flocks", "_flock_transactions", "_quota_transactions", "_salmonella_tests", "_production"]
+        entity_frames = {
+            "ACCOUNT": ("_accounts", "ACCOUNT_ID"),
+            "CONTACT": ("_contacts", "CONTACT_ID"),
+            "FARM_LOCATION": ("_farm_locations", "FARM_LOCATION_ID"),
+            "FACILITY": ("_facilities", "FACILITY_ID"),
+            "FACILITY_DETAIL": ("_facility_details", "FACILITY_DETAIL_ID"),
+            "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
+            "FLOCK": ("_flocks", "FLOCK_ID"),
+            "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
+            "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"),
+            "SALMONELLA_TEST": ("_salmonella_tests", "SALMONELLA_TEST_ID"),
+            "SALMONELLA_TEST_SAMPLE": ("_salmonella_test_samples", "SALMONELLA_TEST_SAMPLE_ID"),
+            "QUOTA_ALLOCATION": ("_quota_allocations", "QUOTA_ALLOCATION_ID"),
+            "DIM_EFC_DATE": ("_efc_dates", "DAY"),
+        }
+        attributes = [attribute for attribute, _key in entity_frames.values()] + ["_production"]
         snapshots = {name: getattr(self, name).copy(deep=True) for name in attributes}
         import_snapshot = [dict(row) for row in self._import_batches]
-        methods = {
-            "ACCOUNT": ("ACCOUNT_ID", self.upsert_account), "FARM_LOCATION": ("FARM_LOCATION_ID", self.upsert_farm_location), "FACILITY": ("FACILITY_ID", self.upsert_facility),
-            "FACILITY_DETAIL": ("FACILITY_DETAIL_ID", self.upsert_facility_detail),
-            "QUOTA_REGISTRATION": ("QUOTA_ID", self.upsert_quota_registration), "FLOCK": ("FLOCK_ID", self.upsert_flock),
-            "FLOCK_TRANSACTION": ("FLOCK_TRANSACTION_ID", self.upsert_flock_transaction),
-            "QUOTA_TRANSACTION": ("QUOTA_TRANSACTION_ID", self.upsert_quota_transaction),
-            "SALMONELLA_TEST": ("SALMONELLA_TEST_ID", self.upsert_salmonella_test),
-        }
         counts = {}
         try:
             from data.migration import load_mapping_for_version
             rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id and row["VALIDATION_STATUS"] == "READY"]
             for entity in load_mapping_for_version(batch.get("SCHEMA_VERSION"))["entity_order"]:
-                records = [dict(row["NORMALIZED_DATA"]) for row in rows if row["SOURCE_ENTITY"] == entity]
+                records = [
+                    dict(row["NORMALIZED_DATA"]) for row in rows
+                    if row["SOURCE_ENTITY"] == entity and row.get("NORMALIZED_DATA") is not None
+                ]
                 if entity == "PRODUCTION_RECORD":
                     if not any(item.get("IMPORT_ID") == batch_id for item in self._import_batches):
-                        self.create_import_batch({"IMPORT_ID": batch_id, "FILENAME": "Synthetic EIMS migration", "SOURCE": "EIMS_MIGRATION", "STATUS": "Validated"})
+                        self.create_import_batch({"IMPORT_ID": batch_id, "FILENAME": "EIMS migration", "SOURCE": "EIMS_MIGRATION", "STATUS": "Validated"})
                     existing = set(self._production.get("PRODUCTION_ID", pd.Series(dtype=str)).astype(str))
                     pending = [record for record in records if str(record["PRODUCTION_ID"]) not in existing]
                     counts[entity] = self.insert_production_records(pd.DataFrame(pending), batch_id) if pending else 0
                 else:
-                    key, method = methods[entity]
-                    attribute = attributes[list(methods).index(entity)]
-                    existing = set(getattr(self, attribute)[key].astype(str))
+                    attribute, key = entity_frames[entity]
+                    frame = getattr(self, attribute)
+                    existing = set(frame[key].astype(str)) if key in frame else set()
                     counts[entity] = 0
                     for record in records:
                         if str(record[key]) not in existing:
-                            method(record); counts[entity] += 1
+                            self._upsert_frame(attribute, key, record)
+                            existing.add(str(record[key]))
+                            counts[entity] += 1
             batch["STATUS"] = "COMMITTED"; batch["COMMITTED_COUNTS"] = counts; batch["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
             for row in self._migration_id_map:
                 if row["MIGRATION_BATCH_ID"] == batch_id: row["STATUS"] = "COMMITTED"
@@ -845,10 +884,14 @@ class MockRepository(BaseRepository):
         targets = {}
         for row in maps: targets.setdefault(row["SOURCE_ENTITY"], set()).add(row["TARGET_ID"])
         frame_map = {
-            "ACCOUNT": ("_accounts", "ACCOUNT_ID"), "FARM_LOCATION": ("_farm_locations", "FARM_LOCATION_ID"), "FACILITY": ("_facilities", "FACILITY_ID"),
+            "ACCOUNT": ("_accounts", "ACCOUNT_ID"), "CONTACT": ("_contacts", "CONTACT_ID"),
+            "FARM_LOCATION": ("_farm_locations", "FARM_LOCATION_ID"), "FACILITY": ("_facilities", "FACILITY_ID"),
             "FACILITY_DETAIL": ("_facility_details", "FACILITY_DETAIL_ID"), "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
             "FLOCK": ("_flocks", "FLOCK_ID"), "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
             "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"), "SALMONELLA_TEST": ("_salmonella_tests", "SALMONELLA_TEST_ID"),
+            "SALMONELLA_TEST_SAMPLE": ("_salmonella_test_samples", "SALMONELLA_TEST_SAMPLE_ID"),
+            "QUOTA_ALLOCATION": ("_quota_allocations", "QUOTA_ALLOCATION_ID"),
+            "DIM_EFC_DATE": ("_efc_dates", "DAY"),
             "PRODUCTION_RECORD": ("_production", "PRODUCTION_ID"),
         }
         for entity in reversed(list(frame_map)):
@@ -959,6 +1002,14 @@ class MockRepository(BaseRepository):
             "total_rejected": float(total_rejected),
             "total_loss": float(total_loss),
         }
+
+    def get_efc_dates(self, date_from=None, date_to=None) -> pd.DataFrame:
+        frame = self._efc_dates.copy()
+        if date_from is not None and "DAY" in frame:
+            frame = frame[pd.to_datetime(frame["DAY"]).dt.date >= date_from]
+        if date_to is not None and "DAY" in frame:
+            frame = frame[pd.to_datetime(frame["DAY"]).dt.date <= date_to]
+        return frame.sort_values("DAY").copy() if "DAY" in frame else frame
 
     def get_dashboard_metrics(self) -> dict:
         today = dt.date.today()

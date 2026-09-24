@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from data.migration import analyze_migration_files, load_mapping
+from data.migration import V2_MAPPING_PATH, analyze_migration_files, load_mapping
 
 
 FIXED_GENERATION_TIME = "2026-09-15T00:00:00Z"
@@ -245,7 +245,7 @@ def write_dataset(root: Path, name: str, frames: dict[str, pd.DataFrame], mappin
 
 
 def generate(output: Path) -> dict:
-    mapping = load_mapping()
+    mapping = load_mapping(V2_MAPPING_PATH)
     output.mkdir(parents=True, exist_ok=True)
     manifest = {
         "schema_version": mapping["schema_version"],

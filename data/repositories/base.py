@@ -108,6 +108,15 @@ class BaseRepository(ABC):
         """Soft or hard delete. Returns True if deleted."""
         ...
 
+    @abstractmethod
+    def get_contacts(
+        self, account_id: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
+        keyword: str | None = None,
+    ) -> pd.DataFrame:
+        """Return migrated Dataverse contacts."""
+        ...
+
     # Farm Locations / Dynamics "Other Addresses" (provisional)
 
     @abstractmethod
@@ -269,6 +278,15 @@ class BaseRepository(ABC):
     def delete_quota_transaction(self, transaction_id: str) -> bool:
         ...
 
+    @abstractmethod
+    def get_quota_allocations(
+        self, quota_type: Optional[str] = None,
+        province: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
+    ) -> pd.DataFrame:
+        """Return historical EIMS quota allocations."""
+        ...
+
     # Salmonella testing (provisional)
     @abstractmethod
     def get_salmonella_tests(
@@ -402,6 +420,14 @@ class BaseRepository(ABC):
     @abstractmethod
     def get_production_summary_metrics(self) -> dict:
         """Return aggregate summary metrics for the home page."""
+        ...
+
+    @abstractmethod
+    def get_efc_dates(
+        self, date_from: Optional[object] = None,
+        date_to: Optional[object] = None,
+    ) -> pd.DataFrame:
+        """Return the deduplicated EFC reporting date dimension."""
         ...
 
     @abstractmethod

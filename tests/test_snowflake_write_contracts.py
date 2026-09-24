@@ -52,6 +52,89 @@ def _ddl_columns(path: str, table: str) -> list[str]:
     ]
 
 
+FINAL_MODEL_DDL_PATHS = (
+    "sql/02_core_tables.sql",
+    "sql/12_real_eims_additive_migration.sql",
+)
+
+
+def _final_model_ddl() -> str:
+    return "\n".join(
+        (ROOT / path).read_text(encoding="utf-8")
+        for path in FINAL_MODEL_DDL_PATHS
+    )
+
+
+def _final_model_columns(table: str) -> list[str]:
+    ddl = _final_model_ddl()
+
+    match = re.search(
+        rf"CREATE TABLE IF NOT EXISTS "
+        rf"EFNS_DEV\.[A-Z_]+\.{table}\s*"
+        rf"\((.*?)\)\s*(?:COMMENT\s*=|;)",
+        ddl,
+        flags=re.DOTALL,
+    )
+    assert match, f"DDL for {table} was not found"
+
+    columns = [
+        line.split()[0]
+        for line in match.group(1).splitlines()
+        if line.strip()
+        and not line.strip().startswith(
+            ("CONSTRAINT", "REFERENCES")
+        )
+        for line in [line.strip().rstrip(",")]
+    ]
+
+    added_columns = re.findall(
+        rf"ALTER TABLE IF EXISTS "
+        rf"EFNS_DEV\.[A-Z_]+\.{table}\s+"
+        rf"ADD COLUMN IF NOT EXISTS\s+"
+        rf"([A-Z0-9_]+)\s+",
+        ddl,
+    )
+
+    for column in added_columns:
+        if column not in columns:
+            columns.append(column)
+
+    return columns
+
+
+def _final_model_date_columns(table: str) -> set[str]:
+    ddl = _final_model_ddl()
+
+    match = re.search(
+        rf"CREATE TABLE IF NOT EXISTS "
+        rf"EFNS_DEV\.[A-Z_]+\.{table}\s*"
+        rf"\((.*?)\)\s*(?:COMMENT\s*=|;)",
+        ddl,
+        flags=re.DOTALL,
+    )
+    assert match, f"DDL for {table} was not found"
+
+    dates = set(
+        re.findall(
+            r"^\s+([A-Z_]+)\s+DATE\b",
+            match.group(1),
+            flags=re.MULTILINE,
+        )
+    )
+
+    dates.update(
+        re.findall(
+            rf"ALTER TABLE IF EXISTS "
+            rf"EFNS_DEV\.[A-Z_]+\.{table}\s+"
+            rf"ADD COLUMN IF NOT EXISTS\s+"
+            rf"([A-Z0-9_]+)\s+DATE\b",
+            ddl,
+        )
+    )
+
+    return dates
+
+
 class RecordingExecutor:
     runtime_name = "Offline contract"
 
@@ -117,27 +200,32 @@ def _repo(executor) -> SnowflakeRepository:
     return repo
 
 
-def test_core_model_columns_exactly_match_repository_order():
+def test_final_model_columns_match_repository_contract():
     for table, (key, allowed_text) in MODEL.items():
-        assert _ddl_columns("sql/02_core_tables.sql", table) == [
+        expected = {
             key,
             *allowed_text.split(),
             "CREATED_AT",
             "UPDATED_AT",
-        ]
+        }
+        actual = set(_final_model_columns(table))
 
+        assert actual == expected, {
+            "table": table,
+            "missing": sorted(expected - actual),
+            "unexpected": sorted(actual - expected),
+        }
 
-def test_every_core_date_column_is_normalized_at_repository_boundary():
-    ddl = (ROOT / "sql/02_core_tables.sql").read_text(encoding="utf-8")
+def test_every_model_date_column_is_normalized_at_repository_boundary():
     for table in MODEL:
-        match = re.search(
-            rf"CREATE TABLE IF NOT EXISTS EFNS_DEV\.CORE\.{table}\s*\((.*?)\)\s*(?:COMMENT\s*=|;)",
-            ddl,
-            flags=re.DOTALL,
-        )
-        ddl_dates = set(re.findall(r"^\s+([A-Z_]+)\s+DATE\b", match.group(1), flags=re.MULTILINE))
-        assert ddl_dates == set(DATE_FIELDS.get(table, ())), table
+        actual = _final_model_date_columns(table)
+        expected = set(DATE_FIELDS.get(table, ()))
 
+        assert actual == expected, {
+            "table": table,
+            "missing_normalizers": sorted(actual - expected),
+            "non_ddl_date_fields": sorted(expected - actual),
+        }
 
 def test_import_and_production_insert_columns_align_with_ddl():
     assert _ddl_columns("sql/03_production_tables.sql", "IMPORT_BATCH") == [
@@ -178,18 +266,54 @@ def test_every_entity_create_uses_direct_insert_and_server_utc(table):
     repo = _repo(executor)
     key, fields = MODEL[table]
     first_field = fields.split()[0]
-    result = repo._upsert(table, {first_field: f"value-{table.lower()}"})
-    writes = [call for call in executor.calls if call[0] == "execute"]
+
+    if table == "DIM_EFC_DATE":
+        record = {
+            key: dt.date(2026, 2, 3),
+            first_field: 2026,
+        }
+        expected_params = (
+            dt.date(2026, 2, 3),
+            2026,
+        )
+        expected_schema = "REPORTING"
+    else:
+        record = {
+            first_field: f"value-{table.lower()}",
+        }
+        expected_params = None
+        expected_schema = "CORE"
+
+    result = repo._upsert(table, record)
+
+    writes = [
+        call
+        for call in executor.calls
+        if call[0] == "execute"
+    ]
     assert len(writes) == 1
+
     _, sql, params = writes[0]
-    assert sql.startswith(f"INSERT INTO EFNS_DEV.CORE.{table}")
+
+    assert sql.startswith(
+        f"INSERT INTO EFNS_DEV.{expected_schema}.{table}"
+    )
     assert "UPDATE EFNS_DEV" not in sql
     assert sql.count(UTC_NOW_NTZ) == 2
     assert len(params) == sql.count("%s")
-    assert params == (result, f"value-{table.lower()}")
-    assert len(result) == 36
-    assert executor.commits == 1 and executor.rollbacks == 0
 
+    if table == "DIM_EFC_DATE":
+        assert params == expected_params
+        assert result == dt.date(2026, 2, 3)
+    else:
+        assert params == (
+            result,
+            f"value-{table.lower()}",
+        )
+        assert len(result) == 36
+
+    assert executor.commits == 1
+    assert executor.rollbacks == 0
 
 def test_account_insert_field_and_parameter_order_matches_real_ddl():
     executor = RecordingExecutor()
@@ -242,20 +366,47 @@ def test_optimistic_lock_timestamp_is_connector_compatible_and_canonical_utc():
 def test_every_entity_normalizes_pandas_optimistic_lock_timestamp(table):
     executor = RecordingExecutor(existing=True)
     repo = _repo(executor)
+
     key, fields = MODEL[table]
     first_field = fields.split()[0]
+
+    if table == "DIM_EFC_DATE":
+        entity_id = dt.date(2026, 2, 3)
+        updated_value = 2026
+        expected_schema = "REPORTING"
+    else:
+        entity_id = f"record-{table.lower()}"
+        updated_value = "Updated"
+        expected_schema = "CORE"
+
     repo._upsert(
         table,
         {
-            key: f"record-{table.lower()}",
-            first_field: "Updated",
-            "EXPECTED_UPDATED_AT": pd.Timestamp("2026-02-02T12:00:00"),
+            key: entity_id,
+            first_field: updated_value,
+            "EXPECTED_UPDATED_AT": pd.Timestamp(
+                "2026-02-02T12:00:00"
+            ),
         },
     )
-    _, _sql, params = next(call for call in executor.calls if call[0] == "execute")
-    assert params[-1] == dt.datetime(2026, 2, 2, 12, 0)
-    assert type(params[-1]) is dt.datetime
 
+    _, sql, params = next(
+        call
+        for call in executor.calls
+        if call[0] == "execute"
+    )
+
+    assert sql.startswith(
+        f"UPDATE EFNS_DEV.{expected_schema}.{table}"
+    )
+    assert params[-1] == dt.datetime(
+        2026,
+        2,
+        2,
+        12,
+        0,
+    )
+    assert type(params[-1]) is dt.datetime
 
 def test_unknown_insert_affected_rows_is_verified_and_returned():
     executor = RecordingExecutor(affected=-1)

@@ -11,7 +11,9 @@ from decimal import Decimal, InvalidOperation
 from typing import Optional
 import uuid
 
+
 import pandas as pd
+
 
 from data.connection import ConnectorExecutor, SqlExecutor, create_executor
 from data.repositories.base import BaseRepository, ConcurrencyError, RepositoryError
@@ -27,14 +29,18 @@ from data.validation import (
 
 MODEL = {
     "ACCOUNT": ("ACCOUNT_ID", "REGISTRATION_NUMBER ORGANIZATION_NAME ADDRESS_LINE1 ADDRESS_LINE2 ADDRESS_LINE3 CITY PROVINCE POSTAL_CODE COUNTRY_REGION LATITUDE LONGITUDE CONTACT_NAME CONTACT_PHONE CONTACT_EMAIL FAX WEBSITE LICENCE_NUMBER PARENT_ACCOUNT_ID GRADING_STATION_ACCOUNT_ID PULLET_GROWER_ACCOUNT_ID PROVINCE_OF_REGISTRATION SPENT_FOWL_PLANS DEFAULT_ON_REPORTS NO_SVG DESCRIPTION PRODUCER_ROLE BREEDER_ROLE HATCHERY_ROLE PULLET_GROWER_ROLE GRADER_ROLE PROCESSOR_BREAKER_ROLE DISPOSAL_PLANT_ROLE UNREGULATED_ROLE PROV_BOARD_EFC_ROLE GOVERNMENT_ROLE VENDOR_ROLE RESEARCH_EXEMPT_ROLE SHIPPER_ROLE OTHER_ROLE STATUS"),
-    "FARM_LOCATION": ("FARM_LOCATION_ID", "ACCOUNT_ID LOCATION_NAME ADDRESS_1 ADDRESS_2 CITY PROVINCE POSTAL_CODE PHONE STATUS"),
-    "FACILITY": ("FACILITY_ID", "ACCOUNT_ID FACILITY_NAME FACILITY_TYPE STATUS ACTIVATION_DATE CONSTRUCTION_DATE CLOSURE_DATE DESTRUCTION_DATE INACTIVE_DATE"),
-    "FACILITY_DETAIL": ("FACILITY_DETAIL_ID", "FACILITY_ID DETAIL_NAME DETAIL_TYPE STATUS COMMENTS"),
+    "CONTACT": ("CONTACT_ID", "ACCOUNT_ID FULL_NAME FIRST_NAME MIDDLE_NAME LAST_NAME JOB_TITLE EMAIL PHONE MOBILE_PHONE FAX ADDRESS_LINE1 ADDRESS_LINE2 CITY PROVINCE POSTAL_CODE COUNTRY_REGION EIMS_CONTACT_NUMBER LANGUAGE_PREFERENCE PRIME_CONTACT STATUS"),
+    "FARM_LOCATION": ("FARM_LOCATION_ID", "ACCOUNT_ID LOCATION_NAME ADDRESS_1 ADDRESS_2 CITY PROVINCE POSTAL_CODE PHONE FAX EIMS_LOCATION_ID STATUS"),
+    "FACILITY": ("FACILITY_ID", "ACCOUNT_ID FARM_LOCATION_ID FACILITY_NAME FACILITY_TYPE HOUSING_SYSTEM STATUS ACTIVATION_DATE CONSTRUCTION_DATE RENOVATION_DATE CLOSURE_DATE DESTRUCTION_DATE INACTIVE_DATE FACILITY_QUOTA MANURE_DISPOSAL COMMENTS"),
+    "FACILITY_DETAIL": ("FACILITY_DETAIL_ID", "FACILITY_ID DETAIL_NAME DETAIL_TYPE STATUS COMMENTS EIMS_FACILITY_DETAIL_ID BIRD_COLOUR BIRDS_HOUSED CAGE_BRAND DATE_INSTALLED HEIGHT HIGHEST_BIRDS_PER_CAGE LENGTH NUMBER_OF_CAGES SQUARE_INCHES WIDTH"),
     "FLOCK": ("FLOCK_ID", "FLOCK_NUMBER ACCOUNT_ID FACILITY_ID FACILITY_DETAIL_ID QUOTA_ID FLOCK_QUOTA_TYPE STATUS CREATE_DELIVERY_TRANSACTION PERMIT_NUMBER PERMIT_DATE HATCH_DATE DATE_ORDERED BIRD_COUNT EGG_COLOUR BIRD_STRAIN PLACEMENT_DATE EST_DISPOSAL DISPOSAL_DATE BIRDS_DISPOSED BREEDER HATCHERY PULLET_GROWER DISPOSAL_PLANT DISPOSAL_METHOD COMMENTS"),
     "FLOCK_TRANSACTION": ("FLOCK_TRANSACTION_ID", "FLOCK_ID TRANSACTION_TYPE QUANTITY TRANSACTION_DATE NOTES"),
     "QUOTA_REGISTRATION": ("QUOTA_ID", "REGISTRATION_NUMBER ACCOUNT_ID QUOTA_NAME QUOTA_TYPE STATUS EFFECTIVE_DATE END_DATE COMMENTS"),
     "QUOTA_TRANSACTION": ("QUOTA_TRANSACTION_ID", "TRANSACTION_TYPE QUOTA_ID EFFECTIVE_DATE END_DATE QUOTA_COUNT OWNER_ACCOUNT_ID RELATED_ACCOUNT_ID RELATED_QUOTA_ID RELATED_TRANSACTION_ID PRICE QUOTA_LEASE_TYPE COMMENTS"),
-    "SALMONELLA_TEST": ("SALMONELLA_TEST_ID", "FLOCK_ID ACCOUNT_ID PERMIT_NUMBER TESTING_DATE INSPECTOR NUMBER_OF_SAMPLES TEST_RESULT DATE_RESULT_SENT DATE_RECEIVED CASE_FILE_NUMBER INVOICE_NUMBER INVOICE_DATE COMMENTS"),
+    "SALMONELLA_TEST": ("SALMONELLA_TEST_ID", "FLOCK_ID ACCOUNT_ID PERMIT_NUMBER TESTING_DATE INSPECTOR NUMBER_OF_SAMPLES TEST_RESULT TEST_TYPE DATE_RESULT_SENT DATE_RECEIVED CASE_FILE_NUMBER INVOICE_NUMBER INVOICE_DATE COMMENTS"),
+    "SALMONELLA_TEST_SAMPLE": ("SALMONELLA_TEST_SAMPLE_ID", "SALMONELLA_TEST_ID SAMPLE_REFERENCE TEST_AREA SEROTYPE PHAGE STATUS COMMENTS"),
+    "QUOTA_ALLOCATION": ("QUOTA_ALLOCATION_ID", "ALLOCATION_COUNT COMMENTS EFFECTIVE_DATE EIMS_ALLOCATION_ID PROVINCE QUOTA_TYPE STATUS"),
+    "DIM_EFC_DATE": ("DAY", "EFC_YEAR EFC_WEEK_NUMBER EFC_WEEK EFC_WEEK_LABEL EFC_LONG_NAME EFC_PERIOD EFC_PERIOD_ALIAS EFC_QUARTER ELEMENT_CODE ELEMENT_CODES PREVIOUS_QUARTER PREV_YEAR PREV_WEEK PREV_QUARTER DATE_VALUE MONTH_NUMBER MONTH_TEXT DAYS_IN_MONTH YEAR_NUMBER YEAR_MONTH QUARTER_NUMBER DAYS_IN_QUARTER YEAR_QUARTER DAY_STRING"),
 }
 PRODUCTION_COLUMNS = "PRODUCER_ACCOUNT_ID GRADER_ACCOUNT_ID FACILITY_ID FLOCK_ID GRADER_NAME PRODUCER_NUMBER GRADER_NUMBER BARN_IDENTITY SOURCE_WEEK_CODE REPORTING_YEAR REPORTING_WEEK MARKETING_TYPE HOUSING_SYSTEM EGG_TYPE EGG_COLOUR FLOCK_AGE NET_WEIGHT NET_BOXES NET_PER_BOX JUMBO EXTRA_LARGE LARGE MEDIUM SMALL PEEWEE GRADE_B GRADE_C CRACKS NEST_RUN NEST_RUN_25_PLUS NEST_RUN_24_PLUS NEST_RUN_23_PLUS NEST_RUN_22_PLUS NEST_RUN_21_PLUS NEST_RUN_20_PLUS NEST_RUN_19_PLUS NEST_RUN_18_PLUS NEST_RUN_17_PLUS OTHER_LEVIABLE OTHER_NON_LEVIABLE FARM_GATE_SALES ON_FARM_CONSUMPTION SUBTOTAL REJECTS LEAKERS TOTAL TOTAL_RECEIVED REJECTED LOSS LEGACY_REJECT_LOSS_TOTAL TOTAL_ACCEPTED SOURCE_TYPE MATCH_STATUS SOURCE_ROW_NUMBER MATCH_CONFIRMED_AT MATCH_CONFIRMED_BY".split()
 PRODUCTION_INTEGER_COLUMNS = frozenset({
@@ -56,12 +62,15 @@ RAW_ROW_COLUMNS = "RAW_ROW_ID IMPORT_ID SOURCE_ROW_NUMBER RAW_DATA VALIDATION_ST
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
 UTC_NOW_NTZ = "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ"
 DATE_FIELDS = {
-    "FACILITY": frozenset({"ACTIVATION_DATE", "CONSTRUCTION_DATE", "CLOSURE_DATE", "DESTRUCTION_DATE", "INACTIVE_DATE"}),
+    "FACILITY": frozenset({"ACTIVATION_DATE", "CONSTRUCTION_DATE", "RENOVATION_DATE", "CLOSURE_DATE", "DESTRUCTION_DATE", "INACTIVE_DATE"}),
+    "FACILITY_DETAIL": frozenset({"DATE_INSTALLED"}),
     "FLOCK": frozenset({"PERMIT_DATE", "HATCH_DATE", "DATE_ORDERED", "PLACEMENT_DATE", "EST_DISPOSAL", "DISPOSAL_DATE"}),
     "FLOCK_TRANSACTION": frozenset({"TRANSACTION_DATE"}),
     "QUOTA_REGISTRATION": frozenset({"EFFECTIVE_DATE", "END_DATE"}),
     "QUOTA_TRANSACTION": frozenset({"EFFECTIVE_DATE", "END_DATE"}),
     "SALMONELLA_TEST": frozenset({"TESTING_DATE", "DATE_RESULT_SENT", "DATE_RECEIVED", "INVOICE_DATE"}),
+    "QUOTA_ALLOCATION": frozenset({"EFFECTIVE_DATE"}),
+    "DIM_EFC_DATE": frozenset({"DAY", "DATE_VALUE"}),
 }
 _NULL_DATE_TEXT = frozenset({"", "none", "nat", "null"})
 _NULL_NUMERIC_TEXT = frozenset({"", "none", "nan", "nat", "null"})
@@ -271,61 +280,127 @@ class SnowflakeRepository(BaseRepository):
                 normalized[field] = normalize_date_bind(normalized[field], field)
         return normalized
 
-    def _upsert_with_executor(self, executor: SqlExecutor, table: str, record: dict) -> str:
+    def _upsert_with_executor(
+        self,
+        executor: SqlExecutor,
+        table: str,
+        record: dict,
+    ) -> str:
         record = self._normalize_date_fields(table, record)
+
+        target_schema = (
+            self.schema_reporting
+            if table == "DIM_EFC_DATE"
+            else self.schema_core
+        )
+        target_table = self._table(table, target_schema)
+
         key, allowed_text = MODEL[table]
-        expected = normalize_timestamp_bind(record.get("EXPECTED_UPDATED_AT"), "EXPECTED_UPDATED_AT")
+        expected = normalize_timestamp_bind(
+            record.get("EXPECTED_UPDATED_AT"),
+            "EXPECTED_UPDATED_AT",
+        )
         supplied_id = record.get(key)
         entity_id = supplied_id or str(uuid.uuid4())
         allowed = allowed_text.split()
-        values = {name: record[name] for name in allowed if name in record}
+        values = {
+            name: record[name]
+            for name in allowed
+            if name in record
+        }
+
         if not values:
-            raise RepositoryError(f"No writable fields supplied for {table}.")
+            raise RepositoryError(
+                f"No writable fields supplied for {table}."
+            )
+
         lock = " AND UPDATED_AT = %s" if expected is not None else ""
+
         update_sql = (
-            f"UPDATE {self._table(table)} SET "
+            f"UPDATE {target_table} SET "
             + ", ".join(f"{name} = %s" for name in values)
-            + f", UPDATED_AT = {UTC_NOW_NTZ} WHERE {key} = %s{lock}"
+            + f", UPDATED_AT = {UTC_NOW_NTZ} "
+            + f"WHERE {key} = %s{lock}"
         )
+
         update_params = [*values.values(), entity_id]
         if expected is not None:
             update_params.append(expected)
+
         columns = [key, *values]
         insert_sql = (
-            f"INSERT INTO {self._table(table)} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) "
-            f"VALUES ({', '.join(['%s'] * len(columns))}, {UTC_NOW_NTZ}, {UTC_NOW_NTZ})"
+            f"INSERT INTO {target_table} "
+            f"({', '.join(columns)}, CREATED_AT, UPDATED_AT) "
+            f"VALUES "
+            f"({', '.join(['%s'] * len(columns))}, "
+            f"{UTC_NOW_NTZ}, {UTC_NOW_NTZ})"
         )
+
         existing = pd.DataFrame()
         if supplied_id is not None:
             existing = executor.query(
-                f"SELECT CREATED_AT, UPDATED_AT FROM {self._table(table)} WHERE {key} = %s",
+                f"SELECT CREATED_AT, UPDATED_AT "
+                f"FROM {target_table} "
+                f"WHERE {key} = %s",
                 (entity_id,),
             )
+
         if existing.empty:
             if expected is not None:
-                raise ConcurrencyError("This record no longer exists. Return to the list and reload.")
-            inserted = executor.execute(insert_sql, (entity_id, *values.values()))
+                raise ConcurrencyError(
+                    "This record no longer exists. "
+                    "Return to the list and reload."
+                )
+
+            inserted = executor.execute(
+                insert_sql,
+                (entity_id, *values.values()),
+            )
+
             if inserted == 0:
-                raise RepositoryError(f"Snowflake did not insert the new {table.replace('_', ' ').title()} record.")
+                raise RepositoryError(
+                    f"Snowflake did not insert the new "
+                    f"{table.replace('_', ' ').title()} record."
+                )
+
             if inserted < 0:
                 confirmed = executor.query(
-                    f"SELECT CREATED_AT, UPDATED_AT FROM {self._table(table)} WHERE {key} = %s",
+                    f"SELECT CREATED_AT, UPDATED_AT "
+                    f"FROM {target_table} "
+                    f"WHERE {key} = %s",
                     (entity_id,),
                 )
                 if confirmed.empty:
-                    raise RepositoryError(f"Snowflake could not confirm the new {table.replace('_', ' ').title()} record.")
+                    raise RepositoryError(
+                        f"Snowflake could not confirm the new "
+                        f"{table.replace('_', ' ').title()} record."
+                    )
+
             return entity_id
 
-        affected = executor.execute(update_sql, tuple(update_params))
+        affected = executor.execute(
+            update_sql,
+            tuple(update_params),
+        )
+
         if expected is not None and affected < 0:
             raise RepositoryError(
-                "The active Snowflake runtime did not report an affected-row count; "
-                "the protected update was not accepted."
+                "The active Snowflake runtime did not report an "
+                "affected-row count; the protected update was not accepted."
             )
+
         if affected == 0:
             if expected is not None:
-                raise ConcurrencyError("This record changed after it was opened. Reload it before saving again.")
-            raise RepositoryError(f"Snowflake did not update the {table.replace('_', ' ').title()} record.")
+                raise ConcurrencyError(
+                    "This record changed after it was opened. "
+                    "Reload it before saving again."
+                )
+
+            raise RepositoryError(
+                f"Snowflake did not update the "
+                f"{table.replace('_', ' ').title()} record."
+            )
+
         return entity_id
 
     def _upsert(self, table: str, record: dict) -> str:
@@ -396,6 +471,20 @@ class SnowflakeRepository(BaseRepository):
                 raise RepositoryError("Account cannot reference itself in an Account lookup.")
         return self._upsert("ACCOUNT", record)
     def delete_account(self, value): return self._delete("ACCOUNT", "ACCOUNT_ID", value, (("ACCOUNT", "PARENT_ACCOUNT_ID"), ("ACCOUNT", "GRADING_STATION_ACCOUNT_ID"), ("ACCOUNT", "PULLET_GROWER_ACCOUNT_ID"), ("FARM_LOCATION", "ACCOUNT_ID"), ("FACILITY", "ACCOUNT_ID"), ("FLOCK", "ACCOUNT_ID"), ("QUOTA_REGISTRATION", "ACCOUNT_ID"), ("SALMONELLA_TEST", "ACCOUNT_ID")))
+
+    def get_contacts(self, account_id=None, statuses=None, keyword=None):
+        conditions, params = [], []
+        if account_id:
+            conditions.append("ACCOUNT_ID = %s"); params.append(account_id)
+        if statuses is not None:
+            conditions.append(f"STATUS IN ({', '.join(['%s'] * len(statuses))})"); params.extend(statuses)
+        if keyword:
+            conditions.append("(FULL_NAME ILIKE %s OR EMAIL ILIKE %s OR PHONE ILIKE %s OR JOB_TITLE ILIKE %s)")
+            params.extend([f"%{keyword}%"] * 4)
+        sql = f"SELECT * FROM {self._table('CONTACT')}"
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
+        return self._query(sql, tuple(params) if params else None)
 
     def get_farm_locations(self, farm_location_id=None, account_id=None, statuses=None, keyword=None):
         conditions, params = [], []
@@ -514,6 +603,12 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
         return self._query(sql, tuple(params))
     def delete_quota_transaction(self, value): return self._delete("QUOTA_TRANSACTION", "QUOTA_TRANSACTION_ID", value, (("QUOTA_TRANSACTION", "RELATED_TRANSACTION_ID"),))
 
+    def get_quota_allocations(self, quota_type=None, province=None, statuses=None):
+        return self._filtered(
+            "QUOTA_ALLOCATION",
+            (("QUOTA_TYPE", quota_type), ("PROVINCE", province), ("STATUS", statuses)),
+        )
+
     def get_salmonella_tests(self, account_id=None, facility_id=None, flock_id=None, permit_number=None, test_result=None, inspector=None, case_number=None, invoice_number=None, date_from=None, date_to=None):
         join = f" JOIN {self._table('FLOCK')} f ON f.FLOCK_ID = st.FLOCK_ID" if facility_id else ""
         conditions, params = [], []
@@ -626,19 +721,28 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
         if value is None: return {}
         return json.loads(value) if isinstance(value, str) else dict(value)
 
-    def _insert_migration_core(self, tx, table, records):
+    def _insert_migration_core(self, tx, table, records, schema=None):
         key, allowed_text = MODEL[table]
         allowed = allowed_text.split()
-        normalized = [self._normalize_date_fields(table, self._variant_dict(record)) for record in records]
+        normalized = [
+            self._normalize_date_fields(table, self._variant_dict(record))
+            for record in records if record is not None
+        ]
+        if not normalized: return 0
+        target = self._table(table, schema)
+        existing_frame = tx.query(f"SELECT {key} FROM {target}")
+        existing_ids = set(existing_frame[key].astype(str)) if key in existing_frame else set()
+        normalized = [row for row in normalized if str(row.get(key)) not in existing_ids]
         if not normalized: return 0
         columns = [key, *allowed]
         sql = (
-            f"INSERT INTO {self._table(table)} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) "
+            f"INSERT INTO {target} ({', '.join(columns)}, CREATED_AT, UPDATED_AT) "
             f"SELECT {', '.join(['%s'] * len(columns))}, {UTC_NOW_NTZ}, {UTC_NOW_NTZ} "
-            f"WHERE NOT EXISTS (SELECT 1 FROM {self._table(table)} WHERE {key} = %s)"
+            f"WHERE NOT EXISTS (SELECT 1 FROM {target} WHERE {key} = %s)"
         )
         params = [tuple([row.get(key), *[row.get(column) for column in allowed], row.get(key)]) for row in normalized]
-        return tx.executemany(sql, params)
+        tx.executemany(sql, params)
+        return len(params)
 
     def commit_migration_batch(self, batch_id):
         from data.migration import load_mapping_for_version
@@ -653,15 +757,25 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                     f"SELECT SOURCE_ENTITY, NORMALIZED_DATA FROM {self._table('MIGRATION_RAW_ROW', self.schema_raw)} WHERE MIGRATION_BATCH_ID = %s AND VALIDATION_STATUS = %s ORDER BY SOURCE_ENTITY, SOURCE_ROW_NUMBER",
                     (batch_id, "READY"),
                 )
-                for entity in load_mapping_for_version(batch.get("SCHEMA_VERSION"))["entity_order"]:
-                    records = [row["NORMALIZED_DATA"] for row in rows.to_dict("records") if row["SOURCE_ENTITY"] == entity]
+                contract = load_mapping_for_version(batch.get("SCHEMA_VERSION"))
+                for entity in contract["entity_order"]:
+                    records = [
+                        row["NORMALIZED_DATA"] for row in rows.to_dict("records")
+                        if row["SOURCE_ENTITY"] == entity and row.get("NORMALIZED_DATA") is not None
+                    ]
                     if entity == "PRODUCTION_RECORD":
                         existing_batch = tx.query(f"SELECT IMPORT_ID FROM {self._table('IMPORT_BATCH', self.schema_raw)} WHERE IMPORT_ID = %s", (batch_id,))
                         if existing_batch.empty:
-                            self._insert_batch(tx, batch_id, {"FILENAME": "Synthetic EIMS migration", "SOURCE": "EIMS_MIGRATION", "STATUS": "Validated", "SOURCE_RECORD_COUNT": len(records)})
-                        counts[entity] = self._insert_production(tx, [self._variant_dict(record) for record in records], batch_id)
+                            self._insert_batch(tx, batch_id, {"FILENAME": "EIMS migration", "SOURCE": "EIMS_MIGRATION", "STATUS": "Validated", "SOURCE_RECORD_COUNT": len(records)})
+                        production_records = [self._variant_dict(record) for record in records]
+                        existing = tx.query(f"SELECT PRODUCTION_ID FROM {self._table('PRODUCTION_RECORD')}")
+                        existing_ids = set(existing["PRODUCTION_ID"].astype(str)) if "PRODUCTION_ID" in existing else set()
+                        pending = [record for record in production_records if str(record.get("PRODUCTION_ID")) not in existing_ids]
+                        counts[entity] = self._insert_production(tx, pending, batch_id)
                     else:
-                        counts[entity] = self._insert_migration_core(tx, entity, records)
+                        schema_name = contract["entities"][entity].get("schema")
+                        schema = self.schema_reporting if schema_name == "REPORTING" else None
+                        counts[entity] = self._insert_migration_core(tx, entity, records, schema)
                 tx.execute(f"UPDATE {self._table('MIGRATION_ID_MAP', self.schema_raw)} SET STATUS = %s, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("COMMITTED", batch_id))
                 tx.execute(f"UPDATE {self._table('MIGRATION_BATCH', self.schema_raw)} SET STATUS = %s, COMMITTED_AT = {UTC_NOW_NTZ}, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("COMMITTED", batch_id))
             return {"batch_id": batch_id, "counts": counts, "idempotent": False}
@@ -856,6 +970,13 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
         }
 
     def get_production_records(self, reporting_year=None, reporting_week=None, grader_number=None, barn_identity=None, egg_colour=None, account_id=None): return self._filtered("VW_PRODUCTION_SUMMARY", (("REPORTING_YEAR", reporting_year), ("REPORTING_WEEK", reporting_week), ("GRADER_NUMBER", grader_number), ("BARN_IDENTITY", barn_identity), ("EGG_COLOUR", egg_colour), ("PRODUCER_ACCOUNT_ID", account_id)), self.schema_reporting)
+    def get_efc_dates(self, date_from=None, date_to=None):
+        conditions, params = [], []
+        if date_from is not None: conditions.append("DAY >= %s"); params.append(date_from)
+        if date_to is not None: conditions.append("DAY <= %s"); params.append(date_to)
+        sql = f"SELECT * FROM {self._table('DIM_EFC_DATE', self.schema_reporting)}"
+        if conditions: sql += " WHERE " + " AND ".join(conditions)
+        return self._query(sql + " ORDER BY DAY", tuple(params) if params else None)
     def get_production_summary_metrics(self):
         row = self._query(f"SELECT COUNT(*) PRODUCTION_RECORD_COUNT, COALESCE(SUM(TOTAL_RECEIVED),0) TOTAL_RECEIVED, COALESCE(SUM(TOTAL_ACCEPTED),0) TOTAL_ACCEPTED, COALESCE(SUM(REJECTED),0) TOTAL_REJECTED, COALESCE(SUM(LOSS),0) TOTAL_LOSS FROM {self._table('VW_PRODUCTION_SUMMARY', self.schema_reporting)}").iloc[0]
         counts = {name: int(self._query(f"SELECT COUNT(*) RECORD_COUNT FROM {self._table(table, schema)}").iloc[0]["RECORD_COUNT"] or 0) for name, schema, table in (("import_count", self.schema_raw, "IMPORT_BATCH"), ("account_count", self.schema_core, "ACCOUNT"), ("flock_count", self.schema_core, "FLOCK"))}
