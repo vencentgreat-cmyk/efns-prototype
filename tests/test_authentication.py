@@ -164,6 +164,14 @@ class FakeRepository:
         self.calls.append("import")
         return "import-1", 2
 
+    def import_flock_quota_batch(self, *args, **kwargs):
+        self.calls.append("flock-quota-import")
+        return {"import_id": "flock-import-1", "batch_id": "source-batch-1"}
+
+    def commit_migration_batch(self, *args, **kwargs):
+        self.calls.append("migration-import")
+        return {"batch_id": "migration-batch-1", "counts": {}}
+
     def check_connection(self):
         self.calls.append("diagnostics")
 
@@ -188,6 +196,21 @@ def test_repository_proxy_enforces_writes_and_records_audit(auth_context):
     assert admin_repo.delete_account("a1")
     actions = [event.action for event in store.list_audit(users[Role.ADMIN])]
     assert {"CREATE", "UPDATE", "IMPORT", "DELETE"}.issubset(actions)
+
+
+def test_import_audit_uses_each_operation_result_identifier(auth_context):
+    store, users, _ = auth_context
+    repository = AuthorizedRepository(FakeRepository(), store, users[Role.DATA_EDITOR])
+
+    repository.import_flock_quota_batch({}, [], [])
+    repository.commit_migration_batch("migration-batch-1")
+    repository.import_production_bundle({}, [], pd.DataFrame())
+
+    events = [event for event in store.list_audit(users[Role.ADMIN]) if event.action == "IMPORT"]
+    identifiers = {event.entity_type: event.entity_id for event in events}
+    assert identifiers["FLOCK_QUOTA_IMPORT"] == "flock-import-1"
+    assert identifiers["MIGRATION_BATCH"] == "migration-batch-1"
+    assert identifiers["IMPORT_BATCH"] == "import-1"
 
 
 def test_audit_visibility_and_user_management_events(auth_context):

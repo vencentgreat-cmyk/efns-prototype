@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from data.constants import FARM_LOCATION_STATUSES
+from data.constants import (
+    FARM_LOCATION_STATUSES,
+    QUOTA_TRANSACTION_TYPES,
+    QUOTA_TYPES,
+    SALMONELLA_RESULTS,
+)
 
 
 def validate_farm_location(repo, record: dict) -> list[str]:
@@ -22,10 +27,48 @@ def validate_farm_location(repo, record: dict) -> list[str]:
         errors.append("Status must be Active or Inactive.")
     return errors
 
-from data.constants import QUOTA_TRANSACTION_TYPES, QUOTA_TYPES, SALMONELLA_RESULTS
-
 if TYPE_CHECKING:
     from data.repositories.base import BaseRepository
+
+
+FLOCK_DATE_FIELDS = (
+    "PERMIT_DATE",
+    "HATCH_DATE",
+    "DATE_ORDERED",
+    "PLACEMENT_DATE",
+    "EST_DISPOSAL",
+    "DISPOSAL_DATE",
+)
+_NULL_DATE_TEXT = {"", "none", "null", "nat"}
+
+
+def normalize_flock_dates(record: dict) -> dict:
+    """Return a copy whose Flock dates are Python ``date`` values or ``None``."""
+    normalized = dict(record)
+    for field in FLOCK_DATE_FIELDS:
+        if field not in normalized:
+            continue
+        value = normalized[field]
+        if value is None or (isinstance(value, str) and value.strip().casefold() in _NULL_DATE_TEXT):
+            normalized[field] = None
+            continue
+        if not isinstance(value, str):
+            try:
+                if pd.isna(value):
+                    normalized[field] = None
+                    continue
+            except (TypeError, ValueError):
+                pass
+        if isinstance(value, dt.datetime):
+            normalized[field] = value.date()
+        elif isinstance(value, dt.date):
+            normalized[field] = value
+        else:
+            converted = pd.to_datetime(value, errors="coerce")
+            if pd.isna(converted):
+                raise ValueError(f"{field.replace('_', ' ').title()} is not a valid date.")
+            normalized[field] = converted.date()
+    return normalized
 
 
 def _date(value):
@@ -39,6 +82,7 @@ def _date(value):
 
 
 def validate_flock(repo: "BaseRepository", record: dict) -> list[str]:
+    record = normalize_flock_dates(record)
     errors: list[str] = []
     required = {
         "ACCOUNT_ID": "Account",

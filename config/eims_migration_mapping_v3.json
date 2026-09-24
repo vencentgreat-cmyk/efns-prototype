@@ -1,0 +1,275 @@
+{
+  "schema_version": "EFNS-EIMS-DATAVERSE-3",
+  "status": "real_dataverse_export",
+  "id_policy": "guid",
+  "allow_extra_columns": true,
+  "entity_order": [
+    "ACCOUNT", "CONTACT", "FARM_LOCATION", "FACILITY", "FACILITY_DETAIL",
+    "QUOTA_REGISTRATION", "FLOCK", "FLOCK_TRANSACTION", "QUOTA_TRANSACTION",
+    "SALMONELLA_TEST", "SALMONELLA_TEST_SAMPLE", "PRODUCTION_RECORD",
+    "QUOTA_ALLOCATION", "DIM_EFC_DATE"
+  ],
+  "entities": {
+    "ACCOUNT": {
+      "filename": "account.csv", "id_field": "ACCOUNT_ID",
+      "required": ["ACCOUNT_ID", "ORGANIZATION_NAME"], "natural_key": [],
+      "field_map": {
+        "ACCOUNT_ID": "accountid", "REGISTRATION_NUMBER": "efc_registrationnumber", "ORGANIZATION_NAME": "name",
+        "ADDRESS_LINE1": "address1_line1", "ADDRESS_LINE2": "address1_line2", "CITY": "address1_city",
+        "PROVINCE": "address1_stateorprovince", "POSTAL_CODE": "address1_postalcode",
+        "COUNTRY_REGION": "address1_country", "LATITUDE": "address1_latitude", "LONGITUDE": "address1_longitude",
+        "CONTACT_NAME": "primarycontactidname", "CONTACT_PHONE": "telephone1", "CONTACT_EMAIL": "emailaddress1",
+        "FAX": "fax", "WEBSITE": "websiteurl", "LICENCE_NUMBER": "accountnumber",
+        "GRADING_STATION_ACCOUNT_ID": "crg_gradingstation", "PULLET_GROWER_ACCOUNT_ID": "efns_pulletgroweraccount",
+        "PROVINCE_OF_REGISTRATION": "new_provinceofregistration", "DEFAULT_ON_REPORTS": "efc_defaultonreports",
+        "DESCRIPTION": "description", "PRODUCER_ROLE": "new_producer", "BREEDER_ROLE": "new_breeder",
+        "HATCHERY_ROLE": "new_hatchery", "PULLET_GROWER_ROLE": "new_pulletgrower", "GRADER_ROLE": "new_grader",
+        "PROCESSOR_BREAKER_ROLE": "new_processorbreaker", "DISPOSAL_PLANT_ROLE": "new_disposalplant",
+        "UNREGULATED_ROLE": "new_unregulated", "PROV_BOARD_EFC_ROLE": "new_provboardefc",
+        "GOVERNMENT_ROLE": "new_government", "VENDOR_ROLE": "new_vendor",
+        "RESEARCH_EXEMPT_ROLE": "new_researchexempt", "SHIPPER_ROLE": "new_shipper",
+        "OTHER_ROLE": "new_other", "STATUS": "statuscode_displayname"
+      },
+      "field_types": {
+        "LATITUDE": "decimal", "LONGITUDE": "decimal", "DEFAULT_ON_REPORTS": "boolean",
+        "PRODUCER_ROLE": "boolean", "BREEDER_ROLE": "boolean", "HATCHERY_ROLE": "boolean",
+        "PULLET_GROWER_ROLE": "boolean", "GRADER_ROLE": "boolean", "PROCESSOR_BREAKER_ROLE": "boolean",
+        "DISPOSAL_PLANT_ROLE": "boolean", "UNREGULATED_ROLE": "boolean", "PROV_BOARD_EFC_ROLE": "boolean",
+        "GOVERNMENT_ROLE": "boolean", "VENDOR_ROLE": "boolean", "RESEARCH_EXEMPT_ROLE": "boolean",
+        "SHIPPER_ROLE": "boolean", "OTHER_ROLE": "boolean"
+      },
+      "foreign_keys": {
+        "GRADING_STATION_ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"],
+        "PULLET_GROWER_ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"]
+      }
+    },
+    "CONTACT": {
+      "filename": "contact.csv", "id_field": "CONTACT_ID",
+      "required": ["CONTACT_ID", "FULL_NAME"], "natural_key": [],
+      "field_map": {
+        "CONTACT_ID": "contactid", "ACCOUNT_ID": "parentcustomerid", "FULL_NAME": "fullname",
+        "FIRST_NAME": "firstname", "MIDDLE_NAME": "middlename", "LAST_NAME": "lastname",
+        "JOB_TITLE": "jobtitle", "EMAIL": "emailaddress1", "PHONE": "telephone1", "MOBILE_PHONE": "mobilephone",
+        "FAX": "fax", "ADDRESS_LINE1": "address1_line1", "ADDRESS_LINE2": "address1_line2",
+        "CITY": "address1_city", "PROVINCE": "address1_stateorprovince", "POSTAL_CODE": "address1_postalcode",
+        "COUNTRY_REGION": "address1_country", "EIMS_CONTACT_NUMBER": "efc_eimscontactnumber",
+        "LANGUAGE_PREFERENCE": "efc_languagepreference", "PRIME_CONTACT": "efc_primecontact",
+        "STATUS": "statuscode_displayname"
+      },
+      "field_types": {"PRIME_CONTACT": "boolean"},
+      "foreign_keys": {"ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"]}
+    },
+    "FARM_LOCATION": {
+      "filename": "new_farmlocation.csv", "id_field": "FARM_LOCATION_ID",
+      "required": ["FARM_LOCATION_ID", "ACCOUNT_ID", "LOCATION_NAME"], "natural_key": [],
+      "field_map": {
+        "FARM_LOCATION_ID": "new_farmlocationid", "ACCOUNT_ID": "new_farmlocationidid",
+        "LOCATION_NAME": "new_name", "ADDRESS_1": "new_address1", "ADDRESS_2": "efc_address1line2",
+        "CITY": "new_city", "PROVINCE": "new_provincestates", "POSTAL_CODE": "new_postalcode",
+        "PHONE": "efc_phone", "FAX": "efc_fax", "EIMS_LOCATION_ID": "efc_locationid",
+        "STATUS": "statuscode_displayname"
+      },
+      "foreign_keys": {"ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"]}
+    },
+    "FACILITY": {
+      "filename": "new_facility.csv", "id_field": "FACILITY_ID",
+      "required": ["FACILITY_ID", "ACCOUNT_ID", "FACILITY_NAME"], "natural_key": [],
+      "field_map": {
+        "FACILITY_ID": "new_facilityid", "ACCOUNT_ID": "new_account", "FARM_LOCATION_ID": "new_farmlocationidid",
+        "FACILITY_NAME": "new_name", "FACILITY_TYPE": "efc_facilitytype_displayname",
+        "HOUSING_SYSTEM": "new_facilitytype_displayname", "STATUS": "statuscode_displayname",
+        "CONSTRUCTION_DATE": "new_constructionday", "RENOVATION_DATE": "new_renovationdate",
+        "FACILITY_QUOTA": "efc_facilityquota", "MANURE_DISPOSAL": "new_manuredisposal_displayname",
+        "COMMENTS": "efc_comments"
+      },
+      "field_types": {"CONSTRUCTION_DATE": "date", "RENOVATION_DATE": "date", "FACILITY_QUOTA": "decimal"},
+      "foreign_keys": {
+        "ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"], "FARM_LOCATION_ID": ["FARM_LOCATION", "FARM_LOCATION_ID"]
+      }
+    },
+    "FACILITY_DETAIL": {
+      "filename": "efc_facilitydetails.csv", "id_field": "FACILITY_DETAIL_ID",
+      "required": ["FACILITY_DETAIL_ID", "FACILITY_ID"], "natural_key": [],
+      "field_map": {
+        "FACILITY_DETAIL_ID": "efc_facilitydetailsid", "FACILITY_ID": "efc_facilityid",
+        "DETAIL_NAME": "efc_facilityidname", "DETAIL_TYPE": "efc_facilitytype_displayname",
+        "STATUS": "statuscode_displayname", "EIMS_FACILITY_DETAIL_ID": "efc_eimsfacilitydetailid",
+        "BIRD_COLOUR": "efc_birdcolour_displayname", "BIRDS_HOUSED": "efc_birdshoused",
+        "CAGE_BRAND": "efc_cagebrand_displayname", "DATE_INSTALLED": "efc_dateinstalled",
+        "HEIGHT": "efc_height", "HIGHEST_BIRDS_PER_CAGE": "efc_highestbirdspercage",
+        "LENGTH": "efc_length", "NUMBER_OF_CAGES": "efc_numberofcages",
+        "SQUARE_INCHES": "efc_squareinches", "WIDTH": "efc_width"
+      },
+      "field_types": {
+        "BIRDS_HOUSED": "integer", "DATE_INSTALLED": "date", "HEIGHT": "decimal",
+        "HIGHEST_BIRDS_PER_CAGE": "decimal", "LENGTH": "decimal", "NUMBER_OF_CAGES": "integer",
+        "SQUARE_INCHES": "decimal", "WIDTH": "decimal"
+      },
+      "foreign_keys": {"FACILITY_ID": ["FACILITY", "FACILITY_ID"]}
+    },
+    "QUOTA_REGISTRATION": {
+      "filename": "new_quota.csv", "id_field": "QUOTA_ID",
+      "required": ["QUOTA_ID", "REGISTRATION_NUMBER", "ACCOUNT_ID", "QUOTA_TYPE"], "natural_key": [],
+      "field_map": {
+        "QUOTA_ID": "new_quotaid", "REGISTRATION_NUMBER": "efc_eimsregisterid", "ACCOUNT_ID": "new_account",
+        "QUOTA_NAME": "new_name", "QUOTA_TYPE": "efc_quotatype_displayname", "STATUS": "statuscode_displayname",
+        "EFFECTIVE_DATE": "efc_effectivedate", "END_DATE": "efc_enddate"
+      },
+      "field_types": {"EFFECTIVE_DATE": "date", "END_DATE": "date"},
+      "foreign_keys": {"ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"]}
+    },
+    "FLOCK": {
+      "filename": "new_flocks.csv", "id_field": "FLOCK_ID",
+      "required": ["FLOCK_ID", "FLOCK_NUMBER", "ACCOUNT_ID", "PERMIT_NUMBER", "HATCH_DATE", "BIRD_COUNT"],
+      "natural_key": [],
+      "field_map": {
+        "FLOCK_ID": "new_flocksid", "ACCOUNT_ID": "new_account", "FACILITY_ID": "new_facilityidid",
+        "FLOCK_QUOTA_TYPE": "efc_flockquotatype_displayname", "STATUS": "statuscode_displayname",
+        "CREATE_DELIVERY_TRANSACTION": "efc_createdeliverytransaction_displayname", "PERMIT_NUMBER": "new_name",
+        "PERMIT_DATE": "new_permitdate", "HATCH_DATE": "new_hatchdate", "DATE_ORDERED": "new_dateordered",
+        "BIRD_COUNT": "new_birdcount", "EGG_COLOUR": "new_flockcolour_displayname",
+        "BIRD_STRAIN": "efc_birdstrain_displayname", "PLACEMENT_DATE": "new_placementdate",
+        "EST_DISPOSAL": "new_disposaldate", "DISPOSAL_DATE": "new_disposaldate2",
+        "BIRDS_DISPOSED": "efc_birdsdisposed", "BREEDER": "new_breedername", "HATCHERY": "new_hatcheryname",
+        "PULLET_GROWER": "new_pulletgrowername", "DISPOSAL_PLANT": "efc_disposalplantname", "COMMENTS": "efc_comments"
+      },
+      "field_types": {
+        "CREATE_DELIVERY_TRANSACTION": "boolean", "PERMIT_DATE": "date", "HATCH_DATE": "date",
+        "DATE_ORDERED": "date", "BIRD_COUNT": "integer", "PLACEMENT_DATE": "date",
+        "EST_DISPOSAL": "date", "DISPOSAL_DATE": "date", "BIRDS_DISPOSED": "integer"
+      },
+      "fallbacks": {"FLOCK_NUMBER": ["efc_flocknumber", "new_name", "new_flocksid"]},
+      "foreign_keys": {"ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"], "FACILITY_ID": ["FACILITY", "FACILITY_ID"]}
+    },
+    "FLOCK_TRANSACTION": {
+      "filename": "new_flocktransaction.csv", "id_field": "FLOCK_TRANSACTION_ID",
+      "required": ["FLOCK_TRANSACTION_ID", "FLOCK_ID", "TRANSACTION_TYPE", "QUANTITY", "TRANSACTION_DATE"],
+      "natural_key": [],
+      "field_map": {
+        "FLOCK_TRANSACTION_ID": "new_flocktransactionid", "FLOCK_ID": "new_flockidid",
+        "TRANSACTION_TYPE": "new_flocktransactiontype_displayname", "QUANTITY": "new_birdcount",
+        "TRANSACTION_DATE": "new_date", "NOTES": "new_comments"
+      },
+      "field_types": {"QUANTITY": "decimal", "TRANSACTION_DATE": "date"},
+      "numeric_rules": {"QUANTITY": {"min": 0}},
+      "foreign_keys": {"FLOCK_ID": ["FLOCK", "FLOCK_ID"]}
+    },
+    "QUOTA_TRANSACTION": {
+      "filename": "new_quotatransactions.csv", "id_field": "QUOTA_TRANSACTION_ID",
+      "required": ["QUOTA_TRANSACTION_ID", "TRANSACTION_TYPE", "QUOTA_ID", "EFFECTIVE_DATE", "QUOTA_COUNT", "OWNER_ACCOUNT_ID"],
+      "natural_key": [],
+      "field_map": {
+        "QUOTA_TRANSACTION_ID": "new_quotatransactionsid", "TRANSACTION_TYPE": "new_quotatransactiontype_displayname",
+        "QUOTA_ID": "new_quotatransid", "EFFECTIVE_DATE": "new_transactiondate", "END_DATE": "new_enddate",
+        "QUOTA_COUNT": "new_quotacount", "RELATED_ACCOUNT_ID": "new_relatedaccount",
+        "RELATED_QUOTA_ID": "new_relatedquota", "RELATED_TRANSACTION_ID": "efc_relatedtransaction",
+        "PRICE": "new_price", "QUOTA_LEASE_TYPE": "new_credittype_displayname", "COMMENTS": "efc_comments"
+      },
+      "field_types": {"EFFECTIVE_DATE": "date", "END_DATE": "date", "QUOTA_COUNT": "decimal", "PRICE": "decimal"},
+      "derive_parent_fields": {"OWNER_ACCOUNT_ID": ["QUOTA_ID", "QUOTA_REGISTRATION", "QUOTA_ID", "ACCOUNT_ID"]},
+      "foreign_keys": {
+        "QUOTA_ID": ["QUOTA_REGISTRATION", "QUOTA_ID"], "OWNER_ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"],
+        "RELATED_ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"], "RELATED_QUOTA_ID": ["QUOTA_REGISTRATION", "QUOTA_ID"],
+        "RELATED_TRANSACTION_ID": ["QUOTA_TRANSACTION", "QUOTA_TRANSACTION_ID"]
+      }
+    },
+    "SALMONELLA_TEST": {
+      "filename": "new_flocksalmonellatesting.csv", "id_field": "SALMONELLA_TEST_ID",
+      "required": ["SALMONELLA_TEST_ID", "FLOCK_ID", "ACCOUNT_ID", "PERMIT_NUMBER", "TESTING_DATE"],
+      "natural_key": [],
+      "field_map": {
+        "SALMONELLA_TEST_ID": "new_flocksalmonellatestingid", "FLOCK_ID": "new_permitnumberid",
+        "ACCOUNT_ID": "efc_account", "PERMIT_NUMBER": "new_permitnumberidname", "TESTING_DATE": "new_testingdate",
+        "INSPECTOR": "new_inspectorname", "NUMBER_OF_SAMPLES": "new_samples",
+        "TEST_RESULT": "new_setestresult_displayname", "TEST_TYPE": "efc_salmonellatesttype_displayname",
+        "DATE_RESULT_SENT": "new_dateresultsent", "DATE_RECEIVED": "new_daterecieved",
+        "CASE_FILE_NUMBER": "new_casefilenumber", "COMMENTS": "efc_comments"
+      },
+      "field_types": {
+        "TESTING_DATE": "date", "NUMBER_OF_SAMPLES": "integer", "DATE_RESULT_SENT": "date", "DATE_RECEIVED": "date"
+      },
+      "numeric_rules": {"NUMBER_OF_SAMPLES": {"min": 0}},
+      "foreign_keys": {"FLOCK_ID": ["FLOCK", "FLOCK_ID"], "ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"]}
+    },
+    "SALMONELLA_TEST_SAMPLE": {
+      "filename": "new_salmonellasample.csv", "id_field": "SALMONELLA_TEST_SAMPLE_ID",
+      "required": ["SALMONELLA_TEST_SAMPLE_ID", "SALMONELLA_TEST_ID"], "natural_key": [],
+      "field_map": {
+        "SALMONELLA_TEST_SAMPLE_ID": "new_salmonellasampleid", "SALMONELLA_TEST_ID": "new_flocksalmonellatestid",
+        "SAMPLE_REFERENCE": "new_name", "TEST_AREA": "efc_salmonellatestarea_displayname",
+        "SEROTYPE": "efc_serotype_displayname", "PHAGE": "new_phage_displayname", "STATUS": "statuscode_displayname"
+      },
+      "foreign_keys": {"SALMONELLA_TEST_ID": ["SALMONELLA_TEST", "SALMONELLA_TEST_ID"]}
+    },
+    "PRODUCTION_RECORD": {
+      "filename": "new_marketings.csv", "id_field": "PRODUCTION_ID",
+      "required": ["PRODUCTION_ID", "PRODUCER_ACCOUNT_ID", "SOURCE_TYPE", "MATCH_STATUS", "SOURCE_ROW_NUMBER"],
+      "natural_key": [],
+      "field_map": {
+        "PRODUCTION_ID": "new_marketingsid", "PRODUCER_ACCOUNT_ID": "new_account",
+        "GRADER_ACCOUNT_ID": "new_gradingstation", "SOURCE_WEEK_CODE": "efc_productionweek",
+        "REPORTING_YEAR": "efc_productionweek", "REPORTING_WEEK": "efc_productionweek",
+        "MARKETING_TYPE": "new_marketingstype_displayname", "HOUSING_SYSTEM": "efc_productionhousingsystem_displayname",
+        "EGG_TYPE": "efc_productionspecialtytype_displayname", "EGG_COLOUR": "efc_productioncolour_displayname",
+        "JUMBO": "new_jumbo", "EXTRA_LARGE": "new_xlarge", "LARGE": "new_large", "MEDIUM": "new_medium",
+        "SMALL": "new_small", "PEEWEE": "new_peewee", "GRADE_B": "new_b", "GRADE_C": "new_c",
+        "CRACKS": "new_cracks", "NEST_RUN": "new_nestrun", "NEST_RUN_25_PLUS": "new_nr25",
+        "NEST_RUN_24_PLUS": "new_nr24", "NEST_RUN_23_PLUS": "new_nr23", "NEST_RUN_22_PLUS": "new_nr22",
+        "NEST_RUN_21_PLUS": "new_nr21", "NEST_RUN_20_PLUS": "new_nr20", "NEST_RUN_19_PLUS": "new_nr19",
+        "NEST_RUN_18_PLUS": "new_nr18", "NEST_RUN_17_PLUS": "new_nr17", "OTHER_LEVIABLE": "new_otherleviable",
+        "OTHER_NON_LEVIABLE": "new_othernonleviable", "FARM_GATE_SALES": "new_farmgatesales",
+        "ON_FARM_CONSUMPTION": "new_onfarmconsumption", "REJECTS": "new_rejects", "LEAKERS": "new_leakers",
+        "TOTAL": "efc_total"
+      },
+      "field_types": {
+        "REPORTING_YEAR": "integer", "REPORTING_WEEK": "integer", "JUMBO": "decimal", "EXTRA_LARGE": "decimal",
+        "LARGE": "decimal", "MEDIUM": "decimal", "SMALL": "decimal", "PEEWEE": "decimal", "GRADE_B": "decimal",
+        "GRADE_C": "decimal", "CRACKS": "decimal", "NEST_RUN": "decimal", "NEST_RUN_25_PLUS": "decimal",
+        "NEST_RUN_24_PLUS": "decimal", "NEST_RUN_23_PLUS": "decimal", "NEST_RUN_22_PLUS": "decimal",
+        "NEST_RUN_21_PLUS": "decimal", "NEST_RUN_20_PLUS": "decimal", "NEST_RUN_19_PLUS": "decimal",
+        "NEST_RUN_18_PLUS": "decimal", "NEST_RUN_17_PLUS": "decimal", "OTHER_LEVIABLE": "decimal",
+        "OTHER_NON_LEVIABLE": "decimal", "FARM_GATE_SALES": "decimal", "ON_FARM_CONSUMPTION": "decimal",
+        "REJECTS": "decimal", "LEAKERS": "decimal", "TOTAL": "decimal", "SOURCE_ROW_NUMBER": "integer"
+      },
+      "constants": {"SOURCE_TYPE": "EIMS_MIGRATION", "MATCH_STATUS": "CONFIRMED"},
+      "row_number_fields": ["SOURCE_ROW_NUMBER"],
+      "period_fields": {"REPORTING_YEAR": "year", "REPORTING_WEEK": "week"},
+      "foreign_keys": {
+        "PRODUCER_ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"], "GRADER_ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"]
+      }
+    },
+    "QUOTA_ALLOCATION": {
+      "filename": "efc_allocations.csv", "id_field": "QUOTA_ALLOCATION_ID",
+      "required": ["QUOTA_ALLOCATION_ID", "ALLOCATION_COUNT", "EFFECTIVE_DATE", "QUOTA_TYPE"], "natural_key": [],
+      "field_map": {
+        "QUOTA_ALLOCATION_ID": "efc_allocationsid", "ALLOCATION_COUNT": "efc_allocation",
+        "COMMENTS": "efc_comments", "EFFECTIVE_DATE": "efc_effectivedate",
+        "EIMS_ALLOCATION_ID": "efc_eimsallocationid", "PROVINCE": "efc_province_displayname",
+        "QUOTA_TYPE": "efc_quotatype_displayname", "STATUS": "statuscode_displayname"
+      },
+      "field_types": {"ALLOCATION_COUNT": "decimal", "EFFECTIVE_DATE": "date"},
+      "foreign_keys": {}
+    },
+    "DIM_EFC_DATE": {
+      "filename": "DateConverter$.csv", "schema": "REPORTING", "id_field": "DAY", "id_policy": "date",
+      "required": ["DAY", "ELEMENT_CODE"], "natural_key": [], "deduplicate_by": "DAY",
+      "field_map": {
+        "DAY": "Day", "EFC_YEAR": "EFCYear", "EFC_WEEK_NUMBER": "EFCWkNumber", "EFC_WEEK": "EFCWeek",
+        "EFC_WEEK_LABEL": "EFCWeek1", "EFC_LONG_NAME": "EFCLongName", "EFC_PERIOD": "EFCPeriod",
+        "EFC_PERIOD_ALIAS": "EFCPeriodAlias", "EFC_QUARTER": "EFCQuarter", "ELEMENT_CODE": "ElementCode",
+        "PREVIOUS_QUARTER": "PreviousQuarter", "PREV_YEAR": "PrevYear", "PREV_WEEK": "PrevWeek",
+        "PREV_QUARTER": "PrevQuarter", "DATE_VALUE": "yyyymmdd", "MONTH_NUMBER": "Month",
+        "MONTH_TEXT": "MonthText", "DAYS_IN_MONTH": "DaysInMonth", "YEAR_NUMBER": "Year",
+        "YEAR_MONTH": "YearMonth", "QUARTER_NUMBER": "Quarter", "DAYS_IN_QUARTER": "DaysinQuarter",
+        "YEAR_QUARTER": "YearQuarter", "DAY_STRING": "DayString"
+      },
+      "field_types": {
+        "DAY": "date", "EFC_YEAR": "integer", "EFC_WEEK_NUMBER": "integer", "EFC_PERIOD": "integer",
+        "EFC_QUARTER": "integer", "PREV_YEAR": "integer", "PREV_WEEK": "integer", "PREV_QUARTER": "integer",
+        "DATE_VALUE": "date", "MONTH_NUMBER": "integer", "DAYS_IN_MONTH": "integer", "YEAR_NUMBER": "integer",
+        "QUARTER_NUMBER": "integer", "DAYS_IN_QUARTER": "integer"
+      },
+      "foreign_keys": {}
+    }
+  }
+}

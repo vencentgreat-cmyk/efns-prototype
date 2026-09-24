@@ -20,13 +20,14 @@ mapping = load_mapping()
 
 page_header(
     "Historical EIMS Migration",
-    "Stage, validate, reconcile, and commit a provisional historical export package.",
+    "Validate, preserve, reconcile, and commit the authorized historical Dataverse export.",
     "MIGRATION",
 )
 
-st.warning(
-    "This workflow uses a provisional mapping pending authoritative EIMS metadata. "
-    "Daily Production Import remains a separate workflow."
+st.info(
+    "This workflow uses the field names and relationships recovered from Jensen's "
+    "named-column Dataverse exports. Unconfirmed business meanings remain documented "
+    "as migration assumptions. Daily Production Import remains a separate workflow."
 )
 
 with st.container(border=True):
@@ -54,7 +55,7 @@ if analysis is not None:
     metrics[1].metric("Ready", analysis.ready_count)
     metrics[2].metric("Rejected", analysis.rejected_count)
     metrics[3].metric("Files", len(analysis.files))
-    metrics[4].metric("Warnings", 0)
+    metrics[4].metric("Entities", len(analysis.reconciliation))
     metrics[5].metric("Relationship mismatches", int(relationship_errors))
 
     with st.container(border=True):
@@ -70,7 +71,7 @@ if analysis is not None:
         st.dataframe(file_summary, hide_index=True, width="stretch")
         st.dataframe(analysis.reconciliation, hide_index=True, width="stretch")
         if analysis.errors.empty:
-            st.success("All source rows passed the provisional validation contract.")
+            st.success("All source rows passed the Dataverse export validation contract.")
         else:
             st.error("Rejected rows must be reviewed. Only Ready rows are eligible for commit.")
             st.dataframe(analysis.errors, hide_index=True, width="stretch")
@@ -114,13 +115,21 @@ if analysis is not None:
     prepared = st.session_state.get("eims_prepared_batch_id")
     if prepared == analysis.batch_id:
         with st.container(border=True):
-            section_intro("Commit Ready rows", "The CORE write follows dependency order and rolls back as one transaction on failure.")
+            section_intro(
+                "Commit Ready rows",
+                "Ready rows are written to CORE and REPORTING in dependency order. "
+                "Rejected rows remain preserved in RAW, and any write failure rolls "
+                "back the target transaction.",
+            )
             commit_confirmed = st.checkbox("I reviewed reconciliation and authorize this batch commit.")
             if st.button("Commit migration batch", type="primary", disabled=not commit_confirmed):
                 try:
                     result = repo.commit_migration_batch(prepared)
                     st.session_state.eims_migration_commit_result = result
-                    st.success(f"Migration committed: {sum(result.get('counts', {}).values()):,} new CORE rows.")
+                    st.success(
+                        f"Migration committed: "
+                        f"{sum(result.get('counts', {}).values()):,} new target rows."
+                    )
                 except Exception as exc:
                     show_data_error(exc)
 
@@ -129,7 +138,10 @@ if analysis is not None:
         report = analysis.reconciliation.copy()
         report["COMMITTED_ROWS"] = report["SOURCE_ENTITY"].map(committed.get("counts", {})).fillna(0).astype(int)
         with st.container(border=True):
-            section_intro("Committed reconciliation", "Source, RAW, committed, rejected and unmatched counts for this session.")
+            section_intro(
+                "Committed reconciliation",
+                "Source, RAW, inserted, rejected, and unmatched counts for this session.",
+            )
             st.dataframe(report, hide_index=True, width="stretch")
 
 with st.container(border=True):
