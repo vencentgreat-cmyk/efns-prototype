@@ -25,7 +25,9 @@ def check() -> list[str]:
     required = (
         "snowflake.yml", "environment.yml", "streamlit_app.py",
         "config/eims_migration_mapping.json", "config/eims_migration_mapping_v1.json",
-        "sql/11_eims_migration_foundation.sql",
+        "config/eims_migration_mapping_v2.json", "config/eims_migration_mapping_v3.json",
+        "sql/10_EIMS_V3_DEV_Deployment.sql", "sql/11_eims_migration_foundation.sql",
+        "sql/12_real_eims_additive_migration.sql",
     )
     for name in required:
         if not (ROOT / name).is_file():
@@ -51,10 +53,39 @@ def check() -> list[str]:
         errors.append("The provisional EIMS mapping must be included in the application artifact.")
     if "config/eims_migration_mapping_v1.json" not in project:
         errors.append("The explicit version-1 EIMS mapping must remain available for nine-file packages.")
+    for version in ("v2", "v3"):
+        if f"config/eims_migration_mapping_{version}.json" not in project:
+            errors.append(f"The explicit {version} EIMS mapping must be included in the application artifact.")
     if "sample_data/" in project or "fake_eims_export" in project:
         errors.append("Generated EIMS sample packages must not be deployed with Streamlit.")
 
     migration_sql = (ROOT / "sql" / "11_eims_migration_foundation.sql").read_text(encoding="utf-8").upper()
+    eims_v3_deployment = (ROOT / "sql" / "10_EIMS_V3_DEV_Deployment.sql").read_text(encoding="utf-8").upper()
+    for required_sql in (
+        "USE ROLE ACCOUNTADMIN", "USE WAREHOUSE EFNS_DEV_WH", "USE DATABASE EFNS_DEV",
+        "CURRENT_ROLE()", "CURRENT_WAREHOUSE()", "CURRENT_DATABASE()", "CURRENT_SCHEMA()",
+        "CREATE TABLE IF NOT EXISTS EFNS_DEV.CORE.CONTACT",
+        "CREATE TABLE IF NOT EXISTS EFNS_DEV.CORE.QUOTA_ALLOCATION",
+        "CREATE TABLE IF NOT EXISTS EFNS_DEV.CORE.DIM_EFC_DATE",
+        "CREATE TABLE IF NOT EXISTS EFNS_DEV.RAW.MIGRATION_ERROR",
+        "CREATE TABLE IF NOT EXISTS EFNS_DEV.RAW.MIGRATION_RECONCILIATION",
+        "ALTER TABLE IF EXISTS EFNS_DEV.CORE.PRODUCTION_RECORD ADD COLUMN IF NOT EXISTS GRADER_ACCOUNT_ID",
+        "ALTER TABLE IF EXISTS EFNS_DEV.CORE.QUOTA_TRANSACTION ADD COLUMN IF NOT EXISTS RELATED_QUOTA_ID",
+        "ALTER TABLE IF EXISTS EFNS_DEV.CORE.QUOTA_TRANSACTION ADD COLUMN IF NOT EXISTS RELATED_TRANSACTION_ID",
+        "FK_QUOTA_TRANSACTION_RELATED_TRANSACTION",
+        "CREATE ROLE IF NOT EXISTS EFNS_DEV_APP_OWNER", "EFNS_DEV_APP_OWNER_ROLE",
+        "ERROR_CATEGORY", "READY_FOR_EIMS_V3_VALIDATION",
+    ):
+        if required_sql not in eims_v3_deployment:
+            errors.append(f"EIMS v3 DEV deployment is missing: {required_sql}")
+    for forbidden_sql in ("DROP TABLE", "TRUNCATE", "CREATE OR REPLACE TABLE", "CREATE DATABASE"):
+        if forbidden_sql in eims_v3_deployment:
+            errors.append(f"EIMS v3 DEV deployment contains forbidden SQL: {forbidden_sql}")
+    if re.search(
+        r"(?m)^\s*ALTER TABLE[^\n]+ADD COLUMN IF NOT EXISTS[^\n]+DEFAULT",
+        eims_v3_deployment,
+    ):
+        errors.append("EIMS v3 DEV deployment combines ADD COLUMN IF NOT EXISTS with DEFAULT.")
     if "CREATE STAGE IF NOT EXISTS EFNS_DEV.RAW.EIMS_MIGRATION_FILES" not in migration_sql:
         errors.append("The named internal EIMS migration stage is missing.")
     if "SNOWFLAKE_SSE" not in migration_sql:

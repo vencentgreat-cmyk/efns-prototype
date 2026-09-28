@@ -30,6 +30,10 @@ entities:
         dest: config/eims_migration_mapping.json
       - src: config/eims_migration_mapping_v1.json
         dest: config/eims_migration_mapping_v1.json
+      - src: config/eims_migration_mapping_v2.json
+        dest: config/eims_migration_mapping_v2.json
+      - src: config/eims_migration_mapping_v3.json
+        dest: config/eims_migration_mapping_v3.json
     grants:
       - privilege: USAGE
         role: EFNS_DEV_ADMIN

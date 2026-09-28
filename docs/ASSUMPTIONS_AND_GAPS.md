@@ -83,11 +83,22 @@
 
 ## Temporary Workarounds
 
+### Real Dataverse migration assumptions
+
+- Dataverse GUIDs are retained as CORE primary keys; names are descriptive only.
+- Contact `parentcustomerid` is treated as an Account lookup when it resolves to the supplied Account export.
+- Flock Number uses `efc_flocknumber`, then `new_name`, then the source GUID.
+- Quota Transaction owner is derived from its Quota Registration; optional related-account links remain nullable.
+- Active/Inactive display values are retained without inferring a new business lifecycle.
+- Signed quota and production values are retained as historical corrections rather than rejected.
+- Duplicate DateConverter rows are collapsed by `Day`; all associated ElementCode values are retained in `ELEMENT_CODES`.
+- Missing parent GUIDs are rejected and retained in RAW; the migration never fabricates parent records.
+
 1. **MockRepository** — All data is in-memory and ephemeral. No persistence.
 2. **Synthetic data** — Generated from seeded random pools. Not representative of real patterns.
 3. **PRODUCTION-to-FLOCK provisional link** — Fabricated random assignment for report demo.
 4. **Prototype identity** — Local SQLite and Snowflake viewer identity are implemented; organizational identity lifecycle remains pending.
-5. **Historical migration contract** — `config/eims_migration_mapping.json` is a replaceable intake contract for synthetic workflow testing. Its filenames, requiredness, choices, natural keys and relationships must be reconciled with the incoming EIMS metadata before real migration use.
+5. **Historical migration contracts** — v1/v2 remain for synthetic compatibility. `config/eims_migration_mapping_v3.json` is the named-column Dataverse export contract; business interpretations that are not explicit in the source are listed above.
 6. **Snowflake migration V1 verification completed, V2 pending** — batch `DEV_MIGRATION_6202ef6e6b1c03f4600b74` was manually verified with 8,450 RAW rows and matching counts for all nine V1 CORE entities, then removed with restricted cleanup. The V2 package adds Farm Location and still requires a DEV smoke test.
 
 7. **Transaction list semantics** — Flock and Quota Transactions are historical
@@ -100,6 +111,6 @@
 artifact in this repository. Documentation may explain the mapping but must not
 duplicate it as a second field-by-field table.
 
-The JSON migration contract does not replace that target mapping. It describes
-the temporary incoming-file shape used to exercise the migration engine and is
-explicitly marked `provisional_pending_eims_metadata`.
+The JSON migration contracts define versioned incoming-file shapes. V3 uses the
+observed logical column names from the headered export; the target mapping CSV
+continues to document broader prototype model decisions outside this migration.

@@ -200,6 +200,11 @@ pages = {
                 title="Facility Details",
                 icon=":material/home_work:",
             ),
+            st.Page(
+                page_file("20_EIMS_Reference_Data.py"),
+                title="EIMS Reference Data",
+                icon=":material/dataset:",
+            ),
         ],
         "Flock Management": [
             st.Page(page_file("5_Flocks.py"), title="Flocks", icon=":material/egg:"),

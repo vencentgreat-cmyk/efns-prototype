@@ -276,7 +276,7 @@ def test_every_entity_create_uses_direct_insert_and_server_utc(table):
             dt.date(2026, 2, 3),
             2026,
         )
-        expected_schema = "REPORTING"
+        expected_schema = "CORE"
     else:
         record = {
             first_field: f"value-{table.lower()}",
@@ -373,7 +373,7 @@ def test_every_entity_normalizes_pandas_optimistic_lock_timestamp(table):
     if table == "DIM_EFC_DATE":
         entity_id = dt.date(2026, 2, 3)
         updated_value = 2026
-        expected_schema = "REPORTING"
+        expected_schema = "CORE"
     else:
         entity_id = f"record-{table.lower()}"
         updated_value = "Updated"

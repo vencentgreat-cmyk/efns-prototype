@@ -261,7 +261,7 @@ class SnowflakeRepository(BaseRepository):
         self._executor().check_connection()
 
     def _table(self, table: str, schema: str | None = None) -> str:
-        if table not in MODEL and table not in {"SALMONELLA_TEST_SAMPLE", "IMPORT_BATCH", "IMPORT_RAW_ROW", "PRODUCTION_RECORD", "VW_PRODUCTION_SUMMARY", "MIGRATION_BATCH", "MIGRATION_FILE", "MIGRATION_RAW_ROW", "MIGRATION_ID_MAP"}:
+        if table not in MODEL and table not in {"SALMONELLA_TEST_SAMPLE", "IMPORT_BATCH", "IMPORT_RAW_ROW", "PRODUCTION_RECORD", "VW_PRODUCTION_SUMMARY", "MIGRATION_BATCH", "MIGRATION_FILE", "MIGRATION_RAW_ROW", "MIGRATION_ID_MAP", "MIGRATION_ERROR", "MIGRATION_RECONCILIATION"}:
             raise RepositoryError("Unsupported Snowflake table identifier.")
         return f"{self.database}.{schema or self.schema_core}.{table}"
 
@@ -288,11 +288,7 @@ class SnowflakeRepository(BaseRepository):
     ) -> str:
         record = self._normalize_date_fields(table, record)
 
-        target_schema = (
-            self.schema_reporting
-            if table == "DIM_EFC_DATE"
-            else self.schema_core
-        )
+        target_schema = self.schema_core
         target_table = self._table(table, target_schema)
 
         key, allowed_text = MODEL[table]
@@ -662,6 +658,13 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
             (batch_id,),
         )
 
+    def get_migration_reconciliation(self, batch_id):
+        return self._query(
+            f"SELECT * FROM {self._table('MIGRATION_RECONCILIATION', self.schema_raw)} "
+            "WHERE MIGRATION_BATCH_ID = %s ORDER BY SOURCE_ENTITY",
+            (batch_id,),
+        )
+
     def stage_migration_file(self, batch_id, filename, content):
         from data.migration import migration_stage_path
         path = migration_stage_path(batch_id, filename)
@@ -706,6 +709,37 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                 json.dumps(row.get("RAW_DATA"), default=str), json.dumps(row.get("NORMALIZED_DATA"), default=str),
                 row["VALIDATION_STATUS"], row.get("MATCH_STATUS"), json.dumps(row.get("VALIDATION_MESSAGES", []), default=str),
             ) for row in raw_rows])
+            reconciliation = {}
+            error_rows = []
+            for row in raw_rows:
+                entity = row["SOURCE_ENTITY"]
+                counts = reconciliation.setdefault(entity, {"source": 0, "ready": 0, "rejected": 0})
+                counts["source"] += 1
+                counts["ready" if row["VALIDATION_STATUS"] == "READY" else "rejected"] += 1
+                for message in row.get("VALIDATION_MESSAGES", []):
+                    field = str(message).split(" ", 1)[0].rstrip(".")
+                    error_rows.append((
+                        str(uuid.uuid4()), batch_id, row["SOURCE_FILENAME"], entity,
+                        row["SOURCE_ROW_NUMBER"], field, str(message),
+                    ))
+            if error_rows:
+                tx.executemany(
+                    f"INSERT INTO {self._table('MIGRATION_ERROR', self.schema_raw)} "
+                    "(MIGRATION_ERROR_ID, MIGRATION_BATCH_ID, SOURCE_FILENAME, SOURCE_ENTITY, "
+                    "SOURCE_ROW_NUMBER, FIELD_NAME, ERROR_MESSAGE, CREATED_AT) "
+                    f"VALUES (%s, %s, %s, %s, %s, %s, %s, {UTC_NOW_NTZ})",
+                    error_rows,
+                )
+            tx.executemany(
+                f"INSERT INTO {self._table('MIGRATION_RECONCILIATION', self.schema_raw)} "
+                "(MIGRATION_RECONCILIATION_ID, MIGRATION_BATCH_ID, SOURCE_ENTITY, SOURCE_ROWS, "
+                "READY_ROWS, REJECTED_ROWS, INSERTED_ROWS, CREATED_AT, UPDATED_AT) "
+                f"VALUES (%s, %s, %s, %s, %s, %s, 0, {UTC_NOW_NTZ}, {UTC_NOW_NTZ})",
+                [
+                    (str(uuid.uuid4()), batch_id, entity, values["source"], values["ready"], values["rejected"])
+                    for entity, values in reconciliation.items()
+                ],
+            )
             map_sql = (
                 f"INSERT INTO {self._table('MIGRATION_ID_MAP', self.schema_raw)} "
                 f"(MIGRATION_ID_MAP_ID, MIGRATION_BATCH_ID, SOURCE_ENTITY, SOURCE_ID, TARGET_ID, STATUS, CREATED_AT, UPDATED_AT) "
@@ -773,9 +807,13 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                         pending = [record for record in production_records if str(record.get("PRODUCTION_ID")) not in existing_ids]
                         counts[entity] = self._insert_production(tx, pending, batch_id)
                     else:
-                        schema_name = contract["entities"][entity].get("schema")
-                        schema = self.schema_reporting if schema_name == "REPORTING" else None
-                        counts[entity] = self._insert_migration_core(tx, entity, records, schema)
+                        counts[entity] = self._insert_migration_core(tx, entity, records)
+                    tx.execute(
+                        f"UPDATE {self._table('MIGRATION_RECONCILIATION', self.schema_raw)} "
+                        f"SET INSERTED_ROWS = %s, UPDATED_AT = {UTC_NOW_NTZ} "
+                        "WHERE MIGRATION_BATCH_ID = %s AND SOURCE_ENTITY = %s",
+                        (counts[entity], batch_id, entity),
+                    )
                 tx.execute(f"UPDATE {self._table('MIGRATION_ID_MAP', self.schema_raw)} SET STATUS = %s, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("COMMITTED", batch_id))
                 tx.execute(f"UPDATE {self._table('MIGRATION_BATCH', self.schema_raw)} SET STATUS = %s, COMMITTED_AT = {UTC_NOW_NTZ}, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("COMMITTED", batch_id))
             return {"batch_id": batch_id, "counts": counts, "idempotent": False}
@@ -974,7 +1012,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
         conditions, params = [], []
         if date_from is not None: conditions.append("DAY >= %s"); params.append(date_from)
         if date_to is not None: conditions.append("DAY <= %s"); params.append(date_to)
-        sql = f"SELECT * FROM {self._table('DIM_EFC_DATE', self.schema_reporting)}"
+        sql = f"SELECT * FROM {self._table('DIM_EFC_DATE', self.schema_core)}"
         if conditions: sql += " WHERE " + " AND ".join(conditions)
         return self._query(sql + " ORDER BY DAY", tuple(params) if params else None)
     def get_production_summary_metrics(self):

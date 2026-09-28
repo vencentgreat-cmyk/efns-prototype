@@ -251,7 +251,7 @@
       "foreign_keys": {}
     },
     "DIM_EFC_DATE": {
-      "filename": "DateConverter$.csv", "schema": "REPORTING", "id_field": "DAY", "id_policy": "date",
+      "filename": "DateConverter$.csv", "schema": "CORE", "id_field": "DAY", "id_policy": "date",
       "required": ["DAY", "ELEMENT_CODE"], "natural_key": [], "deduplicate_by": "DAY",
       "field_map": {
         "DAY": "Day", "EFC_YEAR": "EFCYear", "EFC_WEEK_NUMBER": "EFCWkNumber", "EFC_WEEK": "EFCWeek",

@@ -385,6 +385,11 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
+    def get_migration_reconciliation(self, batch_id: str) -> pd.DataFrame:
+        """Return safe per-entity source, validation, and inserted counts."""
+        ...
+
+    @abstractmethod
     def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:
         ...
 

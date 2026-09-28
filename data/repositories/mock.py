@@ -68,6 +68,8 @@ class MockRepository(BaseRepository):
         self._migration_files: list[dict] = []
         self._migration_raw_rows: list[dict] = []
         self._migration_id_map: list[dict] = []
+        self._migration_errors: list[dict] = []
+        self._migration_reconciliation: list[dict] = []
         # Link production to a synthetic import batch
         self._ensure_default_batch()
 
@@ -793,6 +795,12 @@ class MockRepository(BaseRepository):
     def get_migration_raw_rows(self, batch_id: str) -> pd.DataFrame:
         return pd.DataFrame([dict(row) for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id])
 
+    def get_migration_reconciliation(self, batch_id: str) -> pd.DataFrame:
+        return pd.DataFrame([
+            dict(row) for row in self._migration_reconciliation
+            if row["MIGRATION_BATCH_ID"] == batch_id
+        ])
+
     def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:
         from data.migration import migration_stage_path
         del content
@@ -816,6 +824,25 @@ class MockRepository(BaseRepository):
                     "MIGRATION_BATCH_ID": batch_id, "SOURCE_ENTITY": item["SOURCE_ENTITY"],
                     "SOURCE_ID": item.get("SOURCE_ID"), "TARGET_ID": item["TARGET_ID"], "STATUS": "READY",
                 })
+            for message in item.get("VALIDATION_MESSAGES", []):
+                self._migration_errors.append({
+                    "MIGRATION_BATCH_ID": batch_id,
+                    "SOURCE_FILENAME": item["SOURCE_FILENAME"],
+                    "SOURCE_ENTITY": item["SOURCE_ENTITY"],
+                    "SOURCE_ROW_NUMBER": item["SOURCE_ROW_NUMBER"],
+                    "FIELD_NAME": str(message).split(" ", 1)[0].rstrip("."),
+                    "ERROR_MESSAGE": str(message),
+                })
+        for entity in sorted({row["SOURCE_ENTITY"] for row in raw_rows}):
+            entity_rows = [row for row in raw_rows if row["SOURCE_ENTITY"] == entity]
+            self._migration_reconciliation.append({
+                "MIGRATION_BATCH_ID": batch_id,
+                "SOURCE_ENTITY": entity,
+                "SOURCE_ROWS": len(entity_rows),
+                "READY_ROWS": sum(row["VALIDATION_STATUS"] == "READY" for row in entity_rows),
+                "REJECTED_ROWS": sum(row["VALIDATION_STATUS"] == "REJECTED" for row in entity_rows),
+                "INSERTED_ROWS": 0,
+            })
         return batch_id
 
     def commit_migration_batch(self, batch_id: str) -> dict:
@@ -868,6 +895,9 @@ class MockRepository(BaseRepository):
                             existing.add(str(record[key]))
                             counts[entity] += 1
             batch["STATUS"] = "COMMITTED"; batch["COMMITTED_COUNTS"] = counts; batch["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
+            for row in self._migration_reconciliation:
+                if row["MIGRATION_BATCH_ID"] == batch_id:
+                    row["INSERTED_ROWS"] = counts.get(row["SOURCE_ENTITY"], 0)
             for row in self._migration_id_map:
                 if row["MIGRATION_BATCH_ID"] == batch_id: row["STATUS"] = "COMMITTED"
             return {"batch_id": batch_id, "counts": counts, "idempotent": False}
@@ -902,6 +932,10 @@ class MockRepository(BaseRepository):
         self._migration_files = [row for row in self._migration_files if row["MIGRATION_BATCH_ID"] != batch_id]
         self._migration_raw_rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] != batch_id]
         self._migration_id_map = [row for row in self._migration_id_map if row["MIGRATION_BATCH_ID"] != batch_id]
+        self._migration_errors = [row for row in self._migration_errors if row["MIGRATION_BATCH_ID"] != batch_id]
+        self._migration_reconciliation = [
+            row for row in self._migration_reconciliation if row["MIGRATION_BATCH_ID"] != batch_id
+        ]
         return True
 
     def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:

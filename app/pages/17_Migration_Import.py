@@ -1,4 +1,4 @@
-"""Historical EIMS migration workspace (provisional metadata contract)."""
+"""Historical EIMS migration workspace for named-column Dataverse exports."""
 
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ if analysis is not None:
         with st.container(border=True):
             section_intro(
                 "Commit Ready rows",
-                "Ready rows are written to CORE and REPORTING in dependency order. "
+                "Ready rows are written to CORE in dependency order. "
                 "Rejected rows remain preserved in RAW, and any write failure rolls "
                 "back the target transaction.",
             )
@@ -152,6 +152,16 @@ with st.container(border=True):
             st.info("No historical migration batches have been prepared.")
         else:
             st.dataframe(history, hide_index=True, width="stretch")
+            selected_history = st.selectbox(
+                "Batch reconciliation",
+                [""] + history["MIGRATION_BATCH_ID"].astype(str).tolist(),
+            )
+            if selected_history:
+                reconciliation = repo.get_migration_reconciliation(selected_history)
+                if reconciliation.empty:
+                    st.info("No persisted reconciliation is available for this batch.")
+                else:
+                    st.dataframe(reconciliation, hide_index=True, width="stretch")
             if has_permission(user, Permission.DELETE_DATA):
                 synthetic = history[history["MIGRATION_BATCH_ID"].astype(str).str.startswith("DEV_MIGRATION_")]
                 options = synthetic["MIGRATION_BATCH_ID"].astype(str).tolist()
