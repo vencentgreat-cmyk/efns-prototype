@@ -72,20 +72,24 @@ if report is None:
 existing_import = repo.find_import_by_hash(report.package_hash)
 row_frame = report.rows_frame()
 
-metrics = st.columns(4)
+metrics = st.columns(5)
 metrics[0].metric("Files", len(report.files))
-metrics[1].metric("Source rows", sum(item.row_count for item in report.files))
-metrics[2].metric("Valid rows", len(report.ready_rows))
-metrics[3].metric("Rejected rows", len(report.rejected_rows))
+metrics[1].metric("Unsupported files", len(report.unsupported_files))
+metrics[2].metric("Source rows", sum(item.row_count for item in report.files))
+metrics[3].metric("Valid rows", len(report.ready_rows))
+metrics[4].metric("Rejected rows", len(report.rejected_rows))
 
 with st.container(border=True):
     section_intro("File review", "Detected contents and a short preview from each file.")
     summary = pd.DataFrame([
         {
             "File name": item.filename,
-            "Detected contents": ENTITY_DISPLAY.get(item.entity, "Could not detect"),
+            "Detected contents": (
+                f"Unsupported: {item.errors[0].removeprefix('Unsupported entity: ').rstrip('.')}"
+                if item.unsupported_entity else ENTITY_DISPLAY.get(item.entity, "Could not detect")
+            ),
             "Rows": item.row_count,
-            "File status": "Needs attention" if item.errors else "Ready for row checks",
+            "File status": "Unsupported" if item.unsupported_entity else ("Needs attention" if item.errors else "Ready for row checks"),
         }
         for item in report.files
     ])
@@ -99,10 +103,12 @@ with st.container(border=True):
                 st.dataframe(item.preview, hide_index=True, width="stretch", height=260)
 
 with st.container(border=True):
-    section_intro("Validation results", "Rejected rows are never imported. Download the report, correct the file, and try again.")
+    section_intro("Validation results", "Unsupported files and rejected rows are never imported.")
     if existing_import:
         st.error("This exact set of files has already been imported.")
-    elif report.rejected_rows:
+    elif report.unsupported_files and not report.ready_rows:
+        st.warning("The uploaded files contain data that this page does not support.")
+    elif report.rejected_rows or report.unsupported_files:
         st.warning("Some rows need correction. Valid rows may still be imported after review.")
     elif report.ready_rows:
         st.success("All rows passed validation.")
@@ -111,7 +117,7 @@ with st.container(border=True):
 
     status_filter = st.segmented_control(
         "Rows to show",
-        ("All rows", "Valid", "Rejected"),
+        ("All rows", "Valid", "Rejected", "Unsupported"),
         default="All rows",
         key="daily_flock_quota_status_filter",
     )
@@ -120,16 +126,18 @@ with st.container(border=True):
         shown = row_frame[row_frame["STATUS"] == "Ready"]
     elif status_filter == "Rejected":
         shown = row_frame[row_frame["STATUS"] == "Rejected"]
+    elif status_filter == "Unsupported":
+        shown = row_frame[row_frame["STATUS"] == "Unsupported"]
     st.dataframe(shown.head(500), hide_index=True, width="stretch", height=420)
     if len(shown) > 500:
         st.caption("The on-screen preview is limited to 500 rows. Counts include the full upload.")
 
-    rejected = row_frame[row_frame["STATUS"] == "Rejected"]
-    if not rejected.empty:
-        safe_rejected = spreadsheet_safe(rejected)
+    issues = row_frame[row_frame["STATUS"].isin(["Rejected", "Unsupported"])]
+    if not issues.empty:
+        safe_issues = spreadsheet_safe(issues)
         st.download_button(
-            "Download error report",
-            safe_rejected.to_csv(index=False).encode("utf-8-sig"),
+            "Download issue report",
+            safe_issues.to_csv(index=False).encode("utf-8-sig"),
             file_name="daily-flock-quota-errors.csv",
             mime="text/csv",
             icon=":material/download:",

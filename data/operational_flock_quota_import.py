@@ -36,6 +36,18 @@ ENTITY_DISPLAY = {
     "FLOCK_TRANSACTION": "Flock Transactions",
     "QUOTA_TRANSACTION": "Quota Transactions",
 }
+UNSUPPORTED_ENTITY_DISPLAY = {
+    "ACCOUNT": "Account data",
+    "CONTACT": "Contacts",
+    "FARM_LOCATION": "Farm Locations",
+    "FACILITY": "Facilities",
+    "FACILITY_DETAIL": "Facility Details",
+    "SALMONELLA_TEST": "Salmonella Tests",
+    "SALMONELLA_TEST_SAMPLE": "Salmonella Test Samples",
+    "PRODUCTION_RECORD": "Production Records",
+    "QUOTA_ALLOCATION": "Quota Allocations",
+    "DIM_EFC_DATE": "EFC Dates",
+}
 IMPORT_ORDER = SUPPORTED_ENTITIES
 DEFAULT_MAX_FILE_BYTES = 200 * 1024 * 1024
 
@@ -90,6 +102,7 @@ class OperationalFile:
     file_hash: str
     file_size: int
     errors: list[str] = field(default_factory=list)
+    unsupported_entity: str | None = None
 
 
 @dataclass
@@ -118,6 +131,14 @@ class OperationalReport:
     @property
     def rejected_rows(self) -> list[OperationalRow]:
         return [row for row in self.rows if row.status == "Rejected"]
+
+    @property
+    def unsupported_rows(self) -> list[OperationalRow]:
+        return [row for row in self.rows if row.status == "Unsupported"]
+
+    @property
+    def unsupported_files(self) -> list[OperationalFile]:
+        return [item for item in self.files if item.unsupported_entity]
 
     @property
     def records_by_entity(self) -> dict[str, list[dict[str, Any]]]:
@@ -195,7 +216,7 @@ def _aliases(entity: str, contract: dict[str, Any]) -> dict[str, str]:
         aliases[_header(source)] = target
     for target in (spec.get("required", []) + [spec["id_field"]]):
         aliases[_header(target)] = target
-    for target in _OPERATIONAL_FIELDS[entity]:
+    for target in _OPERATIONAL_FIELDS.get(entity, ()):
         aliases[_header(target)] = target
         aliases[_header(target.replace("_", " "))] = target
     for target, fallbacks in spec.get("fallbacks", {}).items():
@@ -205,8 +226,18 @@ def _aliases(entity: str, contract: dict[str, Any]) -> dict[str, str]:
     return aliases
 
 
-def _detect_entity(headers: Iterable[str], contract: dict[str, Any]) -> tuple[str | None, str | None]:
+def _detect_entity(
+    headers: Iterable[str], contract: dict[str, Any]
+) -> tuple[str | None, str | None, str | None]:
     normalized = {_header(value) for value in headers if _header(value)}
+    for entity, spec in contract["entities"].items():
+        if entity in SUPPORTED_ENTITIES:
+            continue
+        id_source = spec.get("field_map", {}).get(spec["id_field"])
+        if id_source and _header(id_source) in normalized:
+            label = UNSUPPORTED_ENTITY_DISPLAY.get(entity, entity.replace("_", " ").title())
+            return None, f"Unsupported entity: {label}.", entity
+
     scores: list[tuple[int, int, str]] = []
     for entity in SUPPORTED_ENTITIES:
         spec = contract["entities"][entity]
@@ -218,10 +249,10 @@ def _detect_entity(headers: Iterable[str], contract: dict[str, Any]) -> tuple[st
     best = scores[0]
     tied = [item for item in scores if item[:2] == best[:2]]
     if best[1] < 2:
-        return None, "The file does not contain enough recognized columns to identify its contents."
+        return None, "Could not detect supported content.", None
     if len(tied) > 1:
-        return None, "The columns match more than one record type. Select the record type and validate again."
-    return best[2], None
+        return None, "Could not detect supported content. Select the record type and validate again.", None
+    return best[2], None, None
 
 
 def _read_file(filename: str, content: bytes) -> pd.DataFrame:
@@ -505,19 +536,26 @@ def analyze_operational_files(
         original_columns = [str(value) for value in frame.columns]
         normalized = [_header(value) for value in original_columns]
         duplicate_headers = sorted(name for name, count in Counter(normalized).items() if name and count > 1)
-        entity, detection_error = (selected_entity, None) if selected_entity else _detect_entity(original_columns, contract)
+        if selected_entity:
+            entity, detection_error, unsupported_entity = selected_entity, None, None
+        else:
+            entity, detection_error, unsupported_entity = _detect_entity(original_columns, contract)
         errors = ([detection_error] if detection_error else []) + (["Duplicate columns: " + ", ".join(duplicate_headers) + "."] if duplicate_headers else [])
         digest = content_hash
         fingerprints.append(f"{digest}:{entity or 'UNKNOWN'}")
-        files.append(OperationalFile(filename, entity, len(frame), original_columns, frame.head(20), digest, len(content), errors))
+        files.append(OperationalFile(
+            filename, entity, len(frame), original_columns, frame.head(20), digest,
+            len(content), errors, unsupported_entity,
+        ))
         if entity and not errors:
             for index, row in frame.iterrows():
                 pending.append((filename, entity, int(index) + 2, {str(k): v for k, v in row.to_dict().items()}))
         elif errors:
             for index, row in frame.iterrows():
                 invalid_rows.append(OperationalRow(
-                    filename, int(index) + 2, entity or "UNKNOWN", "", None,
-                    "Rejected", list(errors), {str(k): v for k, v in row.to_dict().items()}, None,
+                    filename, int(index) + 2, unsupported_entity or entity or "UNKNOWN", "", None,
+                    "Unsupported" if unsupported_entity else "Rejected", list(errors),
+                    {str(k): v for k, v in row.to_dict().items()}, None,
                 ))
     package_hash = hashlib.sha256("|".join(sorted(fingerprints)).encode("utf-8")).hexdigest()
     seen: Counter = Counter()
