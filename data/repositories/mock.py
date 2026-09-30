@@ -771,6 +771,109 @@ class MockRepository(BaseRepository):
             self._quota_registrations, self._flocks, self._import_batches = snapshots
             raise
 
+    def import_operational_flock_quota_batch(
+        self,
+        batch: dict,
+        records_by_entity: dict[str, list[dict]],
+        raw_rows: list[dict],
+    ) -> dict:
+        """Commit accepted operational rows with full in-memory rollback."""
+        file_hash = batch.get("FILE_HASH")
+        if file_hash and self.find_import_by_hash(file_hash):
+            raise ValueError("This exact upload has already been imported.")
+        snapshots = (
+            self._quota_registrations.copy(deep=True), self._flocks.copy(deep=True),
+            self._flock_transactions.copy(deep=True), self._quota_transactions.copy(deep=True),
+            [dict(item) for item in self._import_batches], [dict(item) for item in self._raw_rows],
+        )
+        frames = {
+            "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
+            "FLOCK": ("_flocks", "FLOCK_ID"),
+            "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
+            "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"),
+        }
+        counts = {entity: 0 for entity in frames}
+        created_count = updated_count = 0
+        try:
+            for entity in frames:
+                attribute, key = frames[entity]
+                for source in records_by_entity.get(entity, []):
+                    record = dict(source)
+                    action = record.pop("ACTION", "")
+                    entity_id = record.get(key)
+                    current_frame = getattr(self, attribute)
+                    exists = entity_id in set(current_frame.get(key, pd.Series(dtype=str)).astype(str))
+                    if action not in {"CREATE", "UPDATE"}:
+                        raise ValueError("Unsupported operational import action.")
+                    if action == "CREATE" and exists:
+                        raise ValueError("A record selected for creation already exists.")
+                    if action == "UPDATE" and not exists:
+                        raise ValueError("A record selected for update no longer exists.")
+
+                    if entity == "QUOTA_REGISTRATION":
+                        if self.get_account(record.get("ACCOUNT_ID")) is None:
+                            raise ValueError("Account no longer exists.")
+                        self.upsert_quota_registration(record)
+                    elif entity == "FLOCK":
+                        if self.get_account(record.get("ACCOUNT_ID")) is None:
+                            raise ValueError("Account no longer exists.")
+                        facility_id = record.get("FACILITY_ID")
+                        if facility_id:
+                            matches = self._facilities[self._facilities["FACILITY_ID"] == facility_id]
+                            facility = matches.iloc[0].to_dict() if len(matches) == 1 else None
+                            if facility is None or str(facility.get("ACCOUNT_ID")) != str(record.get("ACCOUNT_ID")):
+                                raise ValueError("Facility no longer belongs to the selected Account.")
+                        detail_id = record.get("FACILITY_DETAIL_ID")
+                        if detail_id:
+                            details = self._facility_details[self._facility_details["FACILITY_DETAIL_ID"] == detail_id]
+                            if len(details) != 1 or str(details.iloc[0].get("FACILITY_ID")) != str(facility_id):
+                                raise ValueError("Facility Detail no longer belongs to the selected Facility.")
+                        quota_id = record.get("QUOTA_ID")
+                        if quota_id:
+                            quota = self.get_quota_registration(quota_id)
+                            if quota is None or str(quota.get("ACCOUNT_ID")) != str(record.get("ACCOUNT_ID")):
+                                raise ValueError("Quota Registration no longer belongs to the selected Account.")
+                        self.upsert_flock(record)
+                    elif entity == "FLOCK_TRANSACTION":
+                        if self.get_flock(record.get("FLOCK_ID")) is None:
+                            raise ValueError("Flock no longer exists.")
+                        self._upsert_frame(attribute, key, record)
+                    else:
+                        quota = self.get_quota_registration(record.get("QUOTA_ID"))
+                        if quota is None:
+                            raise ValueError("Quota Registration no longer exists.")
+                        record["OWNER_ACCOUNT_ID"] = quota.get("ACCOUNT_ID")
+                        if record.get("RELATED_ACCOUNT_ID") and self.get_account(record["RELATED_ACCOUNT_ID"]) is None:
+                            raise ValueError("Related Account no longer exists.")
+                        if record.get("RELATED_QUOTA_ID") and self.get_quota_registration(record["RELATED_QUOTA_ID"]) is None:
+                            raise ValueError("Related Quota no longer exists.")
+                        if record.get("RELATED_TRANSACTION_ID") and self.get_quota_transaction(record["RELATED_TRANSACTION_ID"]) is None:
+                            raise ValueError("Related Transaction no longer exists.")
+                        self._upsert_frame(attribute, key, record)
+                    counts[entity] += 1
+                    created_count += int(action == "CREATE")
+                    updated_count += int(action == "UPDATE")
+
+            total_count = sum(counts.values())
+            import_id = self.create_import_batch({
+                **batch, "SOURCE": "Daily Flock & Quota Import",
+                "SOURCE_RECORD_COUNT": len(raw_rows), "ROW_COUNT": total_count,
+                "ERROR_COUNT": len(raw_rows) - total_count, "STATUS": "Committed",
+            })
+            self.insert_raw_rows(import_id, raw_rows)
+            return {
+                "import_id": import_id, "file_hash": file_hash, "filename": batch.get("FILENAME"),
+                "total_count": total_count, "created_count": created_count,
+                "updated_count": updated_count, "rejected_count": len(raw_rows) - total_count,
+                "entity_counts": counts, "status": "Committed",
+            }
+        except Exception:
+            (
+                self._quota_registrations, self._flocks, self._flock_transactions,
+                self._quota_transactions, self._import_batches, self._raw_rows,
+            ) = snapshots
+            raise
+
     def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:
         for row in rows:
             stored = dict(row)

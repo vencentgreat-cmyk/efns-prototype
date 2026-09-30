@@ -169,11 +169,6 @@ pages = {
         ],
         "Production": [
             st.Page(
-                page_file("19_Flock_Quota_Import.py"),
-                title="Flock & Quota Import",
-                icon=":material/upload_file:",
-            ),
-            st.Page(
                 page_file("2_Production_Data.py"),
                 title="Production Data",
                 icon=":material/table_view:",
@@ -207,6 +202,11 @@ pages = {
             ),
         ],
         "Flock Management": [
+            st.Page(
+                page_file("19_Daily_Flock_Quota_Import.py"),
+                title="Daily Flock & Quota Import",
+                icon=":material/upload_file:",
+            ),
             st.Page(page_file("5_Flocks.py"), title="Flocks", icon=":material/egg:"),
             st.Page(page_file("6_Flock_Transactions.py"), title="Flock Transactions", icon=":material/swap_horiz:"),
             st.Page(page_file("9_Salmonella_Tests.py"), title="Salmonella Tests", icon=":material/science:"),

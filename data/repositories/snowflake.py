@@ -1007,6 +1007,123 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
             "status": "Committed",
         }
 
+    def import_operational_flock_quota_batch(self, batch, records_by_entity, raw_rows):
+        """Recheck parents and commit accepted daily rows in one transaction."""
+        import_id = batch.get("IMPORT_ID") or str(uuid.uuid4())
+        file_hash = batch.get("FILE_HASH")
+        keys = {
+            "QUOTA_REGISTRATION": "QUOTA_ID", "FLOCK": "FLOCK_ID",
+            "FLOCK_TRANSACTION": "FLOCK_TRANSACTION_ID",
+            "QUOTA_TRANSACTION": "QUOTA_TRANSACTION_ID",
+        }
+        counts = {entity: 0 for entity in keys}
+        created_count = updated_count = 0
+        with self._executor().transaction() as tx:
+            if file_hash:
+                duplicate = tx.query(
+                    f"SELECT IMPORT_ID FROM {self._table('IMPORT_BATCH', self.schema_raw)} "
+                    "WHERE FILE_HASH = %s LIMIT 1", (file_hash,),
+                )
+                if not duplicate.empty:
+                    raise RepositoryError("This exact upload has already been imported.")
+
+            for entity, key in keys.items():
+                for source in records_by_entity.get(entity, []):
+                    record = dict(source)
+                    action = record.pop("ACTION", "")
+                    entity_id = record.get(key)
+                    exists = tx.query(
+                        f"SELECT {key} FROM {self._table(entity)} WHERE {key} = %s LIMIT 1",
+                        (entity_id,),
+                    )
+                    if action not in {"CREATE", "UPDATE"}:
+                        raise RepositoryError("Unsupported operational import action.")
+                    if action == "CREATE" and not exists.empty:
+                        raise RepositoryError("A record selected for creation already exists.")
+                    if action == "UPDATE" and exists.empty:
+                        raise RepositoryError("A record selected for update no longer exists.")
+
+                    if entity == "QUOTA_REGISTRATION":
+                        account = tx.query(
+                            f"SELECT ACCOUNT_ID FROM {self._table('ACCOUNT')} WHERE ACCOUNT_ID = %s",
+                            (record.get("ACCOUNT_ID"),),
+                        )
+                        if account.empty:
+                            raise RepositoryError("Account no longer exists.")
+                    elif entity == "FLOCK":
+                        account = tx.query(
+                            f"SELECT ACCOUNT_ID FROM {self._table('ACCOUNT')} WHERE ACCOUNT_ID = %s",
+                            (record.get("ACCOUNT_ID"),),
+                        )
+                        if account.empty:
+                            raise RepositoryError("Account no longer exists.")
+                        if record.get("FACILITY_ID"):
+                            facility = tx.query(
+                                f"SELECT ACCOUNT_ID FROM {self._table('FACILITY')} WHERE FACILITY_ID = %s",
+                                (record["FACILITY_ID"],),
+                            )
+                            if facility.empty or str(facility.iloc[0]["ACCOUNT_ID"]) != str(record.get("ACCOUNT_ID")):
+                                raise RepositoryError("Facility no longer belongs to the selected Account.")
+                        if record.get("FACILITY_DETAIL_ID"):
+                            detail = tx.query(
+                                f"SELECT FACILITY_ID FROM {self._table('FACILITY_DETAIL')} WHERE FACILITY_DETAIL_ID = %s",
+                                (record["FACILITY_DETAIL_ID"],),
+                            )
+                            if detail.empty or str(detail.iloc[0]["FACILITY_ID"]) != str(record.get("FACILITY_ID")):
+                                raise RepositoryError("Facility Detail no longer belongs to the selected Facility.")
+                        if record.get("QUOTA_ID"):
+                            quota = tx.query(
+                                f"SELECT ACCOUNT_ID FROM {self._table('QUOTA_REGISTRATION')} WHERE QUOTA_ID = %s",
+                                (record["QUOTA_ID"],),
+                            )
+                            if quota.empty or str(quota.iloc[0]["ACCOUNT_ID"]) != str(record.get("ACCOUNT_ID")):
+                                raise RepositoryError("Quota Registration no longer belongs to the selected Account.")
+                    elif entity == "FLOCK_TRANSACTION":
+                        flock = tx.query(
+                            f"SELECT FLOCK_ID FROM {self._table('FLOCK')} WHERE FLOCK_ID = %s",
+                            (record.get("FLOCK_ID"),),
+                        )
+                        if flock.empty:
+                            raise RepositoryError("Flock no longer exists.")
+                    else:
+                        quota = tx.query(
+                            f"SELECT ACCOUNT_ID FROM {self._table('QUOTA_REGISTRATION')} WHERE QUOTA_ID = %s",
+                            (record.get("QUOTA_ID"),),
+                        )
+                        if quota.empty:
+                            raise RepositoryError("Quota Registration no longer exists.")
+                        record["OWNER_ACCOUNT_ID"] = quota.iloc[0]["ACCOUNT_ID"]
+                        for column, parent_table, parent_key, message in (
+                            ("RELATED_ACCOUNT_ID", "ACCOUNT", "ACCOUNT_ID", "Related Account"),
+                            ("RELATED_QUOTA_ID", "QUOTA_REGISTRATION", "QUOTA_ID", "Related Quota"),
+                            ("RELATED_TRANSACTION_ID", "QUOTA_TRANSACTION", "QUOTA_TRANSACTION_ID", "Related Transaction"),
+                        ):
+                            if record.get(column):
+                                parent = tx.query(
+                                    f"SELECT {parent_key} FROM {self._table(parent_table)} WHERE {parent_key} = %s",
+                                    (record[column],),
+                                )
+                                if parent.empty:
+                                    raise RepositoryError(f"{message} no longer exists.")
+                    self._upsert_with_executor(tx, entity, record)
+                    counts[entity] += 1
+                    created_count += int(action == "CREATE")
+                    updated_count += int(action == "UPDATE")
+
+            total_count = sum(counts.values())
+            self._insert_batch(tx, import_id, {
+                **batch, "SOURCE": "Daily Flock & Quota Import",
+                "SOURCE_RECORD_COUNT": len(raw_rows), "ROW_COUNT": total_count,
+                "ERROR_COUNT": len(raw_rows) - total_count, "STATUS": "Committed",
+            })
+            self._insert_raw(tx, import_id, raw_rows)
+        return {
+            "import_id": import_id, "file_hash": file_hash, "filename": batch.get("FILENAME"),
+            "total_count": sum(counts.values()), "created_count": created_count,
+            "updated_count": updated_count, "rejected_count": len(raw_rows) - sum(counts.values()),
+            "entity_counts": counts, "status": "Committed",
+        }
+
     def get_production_records(self, reporting_year=None, reporting_week=None, grader_number=None, barn_identity=None, egg_colour=None, account_id=None): return self._filtered("VW_PRODUCTION_SUMMARY", (("REPORTING_YEAR", reporting_year), ("REPORTING_WEEK", reporting_week), ("GRADER_NUMBER", grader_number), ("BARN_IDENTITY", barn_identity), ("EGG_COLOUR", egg_colour), ("PRODUCER_ACCOUNT_ID", account_id)), self.schema_reporting)
     def get_efc_dates(self, date_from=None, date_to=None):
         conditions, params = [], []

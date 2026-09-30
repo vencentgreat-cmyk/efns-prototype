@@ -37,6 +37,7 @@ IMPORT_METHODS = {
     "create_import_batch": "IMPORT_BATCH",
     "import_production_bundle": "IMPORT_BATCH",
     "import_flock_quota_batch": "FLOCK_QUOTA_IMPORT",
+    "import_operational_flock_quota_batch": "FLOCK_QUOTA_IMPORT",
     "insert_raw_rows": "RAW_PRODUCTION",
     "insert_production_records": "PRODUCTION_RECORD",
     "stage_migration_file": "MIGRATION_FILE",
@@ -112,7 +113,7 @@ class AuthorizedRepository:
         def call(*args, **kwargs):
             self._require(Permission.IMPORT_DATA)
             result = method(*args, **kwargs)
-            if name == "import_flock_quota_batch" and isinstance(result, dict):
+            if name in {"import_flock_quota_batch", "import_operational_flock_quota_batch"} and isinstance(result, dict):
                 entity_id = result.get("import_id")
             elif name == "commit_migration_batch" and isinstance(result, dict):
                 entity_id = result.get("batch_id")
@@ -123,7 +124,7 @@ class AuthorizedRepository:
             details = {"operation": name}
             if name == "import_production_bundle" and isinstance(result, tuple) and len(result) > 1:
                 details["record_count"] = int(result[1])
-            elif name == "import_flock_quota_batch" and isinstance(result, dict):
+            elif name in {"import_flock_quota_batch", "import_operational_flock_quota_batch"} and isinstance(result, dict):
                 details.update(
                     {
                         key: result[key]
@@ -131,7 +132,7 @@ class AuthorizedRepository:
                         if key in result
                     }
                 )
-            if name == "import_flock_quota_batch" and isinstance(result, dict):
+            if name in {"import_flock_quota_batch", "import_operational_flock_quota_batch"} and isinstance(result, dict):
                 try:
                     self.auth_store.record_action(self.actor, "IMPORT", entity_type, str(entity_id), details)
                     result["audit_recorded"] = True

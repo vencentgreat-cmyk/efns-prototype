@@ -361,6 +361,16 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
+    def import_operational_flock_quota_batch(
+        self,
+        batch: dict,
+        records_by_entity: dict[str, list[dict]],
+        raw_rows: list[dict],
+    ) -> dict:
+        """Persist accepted daily Flock/Quota rows and tracking data atomically."""
+        ...
+
+    @abstractmethod
     def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:
         """Preserve source rows and their technical validation state."""
         ...
