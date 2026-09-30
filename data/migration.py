@@ -1,4 +1,4 @@
-"""Synthetic EIMS migration parsing, validation, and reconciliation.
+"""EIMS migration parsing, validation, lineage, and reconciliation.
 
 Field rules are intentionally isolated in ``config/eims_migration_mapping.json``
 so authoritative EIMS metadata can replace this provisional contract.
@@ -20,8 +20,10 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping.json"
+DEFAULT_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping_v3.json"
 V1_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping_v1.json"
+V2_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping_v2.json"
+V3_MAPPING_PATH = DEFAULT_MAPPING_PATH
 SYNTHETIC_PREFIXES = ("DEV_MIGRATION_", "DEV_SYNTH_")
 WORKFLOW_STATUSES = (
     "UPLOADED", "PARSED", "VALIDATED", "READY", "COMMITTED",
@@ -29,6 +31,7 @@ WORKFLOW_STATUSES = (
 )
 _NULL_TEXT = frozenset({"", "none", "null", "nan", "nat"})
 _NUMBER = re.compile(r"^[+-]?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$")
+_GUID = re.compile(r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$")
 
 
 @dataclass(frozen=True)
@@ -63,12 +66,10 @@ def load_mapping(path: Path = DEFAULT_MAPPING_PATH) -> dict:
 
 def load_mapping_for_version(schema_version: str | None) -> dict:
     """Resolve the explicit migration contract without ambiguous file sets."""
-    current = load_mapping()
-    if schema_version == current["schema_version"]:
-        return current
-    legacy = load_mapping(V1_MAPPING_PATH)
-    if schema_version == legacy["schema_version"]:
-        return legacy
+    for path in (V3_MAPPING_PATH, V2_MAPPING_PATH, V1_MAPPING_PATH):
+        contract = load_mapping(path)
+        if schema_version == contract["schema_version"]:
+            return contract
     raise ValueError("The migration package schema version is not supported.")
 
 
@@ -94,7 +95,7 @@ def _source_file(value) -> MigrationSourceFile:
 
 def safe_stage_component(value: str) -> str:
     name = Path(str(value or "")).name
-    if name != value or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,199}", name):
+    if name != value or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.$-]{0,199}", name):
         raise ValueError("Migration filename is not safe for the internal stage.")
     return name
 
@@ -113,7 +114,10 @@ def migration_stage_prefix(batch_id: str) -> str:
 
 def _read_frame(source: MigrationSourceFile, spec: dict) -> pd.DataFrame:
     if source.name.lower().endswith(".csv"):
-        return pd.read_csv(io.BytesIO(source.content), dtype=object, keep_default_na=False)
+        return pd.read_csv(
+            io.BytesIO(source.content), header=0, dtype=object,
+            keep_default_na=False, encoding="utf-8-sig",
+        )
     if source.name.lower().endswith((".xlsx", ".xlsm")):
         return pd.read_excel(
             io.BytesIO(source.content),
@@ -144,9 +148,9 @@ def _convert(value, kind: str, field: str) -> tuple[object, str | None]:
         if isinstance(value, bool):
             return value, None
         text = str(value).strip().casefold()
-        if text in {"true", "1", "yes"}:
+        if text in {"true", "1", "1.0", "yes"}:
             return True, None
-        if text in {"false", "0", "no"}:
+        if text in {"false", "0", "0.0", "no"}:
             return False, None
         return None, f"{field} must be a boolean."
     if kind == "date":
@@ -155,9 +159,10 @@ def _convert(value, kind: str, field: str) -> tuple[object, str | None]:
         if isinstance(value, dt.date):
             return value, None
         try:
-            return dt.date.fromisoformat(str(value).strip()), None
-        except ValueError:
-            return None, f"{field} must be an ISO date (YYYY-MM-DD)."
+            parsed = pd.to_datetime(str(value).strip(), errors="raise")
+            return parsed.date(), None
+        except (TypeError, ValueError):
+            return None, f"{field} must contain a valid ISO date or datetime."
     if kind in {"integer", "decimal"}:
         text = str(value).strip()
         if not _NUMBER.fullmatch(text):
@@ -172,6 +177,46 @@ def _convert(value, kind: str, field: str) -> tuple[object, str | None]:
             return int(number), None
         return number, None
     return None, f"{field} has an unsupported provisional type."
+
+
+def _field_types(spec: dict) -> dict[str, str]:
+    if "field_map" in spec:
+        fields = {field: "string" for field in spec["field_map"]}
+        fields.update({field: "string" for field in spec.get("fallbacks", {})})
+        fields.update({field: "string" for field in spec.get("constants", {})})
+        fields.update({field: "string" for field in spec.get("derive_parent_fields", {})})
+        fields.update(spec.get("field_types", {}))
+        return fields
+    return spec["fields"]
+
+
+def _source_value(raw: dict, spec: dict, field: str, source_row: int):
+    if field in spec.get("constants", {}):
+        return spec["constants"][field]
+    if field in spec.get("row_number_fields", ()):
+        return source_row
+    if field in spec.get("fallbacks", {}):
+        for source_field in spec["fallbacks"][field]:
+            value = raw.get(str(source_field).upper())
+            if not _missing(value):
+                return value
+        return None
+    source_field = spec.get("field_map", {}).get(field, field)
+    value = raw.get(str(source_field).upper())
+    period_part = spec.get("period_fields", {}).get(field)
+    if period_part and not _missing(value):
+        text = str(value).strip()
+        if re.fullmatch(r"\d{6}", text):
+            return text[:4] if period_part == "year" else text[4:]
+    return value
+
+
+def _valid_source_id(value, policy: str) -> bool:
+    if policy == "guid":
+        return bool(_GUID.fullmatch(str(value)))
+    if policy == "date":
+        return isinstance(value, dt.date)
+    return any(str(value).startswith(prefix) for prefix in SYNTHETIC_PREFIXES)
 
 
 def _rule_error(field: str, value, rule: dict) -> str | None:
@@ -190,12 +235,12 @@ def _rule_error(field: str, value, rule: dict) -> str | None:
 def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> MigrationAnalysis:
     sources = [_source_file(value) for value in files]
     if mapping is None:
-        current = load_mapping()
         supplied = {source.name for source in sources}
-        if supplied == set(expected_filenames(load_mapping(V1_MAPPING_PATH))):
-            contract = load_mapping(V1_MAPPING_PATH)
-        else:
-            contract = current
+        contracts = [load_mapping(path) for path in (V3_MAPPING_PATH, V2_MAPPING_PATH, V1_MAPPING_PATH)]
+        contract = next(
+            (candidate for candidate in contracts if supplied == set(expected_filenames(candidate))),
+            load_mapping(),
+        )
     else:
         contract = mapping
     by_name = {safe_stage_component(source.name): source for source in sources}
@@ -219,6 +264,8 @@ def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> Mig
         digest.update(source.name.encode("utf-8")); digest.update(file_hash.encode("ascii"))
         frame = _read_frame(source, spec)
         frame.columns = [str(column).strip().upper() for column in frame.columns]
+        if len(frame.columns) != len(set(frame.columns)):
+            raise ValueError(f"{source.name}: duplicate column names are not allowed.")
         parsed[entity] = frame.to_dict("records")
         file_entries.append({
             "SOURCE_FILENAME": source.name,
@@ -230,22 +277,29 @@ def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> Mig
             "CONTENT": source.content,
         })
         id_field = spec["id_field"]
+        fields = _field_types(spec)
         source_ids[entity] = {}
         natural_values: dict[tuple, list[int]] = {}
         for offset, raw in enumerate(parsed[entity], 2):
             key = (entity, offset)
             messages: list[str] = []
             normalized = {}
-            unknown = sorted(set(raw) - set(spec["fields"]))
-            if unknown:
+            expected_source_fields = {
+                str(value).upper() for value in spec.get("field_map", {}).values()
+            } or set(fields)
+            expected_source_fields.update(
+                str(value).upper()
+                for values in spec.get("fallbacks", {}).values()
+                for value in values
+            )
+            unknown = sorted(set(raw) - expected_source_fields)
+            if unknown and not (spec.get("allow_extra_columns") or contract.get("allow_extra_columns")):
                 messages.append("Unknown columns: " + ", ".join(unknown) + ".")
-            for field, kind in spec["fields"].items():
-                value, error = _convert(raw.get(field), kind, field)
+            for field, kind in fields.items():
+                value, error = _convert(_source_value(raw, spec, field, offset), kind, field)
                 normalized[field] = value
                 if error:
                     messages.append(error)
-                if field in spec.get("required", ()) and value is None:
-                    messages.append(f"{field} is required.")
                 choices = spec.get("choices", {}).get(field)
                 if value is not None and choices and value not in choices:
                     messages.append(f"{field} contains an unknown choice value.")
@@ -254,8 +308,9 @@ def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> Mig
                     messages.append(rule_error)
             source_id = normalized.get(id_field)
             if source_id:
-                if not any(str(source_id).startswith(prefix) for prefix in SYNTHETIC_PREFIXES):
-                    messages.append(f"{id_field} must use a DEV_MIGRATION_ or DEV_SYNTH_ identifier.")
+                id_policy = spec.get("id_policy", contract.get("id_policy", "synthetic"))
+                if not _valid_source_id(source_id, id_policy):
+                    messages.append(f"{id_field} does not match the required {id_policy} identifier format.")
                 source_ids[entity].setdefault(str(source_id), []).append(offset)
             natural_key = tuple(normalized.get(field) for field in spec.get("natural_key", ()))
             if natural_key and all(value is not None for value in natural_key):
@@ -263,13 +318,37 @@ def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> Mig
             row_errors[key] = messages
             row_normalized[key] = normalized
         for duplicate_rows in source_ids[entity].values():
-            if len(duplicate_rows) > 1:
+            if len(duplicate_rows) > 1 and not spec.get("deduplicate_by"):
                 for source_row in duplicate_rows:
                     row_errors[(entity, source_row)].append(f"Duplicate {id_field} in source file.")
         for duplicate_rows in natural_values.values():
             if len(duplicate_rows) > 1:
                 for source_row in duplicate_rows:
                     row_errors[(entity, source_row)].append("Repeated provisional natural key.")
+
+    normalized_indexes: dict[str, dict[str, dict]] = {}
+    for entity in contract["entity_order"]:
+        id_field = contract["entities"][entity]["id_field"]
+        normalized_indexes[entity] = {
+            str(value[id_field]): value
+            for (row_entity, _), value in row_normalized.items()
+            if row_entity == entity and value.get(id_field) is not None
+        }
+
+    for entity in contract["entity_order"]:
+        spec = contract["entities"][entity]
+        for offset, _raw in enumerate(parsed[entity], 2):
+            key = (entity, offset)
+            normalized = row_normalized[key]
+            for target_field, rule in spec.get("derive_parent_fields", {}).items():
+                source_field, parent_entity, parent_key, parent_field = rule
+                source_id = normalized.get(source_field)
+                parent = normalized_indexes[parent_entity].get(str(source_id)) if source_id is not None else None
+                if parent and str(parent.get(parent_key)) == str(source_id):
+                    normalized[target_field] = parent.get(parent_field)
+            for field in spec.get("required", ()):
+                if normalized.get(field) is None:
+                    row_errors[key].append(f"{field} is required.")
 
     valid_ids: dict[str, set[str]] = {entity: set() for entity in contract["entity_order"]}
     for entity in contract["entity_order"]:
@@ -285,9 +364,9 @@ def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> Mig
                     row_errors[key].append(f"{field} references a missing or rejected {parent_entity}.")
 
             if entity == "FLOCK" and not row_errors[key]:
-                facility = next((value for (name, _), value in row_normalized.items() if name == "FACILITY" and value.get("FACILITY_ID") == normalized.get("FACILITY_ID")), None)
-                detail = next((value for (name, _), value in row_normalized.items() if name == "FACILITY_DETAIL" and value.get("FACILITY_DETAIL_ID") == normalized.get("FACILITY_DETAIL_ID")), None)
-                quota = next((value for (name, _), value in row_normalized.items() if name == "QUOTA_REGISTRATION" and value.get("QUOTA_ID") == normalized.get("QUOTA_ID")), None)
+                facility = normalized_indexes.get("FACILITY", {}).get(str(normalized.get("FACILITY_ID")))
+                detail = normalized_indexes.get("FACILITY_DETAIL", {}).get(str(normalized.get("FACILITY_DETAIL_ID")))
+                quota = normalized_indexes.get("QUOTA_REGISTRATION", {}).get(str(normalized.get("QUOTA_ID")))
                 if facility and facility.get("ACCOUNT_ID") != normalized.get("ACCOUNT_ID"):
                     row_errors[key].append("FACILITY_ID does not belong to ACCOUNT_ID.")
                 if detail and detail.get("FACILITY_ID") != normalized.get("FACILITY_ID"):
@@ -295,11 +374,11 @@ def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> Mig
                 if quota and quota.get("ACCOUNT_ID") != normalized.get("ACCOUNT_ID"):
                     row_errors[key].append("QUOTA_ID does not belong to ACCOUNT_ID.")
             if entity == "SALMONELLA_TEST" and not row_errors[key]:
-                flock = next((value for (name, _), value in row_normalized.items() if name == "FLOCK" and value.get("FLOCK_ID") == normalized.get("FLOCK_ID")), None)
+                flock = normalized_indexes.get("FLOCK", {}).get(str(normalized.get("FLOCK_ID")))
                 if flock and flock.get("ACCOUNT_ID") != normalized.get("ACCOUNT_ID"):
                     row_errors[key].append("FLOCK_ID does not belong to ACCOUNT_ID.")
             if entity == "QUOTA_TRANSACTION" and not row_errors[key]:
-                quota = next((value for (name, _), value in row_normalized.items() if name == "QUOTA_REGISTRATION" and value.get("QUOTA_ID") == normalized.get("QUOTA_ID")), None)
+                quota = normalized_indexes.get("QUOTA_REGISTRATION", {}).get(str(normalized.get("QUOTA_ID")))
                 if quota and quota.get("ACCOUNT_ID") != normalized.get("OWNER_ACCOUNT_ID"):
                     row_errors[key].append("OWNER_ACCOUNT_ID does not own QUOTA_ID.")
             if not row_errors[key]:
@@ -356,6 +435,31 @@ def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> Mig
                 "MATCH_STATUS": "CONFIRMED" if status == "READY" else "NO_CANDIDATE",
                 "VALIDATION_MESSAGES": messages,
             })
+        deduplicate_by = contract["entities"][entity].get("deduplicate_by")
+        if deduplicate_by:
+            grouped: dict[object, dict] = {}
+            element_codes: dict[object, set[str]] = {}
+            for record in records[entity]:
+                key_value = record[deduplicate_by]
+                grouped.setdefault(key_value, record)
+                if record.get("ELEMENT_CODE"):
+                    element_codes.setdefault(key_value, set()).add(str(record["ELEMENT_CODE"]))
+            records[entity] = []
+            for key_value, record in grouped.items():
+                stored = dict(record)
+                stored["ELEMENT_CODES"] = ",".join(sorted(element_codes.get(key_value, set())))
+                records[entity].append(stored)
+            canonical = {record[deduplicate_by]: record for record in records[entity]}
+            seen: set[object] = set()
+            for raw_row in raw_rows:
+                if raw_row["SOURCE_ENTITY"] != entity or raw_row["VALIDATION_STATUS"] != "READY":
+                    continue
+                key_value = raw_row["NORMALIZED_DATA"][deduplicate_by]
+                if key_value in seen:
+                    raw_row["NORMALIZED_DATA"] = None
+                else:
+                    raw_row["NORMALIZED_DATA"] = canonical[key_value]
+                    seen.add(key_value)
         unmatched = sum(
             1 for row in raw_rows
             if row["SOURCE_ENTITY"] == entity and row.get("MATCH_STATUS") not in {"CONFIRMED", None}

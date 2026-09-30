@@ -43,6 +43,10 @@ in this repository.
 3. As an operator able to use USERADMIN, SYSADMIN, SECURITYADMIN, and
    ACCOUNTADMIN, run the account foundation and schema/table files in order:
 
+   For an existing `EFNS_DEV` database that only needs the EIMS v3 database
+   upgrade, use `sql/10_EIMS_V3_DEV_Deployment.sql` as the single Snowsight
+   worksheet script instead of replaying the full foundation sequence below.
+
    ```powershell
    snow sql --connection efns-dev --filename sql/00_dev_foundation.sql
    snow sql --connection efns-dev --filename sql/01_setup.sql
@@ -52,6 +56,7 @@ in this repository.
    snow sql --connection efns-dev --filename sql/05_security_tables.sql
    snow sql --connection efns-dev --filename sql/06_least_privilege_grants.sql
    snow sql --connection efns-dev --filename sql/11_eims_migration_foundation.sql
+   snow sql --connection efns-dev --filename sql/12_real_eims_additive_migration.sql
    ```
 
 4. Grant `EFNS_DEV_DEPLOYER` directly to the approved deployment user, then use

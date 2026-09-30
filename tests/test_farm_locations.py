@@ -55,7 +55,13 @@ def test_saved_views_and_dynamic_roles_are_repository_driven():
 
 
 def test_ddl_model_grant_and_page_navigation_contracts():
-    ddl = Path("sql/02_core_tables.sql").read_text(encoding="utf-8").upper()
+    ddl = "\n".join(
+        Path(path).read_text(encoding="utf-8")
+        for path in (
+            "sql/02_core_tables.sql",
+            "sql/12_real_eims_additive_migration.sql",
+        )
+    ).upper()
     grants = Path("sql/06_least_privilege_grants.sql").read_text(encoding="utf-8").upper()
     page = Path("app/pages/18_Farm_Locations.py").read_text(encoding="utf-8")
     assert "CREATE TABLE IF NOT EXISTS EFNS_DEV.CORE.FARM_LOCATION" in ddl

@@ -5,9 +5,17 @@ import io
 import json
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
-from data.migration import MigrationSourceFile, analyze_migration_files, migration_stage_path, migration_stage_prefix
+from data.migration import (
+    MigrationSourceFile,
+    V3_MAPPING_PATH,
+    analyze_migration_files,
+    load_mapping,
+    migration_stage_path,
+    migration_stage_prefix,
+)
 from data.repositories.mock import MockRepository
 from data.connection import ConnectorExecutor
 from scripts.generate_fake_eims_export import generate
@@ -20,6 +28,90 @@ EXPECTED_COUNTS = {
 }
 
 HISTORICAL_V1_TOTAL = 8450
+
+
+def _v3_sources():
+    mapping = load_mapping(V3_MAPPING_PATH)
+    ids = {name: f"00000000-0000-0000-0000-{index:012d}" for index, name in enumerate(mapping["entity_order"], 1)}
+    target_rows = {
+        "ACCOUNT": {"ACCOUNT_ID": ids["ACCOUNT"], "ORGANIZATION_NAME": "Synthetic Account", "DEFAULT_ON_REPORTS": "1"},
+        "CONTACT": {"CONTACT_ID": ids["CONTACT"], "ACCOUNT_ID": ids["ACCOUNT"], "FULL_NAME": "Synthetic Contact"},
+        "FARM_LOCATION": {"FARM_LOCATION_ID": ids["FARM_LOCATION"], "ACCOUNT_ID": ids["ACCOUNT"], "LOCATION_NAME": "Synthetic Location"},
+        "FACILITY": {"FACILITY_ID": ids["FACILITY"], "ACCOUNT_ID": ids["ACCOUNT"], "FARM_LOCATION_ID": ids["FARM_LOCATION"], "FACILITY_NAME": "Synthetic Facility"},
+        "FACILITY_DETAIL": {"FACILITY_DETAIL_ID": ids["FACILITY_DETAIL"], "FACILITY_ID": ids["FACILITY"]},
+        "QUOTA_REGISTRATION": {"QUOTA_ID": ids["QUOTA_REGISTRATION"], "REGISTRATION_NUMBER": "SYN-Q-1", "ACCOUNT_ID": ids["ACCOUNT"], "QUOTA_TYPE": "Layer", "EFFECTIVE_DATE": "2026-01-01T00:00:00Z"},
+        "FLOCK": {"FLOCK_ID": ids["FLOCK"], "FLOCK_NUMBER": "SYN-F-1", "ACCOUNT_ID": ids["ACCOUNT"], "FACILITY_ID": ids["FACILITY"], "PERMIT_NUMBER": "SYN-P-1", "HATCH_DATE": "2026-01-02T13:14:15Z", "BIRD_COUNT": "10", "CREATE_DELIVERY_TRANSACTION": "0.0"},
+        "FLOCK_TRANSACTION": {"FLOCK_TRANSACTION_ID": ids["FLOCK_TRANSACTION"], "FLOCK_ID": ids["FLOCK"], "TRANSACTION_TYPE": "Placement", "QUANTITY": "10", "TRANSACTION_DATE": "2026-01-03"},
+        "QUOTA_TRANSACTION": {"QUOTA_TRANSACTION_ID": ids["QUOTA_TRANSACTION"], "TRANSACTION_TYPE": "Adjustment", "QUOTA_ID": ids["QUOTA_REGISTRATION"], "EFFECTIVE_DATE": "2026-01-04", "QUOTA_COUNT": "-12.5"},
+        "SALMONELLA_TEST": {"SALMONELLA_TEST_ID": ids["SALMONELLA_TEST"], "FLOCK_ID": ids["FLOCK"], "ACCOUNT_ID": ids["ACCOUNT"], "PERMIT_NUMBER": "SYN-P-1", "TESTING_DATE": "2026-01-05"},
+        "SALMONELLA_TEST_SAMPLE": {"SALMONELLA_TEST_SAMPLE_ID": ids["SALMONELLA_TEST_SAMPLE"], "SALMONELLA_TEST_ID": ids["SALMONELLA_TEST"]},
+        "PRODUCTION_RECORD": {"PRODUCTION_ID": ids["PRODUCTION_RECORD"], "PRODUCER_ACCOUNT_ID": ids["ACCOUNT"], "SOURCE_WEEK_CODE": "202601", "TOTAL": "-1.25"},
+        "QUOTA_ALLOCATION": {"QUOTA_ALLOCATION_ID": ids["QUOTA_ALLOCATION"], "ALLOCATION_COUNT": "0", "EFFECTIVE_DATE": "2026-01-01", "QUOTA_TYPE": "Layer"},
+        "DIM_EFC_DATE": {"DAY": "2026-01-01T00:00:00Z", "ELEMENT_CODE": "A", "DATE_VALUE": "2026-01-01"},
+    }
+    sources = []
+    for entity in mapping["entity_order"]:
+        spec = mapping["entities"][entity]
+        rows = []
+        for target in ([target_rows[entity], {**target_rows[entity], "ELEMENT_CODE": "B"}]
+                       if entity == "DIM_EFC_DATE" else [target_rows[entity]]):
+            source = {}
+            for field, value in target.items():
+                source_field = spec.get("field_map", {}).get(field)
+                if source_field:
+                    source[source_field] = value
+                elif field == "FLOCK_NUMBER":
+                    source[spec["fallbacks"][field][0]] = value
+            rows.append(source)
+        content = pd.DataFrame(rows).to_csv(index=False).encode("utf-8-sig")
+        sources.append(MigrationSourceFile(spec["filename"], content))
+    return sources, mapping, ids
+
+
+def test_v3_named_column_package_preserves_types_relationships_and_date_deduplication():
+    sources, mapping, ids = _v3_sources()
+    analysis = analyze_migration_files(sources, mapping)
+    assert analysis.schema_version == "EFNS-EIMS-DATAVERSE-3"
+    assert analysis.ready_count == 15
+    assert analysis.rejected_count == 0
+    assert analysis.records["ACCOUNT"][0]["ACCOUNT_ID"] == ids["ACCOUNT"]
+    assert analysis.records["ACCOUNT"][0]["DEFAULT_ON_REPORTS"] is True
+    assert analysis.records["FLOCK"][0]["CREATE_DELIVERY_TRANSACTION"] is False
+    assert analysis.records["FLOCK"][0]["HATCH_DATE"].isoformat() == "2026-01-02"
+    assert str(analysis.records["QUOTA_TRANSACTION"][0]["QUOTA_COUNT"]) == "-12.5"
+    assert analysis.records["QUOTA_TRANSACTION"][0]["OWNER_ACCOUNT_ID"] == ids["ACCOUNT"]
+    assert len(analysis.records["DIM_EFC_DATE"]) == 1
+    assert analysis.records["DIM_EFC_DATE"][0]["ELEMENT_CODES"] == "A,B"
+
+
+def test_v3_reconciliation_is_persisted_and_commit_rolls_back_atomically(monkeypatch):
+    sources, mapping, _ids = _v3_sources()
+    analysis = analyze_migration_files(sources, mapping)
+    repository = MockRepository()
+    repository.prepare_migration_batch(
+        {"MIGRATION_BATCH_ID": analysis.batch_id, "PACKAGE_HASH": analysis.package_hash,
+         "SCHEMA_VERSION": analysis.schema_version},
+        analysis.files,
+        analysis.raw_rows,
+    )
+    reconciliation = repository.get_migration_reconciliation(analysis.batch_id)
+    assert reconciliation["SOURCE_ROWS"].sum() == analysis.ready_count + analysis.rejected_count
+    baseline = len(repository.get_accounts())
+    monkeypatch.setattr(repository, "insert_production_records", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("rollback")))
+    with pytest.raises(RuntimeError, match="rollback"):
+        repository.commit_migration_batch(analysis.batch_id)
+    assert len(repository.get_accounts()) == baseline
+
+
+def test_real_additive_sql_is_core_scoped_and_non_destructive():
+    sql = Path("sql/12_real_eims_additive_migration.sql").read_text(encoding="utf-8").upper()
+    for table in ("CONTACT", "QUOTA_ALLOCATION", "DIM_EFC_DATE"):
+        assert f"CREATE TABLE IF NOT EXISTS EFNS_DEV.CORE.{table}" in sql
+    assert "CREATE TABLE IF NOT EXISTS EFNS_DEV.RAW.MIGRATION_ERROR" in sql
+    assert "CREATE TABLE IF NOT EXISTS EFNS_DEV.RAW.MIGRATION_RECONCILIATION" in sql
+    assert "EFNS_DEV.REPORTING.DIM_EFC_DATE" not in sql
+    assert "TRUNCATE" not in sql
+    assert "DROP TABLE" not in sql
 
 
 def _sources(directory: Path):

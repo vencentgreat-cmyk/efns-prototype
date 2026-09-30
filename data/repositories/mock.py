@@ -14,6 +14,7 @@ import pandas as pd
 from data.repositories.base import BaseRepository, ConcurrencyError
 from data.synthetic import generate_all
 from data.validation import (
+    normalize_flock_dates,
     validate_farm_location,
     validate_flock,
     validate_quota_registration,
@@ -47,6 +48,7 @@ class MockRepository(BaseRepository):
     def __init__(self, seed: int = 42):
         data = generate_all(seed=seed)
         self._accounts = data["accounts"].copy()
+        self._contacts = pd.DataFrame(columns=["CONTACT_ID", "ACCOUNT_ID", "FULL_NAME", "STATUS"])
         self._farm_locations = data["farm_locations"].copy()
         self._facilities = data["facilities"].copy()
         self._facility_details = data["facility_details"].copy()
@@ -54,16 +56,20 @@ class MockRepository(BaseRepository):
         self._flock_transactions = data["flock_transactions"].copy()
         self._quota_registrations = data["quota_registrations"].copy()
         self._quota_transactions = data["quota_transactions"].copy()
+        self._quota_allocations = pd.DataFrame(columns=["QUOTA_ALLOCATION_ID", "QUOTA_TYPE", "PROVINCE", "STATUS"])
         self._salmonella_tests = data["salmonella_tests"].copy()
         self._salmonella_test_samples = data["salmonella_test_samples"].copy()
         self._production = data["production"].copy()
         self._size_breakdown = data["size_breakdown"].copy()
+        self._efc_dates = pd.DataFrame(columns=["DAY", "ELEMENT_CODE", "ELEMENT_CODES"])
         self._import_batches: list[dict] = []
         self._raw_rows: list[dict] = []
         self._migration_batches: list[dict] = []
         self._migration_files: list[dict] = []
         self._migration_raw_rows: list[dict] = []
         self._migration_id_map: list[dict] = []
+        self._migration_errors: list[dict] = []
+        self._migration_reconciliation: list[dict] = []
         # Link production to a synthetic import batch
         self._ensure_default_batch()
 
@@ -203,6 +209,20 @@ class MockRepository(BaseRepository):
         self._accounts = self._accounts[self._accounts["ACCOUNT_ID"] != account_id]
         return len(self._accounts) < before
 
+    def get_contacts(self, account_id=None, statuses=None, keyword=None) -> pd.DataFrame:
+        frame = self._contacts.copy()
+        if account_id:
+            frame = frame[frame["ACCOUNT_ID"] == account_id]
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
+        if keyword and not frame.empty:
+            fields = [field for field in ("FULL_NAME", "EMAIL", "PHONE", "JOB_TITLE") if field in frame]
+            mask = frame[fields].fillna("").astype(str).apply(
+                lambda column: column.str.contains(keyword, case=False, regex=False)
+            ).any(axis=1)
+            frame = frame[mask]
+        return frame.copy()
+
     # Farm Locations / Dynamics "Other Addresses" (provisional)
 
     def get_farm_locations(self, farm_location_id=None, account_id=None, statuses=None, keyword=None) -> pd.DataFrame:
@@ -320,6 +340,7 @@ class MockRepository(BaseRepository):
         return match.iloc[0].to_dict() if len(match) else None
 
     def upsert_flock(self, record: dict) -> str:
+        record = normalize_flock_dates(record)
         errors = validate_flock(self, record)
         if errors:
             raise ValueError(" ".join(errors))
@@ -514,6 +535,16 @@ class MockRepository(BaseRepository):
         ]
         return len(self._quota_transactions) < before
 
+    def get_quota_allocations(self, quota_type=None, province=None, statuses=None) -> pd.DataFrame:
+        frame = self._quota_allocations.copy()
+        if quota_type:
+            frame = frame[frame["QUOTA_TYPE"] == quota_type]
+        if province:
+            frame = frame[frame["PROVINCE"] == province]
+        if statuses is not None:
+            frame = frame[frame["STATUS"].isin(statuses)]
+        return frame.copy()
+
     # ------------------------------------------------------------------
     # Salmonella tests
     # ------------------------------------------------------------------
@@ -632,6 +663,217 @@ class MockRepository(BaseRepository):
             self._import_batches, self._raw_rows, self._production = snapshots
             raise
 
+    def import_flock_quota_batch(
+        self,
+        batch: dict,
+        quota_records: list[dict],
+        flock_records: list[dict],
+    ) -> dict:
+        """Apply a validated mixed batch with in-memory rollback semantics."""
+        file_hash = batch.get("FILE_HASH")
+        if file_hash and self.find_import_by_hash(file_hash):
+            raise ValueError("This exact file has already been imported.")
+        snapshots = (
+            self._quota_registrations.copy(deep=True),
+            self._flocks.copy(deep=True),
+            [dict(item) for item in self._import_batches],
+        )
+        created_count = 0
+        updated_count = 0
+        try:
+            for source in quota_records:
+                record = dict(source)
+                action = record.pop("ACTION")
+                registration = str(record.get("REGISTRATION_NUMBER") or "").strip()
+                if action not in {"CREATE", "UPDATE"}:
+                    raise ValueError("Unsupported quota import action.")
+                if not registration.startswith("DEV_DEMO_"):
+                    raise ValueError("Quota import is restricted to DEV_DEMO_ identifiers.")
+                matches = self._quota_registrations[
+                    self._quota_registrations["REGISTRATION_NUMBER"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .str.casefold()
+                    == registration.casefold()
+                ]
+                if action == "CREATE" and not matches.empty:
+                    raise ValueError("Registration Number already exists and cannot be created.")
+                if action == "UPDATE" and len(matches) != 1:
+                    raise ValueError("Registration Number does not resolve to one existing record.")
+                if action == "UPDATE" and str(matches.iloc[0]["QUOTA_ID"]) != str(record.get("QUOTA_ID")):
+                    raise ValueError("Quota target changed after validation.")
+                self.upsert_quota_registration(record)
+                created_count += int(action == "CREATE")
+                updated_count += int(action == "UPDATE")
+
+            for source in flock_records:
+                record = dict(source)
+                action = record.pop("ACTION")
+                record.pop("QUOTA_REGISTRATION_NUMBER", None)
+                flock_number = str(record.get("FLOCK_NUMBER") or "").strip()
+                if action not in {"CREATE", "UPDATE"}:
+                    raise ValueError("Unsupported flock import action.")
+                if not flock_number.startswith("DEV_DEMO_"):
+                    raise ValueError("Flock import is restricted to DEV_DEMO_ identifiers.")
+                matches = self._flocks[
+                    self._flocks["FLOCK_NUMBER"]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                    .str.casefold()
+                    == flock_number.casefold()
+                ]
+                if action == "CREATE" and not matches.empty:
+                    raise ValueError("Flock Number already exists and cannot be created.")
+                if action == "UPDATE" and len(matches) != 1:
+                    raise ValueError("Flock Number does not resolve to one existing record.")
+                if action == "UPDATE" and str(matches.iloc[0]["FLOCK_ID"]) != str(record.get("FLOCK_ID")):
+                    raise ValueError("Flock target changed after validation.")
+                permit = str(record.get("PERMIT_NUMBER") or "").strip().casefold()
+                permit_matches = self._flocks[
+                    self._flocks["PERMIT_NUMBER"].fillna("").astype(str).str.strip().str.casefold() == permit
+                ]
+                if action == "UPDATE" and record.get("FLOCK_ID"):
+                    permit_matches = permit_matches[permit_matches["FLOCK_ID"] != record["FLOCK_ID"]]
+                if permit and not permit_matches.empty:
+                    raise ValueError("Permit Number is already used by another Flock.")
+                self.upsert_flock(record)
+                created_count += int(action == "CREATE")
+                updated_count += int(action == "UPDATE")
+
+            total_count = len(quota_records) + len(flock_records)
+            import_id = self.create_import_batch(
+                {
+                    **batch,
+                    "SOURCE": "Flock & Quota Import",
+                    "WORKSHEET_NAME": "Batch Import",
+                    "SOURCE_RECORD_COUNT": total_count,
+                    "ROW_COUNT": total_count,
+                    "ERROR_COUNT": int(batch.get("ERROR_COUNT", 0)),
+                    "STATUS": "Committed",
+                }
+            )
+            return {
+                "import_id": import_id,
+                "batch_id": batch.get("BATCH_ID"),
+                "filename": batch.get("FILENAME"),
+                "file_hash": file_hash,
+                "total_count": total_count,
+                "quota_count": len(quota_records),
+                "flock_count": len(flock_records),
+                "created_count": created_count,
+                "updated_count": updated_count,
+                "rejected_count": int(batch.get("ERROR_COUNT", 0)),
+                "status": "Committed",
+            }
+        except Exception:
+            self._quota_registrations, self._flocks, self._import_batches = snapshots
+            raise
+
+    def import_operational_flock_quota_batch(
+        self,
+        batch: dict,
+        records_by_entity: dict[str, list[dict]],
+        raw_rows: list[dict],
+    ) -> dict:
+        """Commit accepted operational rows with full in-memory rollback."""
+        file_hash = batch.get("FILE_HASH")
+        if file_hash and self.find_import_by_hash(file_hash):
+            raise ValueError("This exact upload has already been imported.")
+        snapshots = (
+            self._quota_registrations.copy(deep=True), self._flocks.copy(deep=True),
+            self._flock_transactions.copy(deep=True), self._quota_transactions.copy(deep=True),
+            [dict(item) for item in self._import_batches], [dict(item) for item in self._raw_rows],
+        )
+        frames = {
+            "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
+            "FLOCK": ("_flocks", "FLOCK_ID"),
+            "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
+            "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"),
+        }
+        counts = {entity: 0 for entity in frames}
+        created_count = updated_count = 0
+        try:
+            for entity in frames:
+                attribute, key = frames[entity]
+                for source in records_by_entity.get(entity, []):
+                    record = dict(source)
+                    action = record.pop("ACTION", "")
+                    entity_id = record.get(key)
+                    current_frame = getattr(self, attribute)
+                    exists = entity_id in set(current_frame.get(key, pd.Series(dtype=str)).astype(str))
+                    if action not in {"CREATE", "UPDATE"}:
+                        raise ValueError("Unsupported operational import action.")
+                    if action == "CREATE" and exists:
+                        raise ValueError("A record selected for creation already exists.")
+                    if action == "UPDATE" and not exists:
+                        raise ValueError("A record selected for update no longer exists.")
+
+                    if entity == "QUOTA_REGISTRATION":
+                        if self.get_account(record.get("ACCOUNT_ID")) is None:
+                            raise ValueError("Account no longer exists.")
+                        self.upsert_quota_registration(record)
+                    elif entity == "FLOCK":
+                        if self.get_account(record.get("ACCOUNT_ID")) is None:
+                            raise ValueError("Account no longer exists.")
+                        facility_id = record.get("FACILITY_ID")
+                        if facility_id:
+                            matches = self._facilities[self._facilities["FACILITY_ID"] == facility_id]
+                            facility = matches.iloc[0].to_dict() if len(matches) == 1 else None
+                            if facility is None or str(facility.get("ACCOUNT_ID")) != str(record.get("ACCOUNT_ID")):
+                                raise ValueError("Facility no longer belongs to the selected Account.")
+                        detail_id = record.get("FACILITY_DETAIL_ID")
+                        if detail_id:
+                            details = self._facility_details[self._facility_details["FACILITY_DETAIL_ID"] == detail_id]
+                            if len(details) != 1 or str(details.iloc[0].get("FACILITY_ID")) != str(facility_id):
+                                raise ValueError("Facility Detail no longer belongs to the selected Facility.")
+                        quota_id = record.get("QUOTA_ID")
+                        if quota_id:
+                            quota = self.get_quota_registration(quota_id)
+                            if quota is None or str(quota.get("ACCOUNT_ID")) != str(record.get("ACCOUNT_ID")):
+                                raise ValueError("Quota Registration no longer belongs to the selected Account.")
+                        self.upsert_flock(record)
+                    elif entity == "FLOCK_TRANSACTION":
+                        if self.get_flock(record.get("FLOCK_ID")) is None:
+                            raise ValueError("Flock no longer exists.")
+                        self._upsert_frame(attribute, key, record)
+                    else:
+                        quota = self.get_quota_registration(record.get("QUOTA_ID"))
+                        if quota is None:
+                            raise ValueError("Quota Registration no longer exists.")
+                        record["OWNER_ACCOUNT_ID"] = quota.get("ACCOUNT_ID")
+                        if record.get("RELATED_ACCOUNT_ID") and self.get_account(record["RELATED_ACCOUNT_ID"]) is None:
+                            raise ValueError("Related Account no longer exists.")
+                        if record.get("RELATED_QUOTA_ID") and self.get_quota_registration(record["RELATED_QUOTA_ID"]) is None:
+                            raise ValueError("Related Quota no longer exists.")
+                        if record.get("RELATED_TRANSACTION_ID") and self.get_quota_transaction(record["RELATED_TRANSACTION_ID"]) is None:
+                            raise ValueError("Related Transaction no longer exists.")
+                        self._upsert_frame(attribute, key, record)
+                    counts[entity] += 1
+                    created_count += int(action == "CREATE")
+                    updated_count += int(action == "UPDATE")
+
+            total_count = sum(counts.values())
+            import_id = self.create_import_batch({
+                **batch, "SOURCE": "Daily Flock & Quota Import",
+                "SOURCE_RECORD_COUNT": len(raw_rows), "ROW_COUNT": total_count,
+                "ERROR_COUNT": len(raw_rows) - total_count, "STATUS": "Committed",
+            })
+            self.insert_raw_rows(import_id, raw_rows)
+            return {
+                "import_id": import_id, "file_hash": file_hash, "filename": batch.get("FILENAME"),
+                "total_count": total_count, "created_count": created_count,
+                "updated_count": updated_count, "rejected_count": len(raw_rows) - total_count,
+                "entity_counts": counts, "status": "Committed",
+            }
+        except Exception:
+            (
+                self._quota_registrations, self._flocks, self._flock_transactions,
+                self._quota_transactions, self._import_batches, self._raw_rows,
+            ) = snapshots
+            raise
+
     def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:
         for row in rows:
             stored = dict(row)
@@ -656,6 +898,12 @@ class MockRepository(BaseRepository):
     def get_migration_raw_rows(self, batch_id: str) -> pd.DataFrame:
         return pd.DataFrame([dict(row) for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id])
 
+    def get_migration_reconciliation(self, batch_id: str) -> pd.DataFrame:
+        return pd.DataFrame([
+            dict(row) for row in self._migration_reconciliation
+            if row["MIGRATION_BATCH_ID"] == batch_id
+        ])
+
     def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:
         from data.migration import migration_stage_path
         del content
@@ -679,6 +927,25 @@ class MockRepository(BaseRepository):
                     "MIGRATION_BATCH_ID": batch_id, "SOURCE_ENTITY": item["SOURCE_ENTITY"],
                     "SOURCE_ID": item.get("SOURCE_ID"), "TARGET_ID": item["TARGET_ID"], "STATUS": "READY",
                 })
+            for message in item.get("VALIDATION_MESSAGES", []):
+                self._migration_errors.append({
+                    "MIGRATION_BATCH_ID": batch_id,
+                    "SOURCE_FILENAME": item["SOURCE_FILENAME"],
+                    "SOURCE_ENTITY": item["SOURCE_ENTITY"],
+                    "SOURCE_ROW_NUMBER": item["SOURCE_ROW_NUMBER"],
+                    "FIELD_NAME": str(message).split(" ", 1)[0].rstrip("."),
+                    "ERROR_MESSAGE": str(message),
+                })
+        for entity in sorted({row["SOURCE_ENTITY"] for row in raw_rows}):
+            entity_rows = [row for row in raw_rows if row["SOURCE_ENTITY"] == entity]
+            self._migration_reconciliation.append({
+                "MIGRATION_BATCH_ID": batch_id,
+                "SOURCE_ENTITY": entity,
+                "SOURCE_ROWS": len(entity_rows),
+                "READY_ROWS": sum(row["VALIDATION_STATUS"] == "READY" for row in entity_rows),
+                "REJECTED_ROWS": sum(row["VALIDATION_STATUS"] == "REJECTED" for row in entity_rows),
+                "INSERTED_ROWS": 0,
+            })
         return batch_id
 
     def commit_migration_batch(self, batch_id: str) -> dict:
@@ -687,38 +954,53 @@ class MockRepository(BaseRepository):
             raise ValueError("Migration batch was not found.")
         if batch.get("STATUS") == "COMMITTED":
             return {"batch_id": batch_id, "counts": dict(batch.get("COMMITTED_COUNTS", {})), "idempotent": True}
-        attributes = ["_accounts", "_farm_locations", "_facilities", "_facility_details", "_quota_registrations", "_flocks", "_flock_transactions", "_quota_transactions", "_salmonella_tests", "_production"]
+        entity_frames = {
+            "ACCOUNT": ("_accounts", "ACCOUNT_ID"),
+            "CONTACT": ("_contacts", "CONTACT_ID"),
+            "FARM_LOCATION": ("_farm_locations", "FARM_LOCATION_ID"),
+            "FACILITY": ("_facilities", "FACILITY_ID"),
+            "FACILITY_DETAIL": ("_facility_details", "FACILITY_DETAIL_ID"),
+            "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
+            "FLOCK": ("_flocks", "FLOCK_ID"),
+            "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
+            "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"),
+            "SALMONELLA_TEST": ("_salmonella_tests", "SALMONELLA_TEST_ID"),
+            "SALMONELLA_TEST_SAMPLE": ("_salmonella_test_samples", "SALMONELLA_TEST_SAMPLE_ID"),
+            "QUOTA_ALLOCATION": ("_quota_allocations", "QUOTA_ALLOCATION_ID"),
+            "DIM_EFC_DATE": ("_efc_dates", "DAY"),
+        }
+        attributes = [attribute for attribute, _key in entity_frames.values()] + ["_production"]
         snapshots = {name: getattr(self, name).copy(deep=True) for name in attributes}
         import_snapshot = [dict(row) for row in self._import_batches]
-        methods = {
-            "ACCOUNT": ("ACCOUNT_ID", self.upsert_account), "FARM_LOCATION": ("FARM_LOCATION_ID", self.upsert_farm_location), "FACILITY": ("FACILITY_ID", self.upsert_facility),
-            "FACILITY_DETAIL": ("FACILITY_DETAIL_ID", self.upsert_facility_detail),
-            "QUOTA_REGISTRATION": ("QUOTA_ID", self.upsert_quota_registration), "FLOCK": ("FLOCK_ID", self.upsert_flock),
-            "FLOCK_TRANSACTION": ("FLOCK_TRANSACTION_ID", self.upsert_flock_transaction),
-            "QUOTA_TRANSACTION": ("QUOTA_TRANSACTION_ID", self.upsert_quota_transaction),
-            "SALMONELLA_TEST": ("SALMONELLA_TEST_ID", self.upsert_salmonella_test),
-        }
         counts = {}
         try:
             from data.migration import load_mapping_for_version
             rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id and row["VALIDATION_STATUS"] == "READY"]
             for entity in load_mapping_for_version(batch.get("SCHEMA_VERSION"))["entity_order"]:
-                records = [dict(row["NORMALIZED_DATA"]) for row in rows if row["SOURCE_ENTITY"] == entity]
+                records = [
+                    dict(row["NORMALIZED_DATA"]) for row in rows
+                    if row["SOURCE_ENTITY"] == entity and row.get("NORMALIZED_DATA") is not None
+                ]
                 if entity == "PRODUCTION_RECORD":
                     if not any(item.get("IMPORT_ID") == batch_id for item in self._import_batches):
-                        self.create_import_batch({"IMPORT_ID": batch_id, "FILENAME": "Synthetic EIMS migration", "SOURCE": "EIMS_MIGRATION", "STATUS": "Validated"})
+                        self.create_import_batch({"IMPORT_ID": batch_id, "FILENAME": "EIMS migration", "SOURCE": "EIMS_MIGRATION", "STATUS": "Validated"})
                     existing = set(self._production.get("PRODUCTION_ID", pd.Series(dtype=str)).astype(str))
                     pending = [record for record in records if str(record["PRODUCTION_ID"]) not in existing]
                     counts[entity] = self.insert_production_records(pd.DataFrame(pending), batch_id) if pending else 0
                 else:
-                    key, method = methods[entity]
-                    attribute = attributes[list(methods).index(entity)]
-                    existing = set(getattr(self, attribute)[key].astype(str))
+                    attribute, key = entity_frames[entity]
+                    frame = getattr(self, attribute)
+                    existing = set(frame[key].astype(str)) if key in frame else set()
                     counts[entity] = 0
                     for record in records:
                         if str(record[key]) not in existing:
-                            method(record); counts[entity] += 1
+                            self._upsert_frame(attribute, key, record)
+                            existing.add(str(record[key]))
+                            counts[entity] += 1
             batch["STATUS"] = "COMMITTED"; batch["COMMITTED_COUNTS"] = counts; batch["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
+            for row in self._migration_reconciliation:
+                if row["MIGRATION_BATCH_ID"] == batch_id:
+                    row["INSERTED_ROWS"] = counts.get(row["SOURCE_ENTITY"], 0)
             for row in self._migration_id_map:
                 if row["MIGRATION_BATCH_ID"] == batch_id: row["STATUS"] = "COMMITTED"
             return {"batch_id": batch_id, "counts": counts, "idempotent": False}
@@ -735,10 +1017,14 @@ class MockRepository(BaseRepository):
         targets = {}
         for row in maps: targets.setdefault(row["SOURCE_ENTITY"], set()).add(row["TARGET_ID"])
         frame_map = {
-            "ACCOUNT": ("_accounts", "ACCOUNT_ID"), "FARM_LOCATION": ("_farm_locations", "FARM_LOCATION_ID"), "FACILITY": ("_facilities", "FACILITY_ID"),
+            "ACCOUNT": ("_accounts", "ACCOUNT_ID"), "CONTACT": ("_contacts", "CONTACT_ID"),
+            "FARM_LOCATION": ("_farm_locations", "FARM_LOCATION_ID"), "FACILITY": ("_facilities", "FACILITY_ID"),
             "FACILITY_DETAIL": ("_facility_details", "FACILITY_DETAIL_ID"), "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
             "FLOCK": ("_flocks", "FLOCK_ID"), "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
             "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"), "SALMONELLA_TEST": ("_salmonella_tests", "SALMONELLA_TEST_ID"),
+            "SALMONELLA_TEST_SAMPLE": ("_salmonella_test_samples", "SALMONELLA_TEST_SAMPLE_ID"),
+            "QUOTA_ALLOCATION": ("_quota_allocations", "QUOTA_ALLOCATION_ID"),
+            "DIM_EFC_DATE": ("_efc_dates", "DAY"),
             "PRODUCTION_RECORD": ("_production", "PRODUCTION_ID"),
         }
         for entity in reversed(list(frame_map)):
@@ -749,6 +1035,10 @@ class MockRepository(BaseRepository):
         self._migration_files = [row for row in self._migration_files if row["MIGRATION_BATCH_ID"] != batch_id]
         self._migration_raw_rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] != batch_id]
         self._migration_id_map = [row for row in self._migration_id_map if row["MIGRATION_BATCH_ID"] != batch_id]
+        self._migration_errors = [row for row in self._migration_errors if row["MIGRATION_BATCH_ID"] != batch_id]
+        self._migration_reconciliation = [
+            row for row in self._migration_reconciliation if row["MIGRATION_BATCH_ID"] != batch_id
+        ]
         return True
 
     def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:
@@ -849,6 +1139,14 @@ class MockRepository(BaseRepository):
             "total_rejected": float(total_rejected),
             "total_loss": float(total_loss),
         }
+
+    def get_efc_dates(self, date_from=None, date_to=None) -> pd.DataFrame:
+        frame = self._efc_dates.copy()
+        if date_from is not None and "DAY" in frame:
+            frame = frame[pd.to_datetime(frame["DAY"]).dt.date >= date_from]
+        if date_to is not None and "DAY" in frame:
+            frame = frame[pd.to_datetime(frame["DAY"]).dt.date <= date_to]
+        return frame.sort_values("DAY").copy() if "DAY" in frame else frame
 
     def get_dashboard_metrics(self) -> dict:
         today = dt.date.today()

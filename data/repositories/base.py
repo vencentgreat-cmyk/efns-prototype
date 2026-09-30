@@ -108,6 +108,15 @@ class BaseRepository(ABC):
         """Soft or hard delete. Returns True if deleted."""
         ...
 
+    @abstractmethod
+    def get_contacts(
+        self, account_id: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
+        keyword: str | None = None,
+    ) -> pd.DataFrame:
+        """Return migrated Dataverse contacts."""
+        ...
+
     # Farm Locations / Dynamics "Other Addresses" (provisional)
 
     @abstractmethod
@@ -269,6 +278,15 @@ class BaseRepository(ABC):
     def delete_quota_transaction(self, transaction_id: str) -> bool:
         ...
 
+    @abstractmethod
+    def get_quota_allocations(
+        self, quota_type: Optional[str] = None,
+        province: Optional[str] = None,
+        statuses: tuple[str, ...] | None = None,
+    ) -> pd.DataFrame:
+        """Return historical EIMS quota allocations."""
+        ...
+
     # Salmonella testing (provisional)
     @abstractmethod
     def get_salmonella_tests(
@@ -333,6 +351,26 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
+    def import_flock_quota_batch(
+        self,
+        batch: dict,
+        quota_records: list[dict],
+        flock_records: list[dict],
+    ) -> dict:
+        """Persist one validated Flock and Quota batch atomically."""
+        ...
+
+    @abstractmethod
+    def import_operational_flock_quota_batch(
+        self,
+        batch: dict,
+        records_by_entity: dict[str, list[dict]],
+        raw_rows: list[dict],
+    ) -> dict:
+        """Persist accepted daily Flock/Quota rows and tracking data atomically."""
+        ...
+
+    @abstractmethod
     def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:
         """Preserve source rows and their technical validation state."""
         ...
@@ -354,6 +392,11 @@ class BaseRepository(ABC):
 
     @abstractmethod
     def get_migration_raw_rows(self, batch_id: str) -> pd.DataFrame:
+        ...
+
+    @abstractmethod
+    def get_migration_reconciliation(self, batch_id: str) -> pd.DataFrame:
+        """Return safe per-entity source, validation, and inserted counts."""
         ...
 
     @abstractmethod
@@ -392,6 +435,14 @@ class BaseRepository(ABC):
     @abstractmethod
     def get_production_summary_metrics(self) -> dict:
         """Return aggregate summary metrics for the home page."""
+        ...
+
+    @abstractmethod
+    def get_efc_dates(
+        self, date_from: Optional[object] = None,
+        date_to: Optional[object] = None,
+    ) -> pd.DataFrame:
+        """Return the deduplicated EFC reporting date dimension."""
         ...
 
     @abstractmethod

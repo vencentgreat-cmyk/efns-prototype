@@ -195,8 +195,18 @@ pages = {
                 title="Facility Details",
                 icon=":material/home_work:",
             ),
+            st.Page(
+                page_file("20_EIMS_Reference_Data.py"),
+                title="EIMS Reference Data",
+                icon=":material/dataset:",
+            ),
         ],
         "Flock Management": [
+            st.Page(
+                page_file("19_Daily_Flock_Quota_Import.py"),
+                title="Daily Flock & Quota Import",
+                icon=":material/upload_file:",
+            ),
             st.Page(page_file("5_Flocks.py"), title="Flocks", icon=":material/egg:"),
             st.Page(page_file("6_Flock_Transactions.py"), title="Flock Transactions", icon=":material/swap_horiz:"),
             st.Page(page_file("9_Salmonella_Tests.py"), title="Salmonella Tests", icon=":material/science:"),
