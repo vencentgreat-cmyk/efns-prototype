@@ -74,6 +74,8 @@ def check() -> list[str]:
         "ALTER TABLE IF EXISTS EFNS_DEV.CORE.QUOTA_TRANSACTION ADD COLUMN IF NOT EXISTS RELATED_TRANSACTION_ID",
         "FK_QUOTA_TRANSACTION_RELATED_TRANSACTION",
         "CREATE ROLE IF NOT EXISTS EFNS_DEV_APP_OWNER", "EFNS_DEV_APP_OWNER_ROLE",
+        "ALTER COLUMN ENTITY_ID SET DATA TYPE VARCHAR(1000)",
+        "INVALID_AUDIT_ENTITY_ID_COLUMNS",
         "ERROR_CATEGORY", "READY_FOR_EIMS_V3_VALIDATION",
     ):
         if required_sql not in eims_v3_deployment:
@@ -156,6 +158,12 @@ def check() -> list[str]:
     if "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE EFNS_DEV.CORE.FARM_LOCATION TO ROLE EFNS_DEV_APP_OWNER;" not in normalized_grants:
         errors.append("Farm Location must have one exact operational CRUD grant for the app owner.")
 
+    security_ddl = (ROOT / "sql" / "05_security_tables.sql").read_text(encoding="utf-8").upper()
+    if not re.search(r"\bENTITY_ID\s+VARCHAR\(1000\)", security_ddl):
+        errors.append("APP.AUDIT_EVENT.ENTITY_ID must be declared as VARCHAR(1000).")
+    if "ALTER COLUMN ENTITY_ID SET DATA TYPE VARCHAR(1000)" not in security_ddl:
+        errors.append("Existing APP.AUDIT_EVENT tables must widen ENTITY_ID to VARCHAR(1000).")
+
     utc_ntz = "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ"
     for ddl_name in ("02_core_tables.sql", "03_production_tables.sql"):
         ddl = (ROOT / "sql" / ddl_name).read_text(encoding="utf-8")
@@ -178,6 +186,8 @@ def check() -> list[str]:
         errors.append("SnowflakeRepository must declare the typed PRODUCTION_RECORD numeric contract.")
     if "normalize_numeric_bind" not in repository or "_NULL_NUMERIC_TEXT" not in repository:
         errors.append("SnowflakeRepository must normalize missing numeric bind values at its boundary.")
+    if "normalize_migration_identifier_bind" not in repository:
+        errors.append("SnowflakeRepository must normalize migration lineage identifiers as VARCHAR binds.")
 
     connection = (ROOT / "data" / "connection.py").read_text(encoding="utf-8")
     if "_literalize_null_bindings" not in connection:

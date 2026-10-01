@@ -132,6 +132,15 @@ def _is_missing_bind(value) -> bool:
         return False
 
 
+def normalize_migration_identifier_bind(value) -> str | None:
+    """Return a type-stable VARCHAR bind for migration lineage identifiers."""
+    if _is_missing_bind(value):
+        return None
+    if isinstance(value, (dt.datetime, dt.date)):
+        return value.isoformat()
+    return str(value)
+
+
 def normalize_numeric_bind(
     value,
     field: str,
@@ -705,7 +714,9 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
             )
             tx.executemany(raw_sql, [(
                 row["MIGRATION_RAW_ROW_ID"], batch_id, row["SOURCE_FILENAME"], row["SOURCE_ENTITY"],
-                row["SOURCE_ROW_NUMBER"], row.get("SOURCE_ID"), row.get("TARGET_ID"),
+                row["SOURCE_ROW_NUMBER"],
+                normalize_migration_identifier_bind(row.get("SOURCE_ID")),
+                normalize_migration_identifier_bind(row.get("TARGET_ID")),
                 json.dumps(row.get("RAW_DATA"), default=str), json.dumps(row.get("NORMALIZED_DATA"), default=str),
                 row["VALIDATION_STATUS"], row.get("MATCH_STATUS"), json.dumps(row.get("VALIDATION_MESSAGES", []), default=str),
             ) for row in raw_rows])
@@ -746,7 +757,11 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                 f"VALUES (%s, %s, %s, %s, %s, %s, {UTC_NOW_NTZ}, {UTC_NOW_NTZ})"
             )
             ready = [row for row in raw_rows if row["VALIDATION_STATUS"] == "READY" and row.get("TARGET_ID")]
-            tx.executemany(map_sql, [(str(uuid.uuid4()), batch_id, row["SOURCE_ENTITY"], row.get("SOURCE_ID"), row["TARGET_ID"], "READY") for row in ready])
+            tx.executemany(map_sql, [(
+                str(uuid.uuid4()), batch_id, row["SOURCE_ENTITY"],
+                normalize_migration_identifier_bind(row.get("SOURCE_ID")),
+                normalize_migration_identifier_bind(row["TARGET_ID"]), "READY",
+            ) for row in ready])
         return batch_id
 
     @staticmethod

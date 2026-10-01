@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import datetime as dt
+from contextlib import contextmanager
 from pathlib import Path
 
 import pandas as pd
@@ -17,6 +19,7 @@ from data.migration import (
     migration_stage_prefix,
 )
 from data.repositories.mock import MockRepository
+from data.repositories.snowflake import SnowflakeRepository
 from data.connection import ConnectorExecutor
 from scripts.generate_fake_eims_export import generate
 
@@ -217,6 +220,89 @@ def test_connector_batches_insert_select_without_native_executemany_rewrite():
     assert count == 2
     assert " UNION ALL SELECT " in calls[0][0]
     assert calls[0][1] == (1, '{}', 2, '{}')
+
+
+def test_snowflake_migration_raw_identifiers_are_type_stable_varchar_binds():
+    class Executor:
+        def __init__(self):
+            self.bulk_calls = []
+            self.commits = 0
+            self.rollbacks = 0
+
+        def query(self, _sql, _params=None):
+            return pd.DataFrame()
+
+        def execute(self, _sql, _params=None):
+            return 1
+
+        def executemany(self, sql, rows, *, batch_size=500):
+            del batch_size
+            values = list(rows)
+            self.bulk_calls.append((sql, values))
+            return len(values)
+
+        @contextmanager
+        def transaction(self):
+            try:
+                yield self
+                self.commits += 1
+            except Exception:
+                self.rollbacks += 1
+                raise
+
+    executor = Executor()
+    repository = SnowflakeRepository.__new__(SnowflakeRepository)
+    repository.executor = executor
+    repository.database = "EFNS_DEV"
+    repository.schema_core = "CORE"
+    repository.schema_raw = "RAW"
+    repository.schema_reporting = "REPORTING"
+    guid = "00000000-0000-0000-0000-000000000001"
+    efc_day = dt.date(2026, 9, 27)
+    rows = [
+        {
+            "MIGRATION_RAW_ROW_ID": "raw-guid", "SOURCE_FILENAME": "account.csv",
+            "SOURCE_ENTITY": "ACCOUNT", "SOURCE_ROW_NUMBER": 2,
+            "SOURCE_ID": guid, "TARGET_ID": guid, "RAW_DATA": {"accountid": guid},
+            "NORMALIZED_DATA": {"ACCOUNT_ID": guid}, "VALIDATION_STATUS": "READY",
+            "MATCH_STATUS": "CONFIRMED", "VALIDATION_MESSAGES": [],
+        },
+        {
+            "MIGRATION_RAW_ROW_ID": "raw-date", "SOURCE_FILENAME": "DateConverter$.csv",
+            "SOURCE_ENTITY": "DIM_EFC_DATE", "SOURCE_ROW_NUMBER": 2,
+            "SOURCE_ID": efc_day, "TARGET_ID": efc_day, "RAW_DATA": {"Day": efc_day},
+            "NORMALIZED_DATA": {"DAY": efc_day}, "VALIDATION_STATUS": "READY",
+            "MATCH_STATUS": "CONFIRMED", "VALIDATION_MESSAGES": [],
+        },
+        {
+            "MIGRATION_RAW_ROW_ID": "raw-rejected", "SOURCE_FILENAME": "new_flocks.csv",
+            "SOURCE_ENTITY": "FLOCK", "SOURCE_ROW_NUMBER": 3,
+            "SOURCE_ID": guid, "TARGET_ID": None, "RAW_DATA": {"new_flocksid": guid},
+            "NORMALIZED_DATA": None, "VALIDATION_STATUS": "REJECTED",
+            "MATCH_STATUS": "NO_CANDIDATE", "VALIDATION_MESSAGES": ["synthetic rejection"],
+        },
+    ]
+
+    result = repository.prepare_migration_batch(
+        {"MIGRATION_BATCH_ID": "batch-mixed", "PACKAGE_HASH": "hash", "SCHEMA_VERSION": "v3"},
+        [], rows,
+    )
+
+    raw_sql, raw_params = next(
+        call for call in executor.bulk_calls if "MIGRATION_RAW_ROW" in call[0]
+    )
+    assert "SOURCE_ID, TARGET_ID" in raw_sql
+    assert [(row[5], row[6]) for row in raw_params] == [
+        (guid, guid), ("2026-09-27", "2026-09-27"), (guid, None),
+    ]
+    assert all(value is None or isinstance(value, str) for row in raw_params for value in row[5:7])
+    assert json.loads(raw_params[1][7])["Day"] == "2026-09-27"
+    assert json.loads(raw_params[1][8])["DAY"] == "2026-09-27"
+    map_params = next(call[1] for call in executor.bulk_calls if "MIGRATION_ID_MAP" in call[0])
+    assert all(value is None or isinstance(value, str) for row in map_params for value in row[3:5])
+    assert result == "batch-mixed"
+    assert executor.commits == 1
+    assert executor.rollbacks == 0
 
 
 def test_mock_migration_preserves_raw_commits_in_order_and_retries_idempotently(generated):

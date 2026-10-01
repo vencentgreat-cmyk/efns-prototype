@@ -12,6 +12,17 @@ def test_snowflake_deployment_bundle_is_python_311_compatible():
     assert check() == []
 
 
+def test_audit_entity_identifier_is_widened_for_new_and_existing_dev_tables():
+    security = (ROOT / "sql" / "05_security_tables.sql").read_text(encoding="utf-8").upper()
+    deployment = (ROOT / "sql" / "10_EIMS_V3_DEV_Deployment.sql").read_text(encoding="utf-8").upper()
+
+    assert re.search(r"\bENTITY_ID\s+VARCHAR\(1000\)", security)
+    widen = "ALTER COLUMN ENTITY_ID SET DATA TYPE VARCHAR(1000)"
+    assert widen in security
+    assert widen in deployment
+    assert "INVALID_AUDIT_ENTITY_ID_COLUMNS" in deployment
+
+
 def test_app_owner_grants_match_repository_access_and_keep_audit_append_only():
     grants = (ROOT / "sql" / "06_least_privilege_grants.sql").read_text(encoding="utf-8").upper()
 
