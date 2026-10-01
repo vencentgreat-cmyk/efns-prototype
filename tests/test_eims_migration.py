@@ -343,6 +343,51 @@ def test_mock_core_commit_rolls_back_and_marks_batch_failed(generated, monkeypat
     assert len(repository.get_migration_raw_rows(analysis.batch_id)) == sum(EXPECTED_COUNTS.values())
 
 
+def test_snowflake_commit_preserves_initial_error_when_failed_status_write_also_fails():
+    from data.migration import load_mapping
+    from data.repositories.base import RepositoryOperationError
+    from data.repositories.snowflake import SnowflakeRepository
+
+    initial = RepositoryOperationError(
+        "INSERT", "ACCOUNT", query_id="01c7704a-0002-dbb1-0003-b706000bc696", error_code="640"
+    )
+
+    class Executor:
+        def __init__(self):
+            self.execute_count = 0
+
+        @contextmanager
+        def transaction(self):
+            yield self
+
+        def query(self, _sql, _params=None):
+            return pd.DataFrame(columns=["SOURCE_ENTITY", "NORMALIZED_DATA"])
+
+        def execute(self, _sql, _params=None):
+            self.execute_count += 1
+            if self.execute_count == 1:
+                raise initial
+            raise RuntimeError("secondary failure-status write")
+
+    repository = SnowflakeRepository.__new__(SnowflakeRepository)
+    repository.executor = Executor()
+    repository.database = "EFNS_DEV"
+    repository.schema_core = "CORE"
+    repository.schema_raw = "RAW"
+    repository.schema_reporting = "REPORTING"
+    repository._one = lambda *_args, **_kwargs: {
+        "STATUS": "READY", "SCHEMA_VERSION": load_mapping()["schema_version"]
+    }
+
+    with pytest.raises(RepositoryOperationError) as captured:
+        repository.commit_migration_batch("batch-1")
+
+    assert captured.value is initial
+    assert captured.value.query_id == "01c7704a-0002-dbb1-0003-b706000bc696"
+    assert captured.value.error_code == "640"
+    assert any("original operation error is preserved" in note for note in captured.value.__notes__)
+
+
 def test_migration_sql_keeps_stage_and_tables_behind_app_owner():
     sql = Path("sql/11_eims_migration_foundation.sql").read_text(encoding="utf-8").upper()
     assert "ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')" in sql

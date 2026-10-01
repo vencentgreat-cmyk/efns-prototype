@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import datetime as dt
 from decimal import Decimal
 import sys
+import threading
 from types import SimpleNamespace
 
 import pandas as pd
@@ -166,6 +168,26 @@ def test_connector_failed_transaction_rolls_back():
     assert (db.commits, db.rollbacks) == (0, 1)
 
 
+def test_connector_rollback_failure_does_not_replace_initial_operation_error():
+    initial = RepositoryOperationError(
+        "INSERT", "MIGRATION_RAW_ROW", query_id="01c7704a-0002-dbb1-0003-b706000bc696", error_code="640"
+    )
+
+    class RollbackFailureConnection(FakeConnection):
+        def rollback(self):
+            raise RuntimeError("secondary rollback failure")
+
+    executor = connection.ConnectorExecutor(
+        lambda: RollbackFailureConnection(FakeCursor(failure=initial))
+    )
+    with pytest.raises(RepositoryOperationError) as captured:
+        with executor.transaction() as tx:
+            tx.execute("INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (%s)", ("guid-1",))
+
+    assert captured.value is initial
+    assert any("original operation error is preserved" in note for note in captured.value.__notes__)
+
+
 def test_connector_wraps_operation_and_connection_failures():
     executor = connection.ConnectorExecutor(lambda: (_ for _ in ()).throw(RuntimeError("network secret")))
     with pytest.raises(RepositoryConnectionError, match="connection failed"):
@@ -287,6 +309,107 @@ def test_snowpark_failed_transaction_rolls_back():
         with executor.transaction():
             raise RuntimeError("failed")
     assert [call[0] for call in session.calls] == ["BEGIN", "ROLLBACK"]
+
+
+def test_snowpark_shared_session_serializes_audit_until_migration_commit_finishes():
+    commit_started = threading.Event()
+    release_commit = threading.Event()
+    audit_started = threading.Event()
+    commit_count = 0
+    ordered_calls = []
+
+    def respond(sql, params):
+        nonlocal commit_count
+        ordered_calls.append(sql)
+        if sql == "COMMIT":
+            commit_count += 1
+            if commit_count == 1:
+                commit_started.set()
+                assert release_commit.wait(timeout=5)
+        return FakeStatement([], [])
+
+    shared_connection = SimpleNamespace()
+    migration_session = FakeSession(respond)
+    audit_session = FakeSession(respond)
+    migration_session._conn = SimpleNamespace(_conn=shared_connection)
+    audit_session._conn = SimpleNamespace(_conn=shared_connection)
+    migration = connection.SnowparkExecutor(migration_session)
+    audit = connection.SnowparkExecutor(audit_session)
+
+    def write_migration():
+        with migration.transaction() as tx:
+            tx.execute("INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (%s)", ("guid-1",))
+
+    def write_audit():
+        audit_started.set()
+        with audit.transaction() as tx:
+            tx.execute("INSERT INTO AUDIT_EVENT (ENTITY_ID) VALUES (%s)", ("batch-1",))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        migration_future = pool.submit(write_migration)
+        assert commit_started.wait(timeout=5)
+        audit_future = pool.submit(write_audit)
+        assert audit_started.wait(timeout=5)
+        try:
+            assert ordered_calls == [
+                "BEGIN",
+                "INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (?)",
+                "COMMIT",
+            ]
+        finally:
+            release_commit.set()
+        migration_future.result(timeout=5)
+        audit_future.result(timeout=5)
+
+    assert ordered_calls == [
+        "BEGIN",
+        "INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (?)",
+        "COMMIT",
+        "BEGIN",
+        "INSERT INTO AUDIT_EVENT (ENTITY_ID) VALUES (?)",
+        "COMMIT",
+    ]
+
+
+def test_snowpark_nested_transaction_on_shared_session_has_one_owner():
+    session = FakeSession()
+    repository = connection.SnowparkExecutor(session)
+    audit = connection.SnowparkExecutor(session)
+
+    with repository.transaction() as tx:
+        tx.execute("INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (%s)", ("guid-1",))
+        with audit.transaction() as audit_tx:
+            audit_tx.execute("INSERT INTO AUDIT_EVENT (ENTITY_ID) VALUES (%s)", ("batch-1",))
+
+    assert [call[0] for call in session.calls] == [
+        "BEGIN",
+        "INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (?)",
+        "INSERT INTO AUDIT_EVENT (ENTITY_ID) VALUES (?)",
+        "COMMIT",
+    ]
+
+
+def test_snowpark_rollback_failure_does_not_replace_initial_insert_error():
+    initial = RepositoryOperationError(
+        "INSERT", "MIGRATION_RAW_ROW", query_id="01c7704a-0002-dbb1-0003-b706000bc696", error_code="640"
+    )
+
+    def respond(sql, params):
+        if sql.startswith("INSERT"):
+            raise initial
+        if sql == "ROLLBACK":
+            raise RuntimeError("secondary rollback failure")
+        return FakeStatement([], [])
+
+    executor = connection.SnowparkExecutor(FakeSession(respond))
+    with pytest.raises(RepositoryOperationError) as captured:
+        with executor.transaction() as tx:
+            tx.execute("INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (%s)", ("guid-1",))
+
+    assert captured.value is initial
+    assert captured.value.query_id == "01c7704a-0002-dbb1-0003-b706000bc696"
+    assert captured.value.error_code == "640"
+    assert any("original operation error is preserved" in note for note in captured.value.__notes__)
 
 
 def test_snowpark_preserves_repository_errors_and_wraps_other_errors():

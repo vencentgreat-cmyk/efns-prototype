@@ -14,7 +14,9 @@ from dataclasses import dataclass
 import os
 import re
 import tempfile
+import threading
 from typing import Callable, Iterable, Iterator, Sequence
+from weakref import WeakKeyDictionary
 
 import pandas as pd
 
@@ -40,6 +42,52 @@ _BULK_INSERT_SELECT = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _SAFE_REFERENCE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+class _SessionExecutionState:
+    """Coordinate all SQL and transaction ownership for one Snowpark session."""
+
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.transaction_owner: int | None = None
+        self.transaction_depth = 0
+
+
+_SESSION_STATES_LOCK = threading.Lock()
+_SESSION_STATES: WeakKeyDictionary = WeakKeyDictionary()
+_SESSION_STATES_BY_ID: dict[int, _SessionExecutionState] = {}
+
+
+def _snowpark_connection_resource(session):
+    """Resolve the connector resource that owns Snowflake transaction state."""
+    connection = getattr(session, "connection", None)
+    if connection is not None:
+        return connection
+    server_connection = getattr(session, "_conn", None)
+    connector_connection = getattr(server_connection, "_conn", None)
+    if connector_connection is not None:
+        return connector_connection
+    return server_connection if server_connection is not None else session
+
+
+def _session_execution_state(session) -> _SessionExecutionState:
+    """Return the shared guard for every executor using one connection."""
+    resource = _snowpark_connection_resource(session)
+    with _SESSION_STATES_LOCK:
+        try:
+            state = _SESSION_STATES.get(resource)
+            if state is None:
+                state = _SessionExecutionState()
+                _SESSION_STATES[resource] = state
+            return state
+        except TypeError:
+            # Some third-party session wrappers cannot be weak-referenced.
+            return _SESSION_STATES_BY_ID.setdefault(id(resource), _SessionExecutionState())
+
+
+def _note_cleanup_failure(primary: Exception, operation: str) -> None:
+    if hasattr(primary, "add_note"):
+        primary.add_note(f"Snowflake {operation} also failed; the original operation error is preserved.")
 
 
 def _safe_reference(value) -> str | None:
@@ -251,6 +299,9 @@ class ConnectorExecutor(SqlExecutor):
     def __init__(self, connection_factory: Callable[[], object]):
         self._connection_factory = connection_factory
         self._connection = None
+        self._operation_lock = threading.RLock()
+        self._transaction_owner: int | None = None
+        self._transaction_depth = 0
 
     def _connect(self):
         if self._connection is None:
@@ -266,19 +317,20 @@ class ConnectorExecutor(SqlExecutor):
 
     @contextmanager
     def _cursor(self):
-        cursor = None
-        try:
-            cursor = self._connect().cursor()
-            yield cursor
-        except RepositoryError:
-            raise
-        except Exception as exc:
-            raise RepositoryConnectionError(
-                "Snowflake could not open a SQL cursor for this operation."
-            ) from exc
-        finally:
-            if cursor is not None:
-                cursor.close()
+        with self._operation_lock:
+            cursor = None
+            try:
+                cursor = self._connect().cursor()
+                yield cursor
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise RepositoryConnectionError(
+                    "Snowflake could not open a SQL cursor for this operation."
+                ) from exc
+            finally:
+                if cursor is not None:
+                    cursor.close()
 
     def query(self, sql: str, params: Params = None) -> pd.DataFrame:
         with self._cursor() as cursor:
@@ -337,20 +389,22 @@ class ConnectorExecutor(SqlExecutor):
             return len(values) if rowcount is None or rowcount < 0 else int(rowcount)
 
     def commit(self) -> None:
-        try:
-            self._connect().commit()
-        except RepositoryError:
-            raise
-        except Exception as exc:
-            raise RepositoryError("Snowflake could not commit the transaction.") from exc
+        with self._operation_lock:
+            try:
+                self._connect().commit()
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise RepositoryError("Snowflake could not commit the transaction.") from exc
 
     def rollback(self) -> None:
-        try:
-            self._connect().rollback()
-        except RepositoryError:
-            raise
-        except Exception as exc:
-            raise RepositoryError("Snowflake could not roll back the transaction.") from exc
+        with self._operation_lock:
+            try:
+                self._connect().rollback()
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise RepositoryError("Snowflake could not roll back the transaction.") from exc
 
     def put_stream(self, stream, stage_path: str) -> None:
         try:
@@ -371,14 +425,29 @@ class ConnectorExecutor(SqlExecutor):
 
     @contextmanager
     def transaction(self) -> Iterator["ConnectorExecutor"]:
-        try:
-            yield self
-            self.commit()
-        except Exception:
+        with self._operation_lock:
+            owner = threading.get_ident()
+            if self._transaction_owner == owner:
+                self._transaction_depth += 1
+                try:
+                    yield self
+                finally:
+                    self._transaction_depth -= 1
+                return
+            self._transaction_owner = owner
+            self._transaction_depth = 1
             try:
-                self.rollback()
-            finally:
+                yield self
+                self.commit()
+            except Exception as primary:
+                try:
+                    self.rollback()
+                except Exception:
+                    _note_cleanup_failure(primary, "rollback")
                 raise
+            finally:
+                self._transaction_owner = None
+                self._transaction_depth = 0
 
 
 def _qmark(sql: str) -> str:
@@ -466,26 +535,29 @@ class SnowparkExecutor(SqlExecutor):
 
     def __init__(self, session, runtime_name: str | None = None):
         self.session = session
+        self._execution_state = _session_execution_state(session)
         if runtime_name:
             self.runtime_name = runtime_name
 
     def _collect(self, sql: str, params: Params = None) -> list:
-        try:
-            return list(self.session.sql(_qmark(sql), params=list(params or ())).collect())
-        except RepositoryError:
-            raise
-        except Exception as exc:
-            raise _operation_error(exc, sql) from exc
+        with self._execution_state.lock:
+            try:
+                return list(self.session.sql(_qmark(sql), params=list(params or ())).collect())
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql) from exc
 
     def query(self, sql: str, params: Params = None) -> pd.DataFrame:
-        try:
-            statement = self.session.sql(_qmark(sql), params=list(params or ()))
-            rows = list(statement.collect())
-            columns = [field.name for field in statement.schema.fields]
-        except RepositoryError:
-            raise
-        except Exception as exc:
-            raise _operation_error(exc, sql) from exc
+        with self._execution_state.lock:
+            try:
+                statement = self.session.sql(_qmark(sql), params=list(params or ()))
+                rows = list(statement.collect())
+                columns = [field.name for field in statement.schema.fields]
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql) from exc
         if not rows:
             return pd.DataFrame(columns=columns)
         dictionaries = [row.as_dict() if hasattr(row, "as_dict") else dict(row) for row in rows]
@@ -495,33 +567,34 @@ class SnowparkExecutor(SqlExecutor):
         return _affected_rows(self._collect(sql, params))
 
     def executemany(self, sql: str, rows: ParamRows, *, batch_size: int = 500) -> int:
-        if batch_size < 1:
-            raise RepositoryError("Snowpark bulk-write batch size must be at least one.")
-        qmark_sql = _qmark(sql)
-        values = _validated_rows(qmark_sql, rows, "?")
-        if not values:
-            return 0
-        values_match = self._VALUES.match(qmark_sql.strip())
-        select_match = self._SELECT.match(qmark_sql.strip())
-        if not values_match and not select_match:
-            raise RepositoryError(
-                "Snowpark bulk writes require an INSERT statement with a VALUES or SELECT clause; row-by-row fallback is disabled."
-            )
-        prefix, group, suffix = (values_match or select_match).groups()
-        total = 0
-        for start in range(0, len(values), batch_size):
-            batch = values[start : start + batch_size]
-            separator = ", " if values_match else " UNION ALL "
-            groups: list[str] = []
-            parameters: list[object] = []
-            for row in batch:
-                null_safe_group, bound = _literalize_null_bindings(group, row)
-                groups.append(null_safe_group)
-                parameters.extend(bound)
-            statement = prefix + ("" if values_match else " ") + separator.join(groups) + suffix
-            affected = self.execute(statement, parameters)
-            total += len(batch) if affected < 0 else affected
-        return total
+        with self._execution_state.lock:
+            if batch_size < 1:
+                raise RepositoryError("Snowpark bulk-write batch size must be at least one.")
+            qmark_sql = _qmark(sql)
+            values = _validated_rows(qmark_sql, rows, "?")
+            if not values:
+                return 0
+            values_match = self._VALUES.match(qmark_sql.strip())
+            select_match = self._SELECT.match(qmark_sql.strip())
+            if not values_match and not select_match:
+                raise RepositoryError(
+                    "Snowpark bulk writes require an INSERT statement with a VALUES or SELECT clause; row-by-row fallback is disabled."
+                )
+            prefix, group, suffix = (values_match or select_match).groups()
+            total = 0
+            for start in range(0, len(values), batch_size):
+                batch = values[start : start + batch_size]
+                separator = ", " if values_match else " UNION ALL "
+                groups: list[str] = []
+                parameters: list[object] = []
+                for row in batch:
+                    null_safe_group, bound = _literalize_null_bindings(group, row)
+                    groups.append(null_safe_group)
+                    parameters.extend(bound)
+                statement = prefix + ("" if values_match else " ") + separator.join(groups) + suffix
+                affected = self.execute(statement, parameters)
+                total += len(batch) if affected < 0 else affected
+            return total
 
     def commit(self) -> None:
         self._collect("COMMIT")
@@ -530,22 +603,39 @@ class SnowparkExecutor(SqlExecutor):
         self._collect("ROLLBACK")
 
     def put_stream(self, stream, stage_path: str) -> None:
-        try:
-            self.session.file.put_stream(stream, stage_path, auto_compress=False, overwrite=False)
-        except Exception as exc:
-            raise _operation_error(exc, "PUT_STREAM EIMS_MIGRATION_FILE") from exc
+        with self._execution_state.lock:
+            try:
+                self.session.file.put_stream(stream, stage_path, auto_compress=False, overwrite=False)
+            except Exception as exc:
+                raise _operation_error(exc, "PUT_STREAM EIMS_MIGRATION_FILE") from exc
 
     @contextmanager
     def transaction(self) -> Iterator["SnowparkExecutor"]:
-        self._collect("BEGIN")
-        try:
-            yield self
-            self.commit()
-        except Exception:
+        state = self._execution_state
+        with state.lock:
+            owner = threading.get_ident()
+            if state.transaction_owner == owner:
+                state.transaction_depth += 1
+                try:
+                    yield self
+                finally:
+                    state.transaction_depth -= 1
+                return
+            self._collect("BEGIN")
+            state.transaction_owner = owner
+            state.transaction_depth = 1
             try:
-                self.rollback()
-            finally:
+                yield self
+                self.commit()
+            except Exception as primary:
+                try:
+                    self.rollback()
+                except Exception:
+                    _note_cleanup_failure(primary, "rollback")
                 raise
+            finally:
+                state.transaction_owner = None
+                state.transaction_depth = 0
 
 
 def _streamlit_runtime_active() -> bool:

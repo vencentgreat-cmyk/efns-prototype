@@ -832,9 +832,15 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                 tx.execute(f"UPDATE {self._table('MIGRATION_ID_MAP', self.schema_raw)} SET STATUS = %s, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("COMMITTED", batch_id))
                 tx.execute(f"UPDATE {self._table('MIGRATION_BATCH', self.schema_raw)} SET STATUS = %s, COMMITTED_AT = {UTC_NOW_NTZ}, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("COMMITTED", batch_id))
             return {"batch_id": batch_id, "counts": counts, "idempotent": False}
-        except Exception:
-            with self._executor().transaction() as tx:
-                tx.execute(f"UPDATE {self._table('MIGRATION_BATCH', self.schema_raw)} SET STATUS = %s, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("FAILED", batch_id))
+        except Exception as primary:
+            try:
+                with self._executor().transaction() as tx:
+                    tx.execute(f"UPDATE {self._table('MIGRATION_BATCH', self.schema_raw)} SET STATUS = %s, UPDATED_AT = {UTC_NOW_NTZ} WHERE MIGRATION_BATCH_ID = %s", ("FAILED", batch_id))
+            except Exception:
+                if hasattr(primary, "add_note"):
+                    primary.add_note(
+                        "The migration failure-status update also failed; the original operation error is preserved."
+                    )
             raise
 
     def cleanup_synthetic_migration(self, batch_id):
