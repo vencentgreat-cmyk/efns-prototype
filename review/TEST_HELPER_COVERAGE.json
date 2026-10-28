@@ -1,0 +1,15 @@
+{
+  "all_runtime_test_helpers_supplied": true,
+  "missing_only_in_explicitly_skipped_snapshot_test": [
+    [
+      "test_manual_historical_corrections.py",
+      393,
+      "scripts.prepare_company_deployment"
+    ],
+    [
+      "test_manual_historical_corrections.py",
+      394,
+      "scripts.company_database_deployment"
+    ]
+  ]
+}

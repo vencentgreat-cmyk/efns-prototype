@@ -1,0 +1,25 @@
+# Generated state; this is not a substitute for the reviewed file manifest.
+.git/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest-tmp/
+.local/
+output/
+dist/
+build/
+*.log
+*.db
+*.sqlite*
+*.zip
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+secrets.toml
+connections.toml
+# CSV / JSON / SQL / XLSX are NOT blanket-ignored: synthetic fixtures and
+# mapping contracts must remain reviewable. New files still require review.

@@ -1,0 +1,12 @@
+{
+  "schema_version": "EFNS-EIMS-DATAVERSE-3-DISPOSAL-R1",
+  "extends": "EFNS-EIMS-DATAVERSE-3",
+  "revision": "FLOCK_DISPOSAL_SEMANTICS_2026_10_23",
+  "basis": "Unmodified Dataverse associated-view field metadata and user-reported old/new page comparisons of three Flocks; no Placement or timezone conversion authorized.",
+  "field_map_overrides": {
+    "FLOCK": {
+      "EST_DISPOSAL": "new_disposaldate2",
+      "DISPOSAL_DATE": "new_disposaldate"
+    }
+  }
+}
