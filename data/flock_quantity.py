@@ -10,7 +10,7 @@ from data.producer_identity import text
 from data.validation import validate_flock_transaction
 
 
-def record_current_quantity(repo, record, request_id, expected_updated_at, reason, *, confirmed=False, actor=None):
+def record_current_quantity(repo, record, request_id, expected_updated_at, reason, *, confirmed=False, actor=None, expected_bird_count=...):
     if not confirmed or not request_id or not str(reason or '').strip() or not actor or not actor.get('user_id') or not actor.get('email'):
         raise RepositoryError('An authenticated recorder, reason, request identity and current-quantity confirmation are required.')
     record=dict(record)
@@ -22,7 +22,8 @@ def record_current_quantity(repo, record, request_id, expected_updated_at, reaso
         raise RepositoryError('Only an explicit current Count or quantified Removal can update Bird Count. Delivery/Sale remain activity only.')
     record['QUANTITY']=int(Decimal(str(record['QUANTITY'])))
     business_date=pd.Timestamp(record['TRANSACTION_DATE']).date()
-    if business_date != dt.datetime.now(ZoneInfo('America/Halifax')).date():
+    from data.business_time import halifax_today,same_value
+    if business_date != halifax_today():
         raise RepositoryError('Current quantity entry is limited to today (Halifax). Save historical activity without applying it to current Bird Count.')
     txid=stable_id('current-flock-quantity',request_id)
     revision_id=stable_id('current-flock-quantity-revision',txid)
@@ -53,6 +54,10 @@ def record_current_quantity(repo, record, request_id, expected_updated_at, reaso
         if expected_updated_at is None or pd.Timestamp(current['UPDATED_AT'])!=pd.Timestamp(expected_updated_at):
             raise ConcurrencyError('Flock changed after review; reload current quantity.')
         old=current.get('BIRD_COUNT')
+        if expected_bird_count is ...:
+            raise RepositoryError('The Bird Count actually reviewed is required; reload and confirm again.')
+        if not same_value(old,expected_bird_count):
+            raise ConcurrencyError('Bird Count changed after review; reload and explicitly confirm the new value.')
         if old is None or pd.isna(old):
             if record['TRANSACTION_TYPE']=='Removal': raise RepositoryError('Cannot deduct a removal from an unknown Bird Count. Record a confirmed Count first.')
         quantity=int(record['QUANTITY'])

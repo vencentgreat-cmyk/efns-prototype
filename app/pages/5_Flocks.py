@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from app.services.form_safety import open_saved_record, stored_index, capture_form, preserve_form, save_form, stored_options, start_new_form, begin_form, field_changed, delete_confirmation
+from data.producer_identity import text as stored_text
+from data.business_time import halifax_today
+
 import datetime as dt
 import uuid
 from zoneinfo import ZoneInfo
@@ -52,9 +56,9 @@ if view.name == "list":
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("flock_list", selected=bool(selected_id))
     if action == "view" and selected_id: open_view("detail", selected_id)
-    if action == "new": open_view("new")
+    if action == "new": start_new_form('flock_form_'); open_view("new")
     if action == "refresh": clear_widget_prefix("flock_filter_"); st.rerun()
-    if action == "delete" and selected_id: st.session_state.flock_delete_pending = selected_id
+    if action == "delete" and selected_id: st.session_state['flock_form___delete_pending']=selected_id
     if st.session_state.get("flock_delete_pending"):
         with st.container(border=True):
             st.warning("Delete the selected Flock? Related Transactions, Tests or Production will block deletion.")
@@ -63,7 +67,7 @@ if view.name == "list":
                     try:
                         repo.delete_flock(st.session_state.flock_delete_pending)
                         st.session_state.pop("flock_delete_pending", None); st.rerun()
-                    except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    except Exception as exc: show_data_error(exc)
                 if st.button("Cancel", key="flock_cancel_delete"):
                     st.session_state.pop("flock_delete_pending", None); st.rerun()
     filters = st.columns([2, 1, 1])
@@ -93,11 +97,9 @@ else:
     is_form = view.name in {"new", "edit"}
     page_header("New Flock" if view.name == "new" else current["FLOCK_NUMBER"], "Validated relationships, permit, dates and bird counts.", "FLOCK RECORD")
     action = record_command_bar("flock_record", view.name)
-    if action in {"back", "cancel"}: open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
-    if action == "edit": clear_widget_prefix("flock_form_"); open_view("edit", view.record_id)
-    if action == "delete" and view.record_id:
-        try: repo.delete_flock(view.record_id); open_view("list")
-        except (ValueError, RepositoryError) as exc: show_data_error(exc)
+    if action in {"back", "cancel"}: start_new_form("flock_form_"); open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
+    if action == "edit": start_new_form("flock_form_"); open_view("edit", view.record_id)
+    if action == "delete" and view.record_id: st.session_state['flock_form___delete_pending']=view.record_id
     if not is_form:
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
         summary, details, related = st.tabs(["Summary", "Details", "Related Records"])
@@ -135,6 +137,7 @@ else:
             else: st.dataframe(production, width="stretch", hide_index=True)
     else:
         current = current or {}
+        begin_form('flock_form_',view.record_id)
         expected_key = f"flock_form_expected_{view.record_id}"
         if view.name == "edit" and view.record_id:
             st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
@@ -153,20 +156,20 @@ else:
                 facility_id = facility_options.get(facility_label)
                 detail_options = {UNASSIGNED_LABEL: None, **{row.DETAIL_NAME: row.FACILITY_DETAIL_ID for row in repo.get_facility_details(facility_id).itertuples()}}
                 detail_label = left.selectbox("Facility Detail", list(detail_options), index=option_index(list(detail_options), label_for_id(detail_options, current.get("FACILITY_DETAIL_ID"), UNASSIGNED_LABEL)), key="flock_form_detail")
-                quotas = repo.get_quota_registrations(account_id=account_id, active_only=True)
+                quotas = repo.get_quota_registrations(account_id=account_id, active_only=not bool(view.record_id))
                 quota_options = {UNASSIGNED_LABEL: None, **{f"{row.QUOTA_NAME} · {row.REGISTRATION_NUMBER}": row.QUOTA_ID for row in quotas.itertuples()}}
                 quota_label = left.selectbox("Quota Registration", list(quota_options), index=option_index(list(quota_options), label_for_id(quota_options, current.get("QUOTA_ID"), UNASSIGNED_LABEL)), key="flock_form_quota")
-                quota_type = left.selectbox("Flock Quota Type", FLOCK_QUOTA_TYPES, index=option_index(list(FLOCK_QUOTA_TYPES), current.get("FLOCK_QUOTA_TYPE")), key="flock_form_quota_type")
+                quota_type = left.selectbox("Flock Quota Type", stored_options(FLOCK_QUOTA_TYPES,current.get("FLOCK_QUOTA_TYPE"),bool(view.record_id)), index=(stored_index(FLOCK_QUOTA_TYPES,current.get("FLOCK_QUOTA_TYPE")) if view.record_id else option_index(list(FLOCK_QUOTA_TYPES), current.get("FLOCK_QUOTA_TYPE"))), key="flock_form_quota_type")
                 flock_number = right.text_input("Flock Number *", value=str(current.get("FLOCK_NUMBER") or ""), key="flock_form_number")
-                status = right.selectbox("Status", FLOCK_STATUSES, index=option_index(list(FLOCK_STATUSES), current.get("STATUS")), key="flock_form_status")
+                status = right.selectbox("Status", stored_options(FLOCK_STATUSES,current.get("STATUS"),bool(view.record_id)), index=(stored_index(FLOCK_STATUSES,current.get("STATUS")) if view.record_id else option_index(list(FLOCK_STATUSES), current.get("STATUS"))), key="flock_form_status")
                 create_delivery = right.checkbox("Create Delivery Transaction", value=bool(current.get("CREATE_DELIVERY_TRANSACTION")), key="flock_form_delivery")
                 permit_number = right.text_input("Permit Number *", value=str(current.get("PERMIT_NUMBER") or ""), key="flock_form_permit")
-                hatch_date = right.date_input("Hatch Date *", value=optional_form_date(current.get("HATCH_DATE")) or dt.date.today(), key="flock_form_hatch")
+                hatch_date = right.date_input("Hatch Date *", value=(optional_form_date(current.get("HATCH_DATE")) if view.record_id else halifax_today()), key="flock_form_hatch")
             with lifecycle:
                 left, right = st.columns(2)
                 bird_count_input = left.text_input("Bird Count *",value=text(current.get("BIRD_COUNT")) or "",key="flock_form_birds_text") if view.record_id else None
                 bird_count = left.number_input("Bird Count *", min_value=0, value=0,key="flock_form_birds") if not view.record_id else None
-                egg_colour = left.selectbox("Egg Colour", EGG_COLOURS, index=option_index(list(EGG_COLOURS), current.get("EGG_COLOUR")), key="flock_form_colour")
+                egg_colour = left.selectbox("Egg Colour", stored_options(EGG_COLOURS,current.get("EGG_COLOUR"),bool(view.record_id)), index=(stored_index(EGG_COLOURS,current.get("EGG_COLOUR")) if view.record_id else option_index(list(EGG_COLOURS), current.get("EGG_COLOUR"))), key="flock_form_colour")
                 permit_date = left.date_input("Permit Date", value=optional_form_date(current.get("PERMIT_DATE")), key="flock_form_permit_date")
                 ordered_date = left.date_input("Date Ordered", value=optional_form_date(current.get("DATE_ORDERED")), key="flock_form_ordered")
                 placement_date = left.date_input("Placement Date", value=optional_form_date(current.get("PLACEMENT_DATE")), key="flock_form_placement")
@@ -183,9 +186,10 @@ else:
                 initial_time = st.time_input('Confirmed initial placement time (Atlantic / Halifax)',value=dt.time(12),key='flock_form_initial_time')
                 initial_reason = st.text_input('Evidence for initial position',key='flock_form_initial_reason')
                 st.session_state.setdefault('flock_form_initial_request',uuid.uuid4().hex)
+        capture_form('flock_form_',current,{'FLOCK_NUMBER': ['flock_form_number'], 'ACCOUNT_ID': ['flock_form_account'], 'FACILITY_ID': ['flock_form_account', 'flock_form_facility'], 'FACILITY_DETAIL_ID': ['flock_form_account', 'flock_form_detail', 'flock_form_facility'], 'QUOTA_ID': ['flock_form_account', 'flock_form_quota'], 'FLOCK_QUOTA_TYPE': ['flock_form_quota_type'], 'STATUS': ['flock_form_status'], 'CREATE_DELIVERY_TRANSACTION': ['flock_form_delivery'], 'PERMIT_NUMBER': ['flock_form_permit'], 'PERMIT_DATE': ['flock_form_permit_date'], 'HATCH_DATE': ['flock_form_hatch'], 'DATE_ORDERED': ['flock_form_ordered'], 'BIRD_COUNT': ['flock_form_birds_text','flock_form_birds'], 'EGG_COLOUR': ['flock_form_colour'], 'BIRD_STRAIN': ['flock_form_strain'], 'PLACEMENT_DATE': ['flock_form_placement'], 'EST_DISPOSAL': ['flock_form_est_disposal'], 'DISPOSAL_DATE': ['flock_form_disposal'], 'BIRDS_DISPOSED': ['flock_form_disposed_text'], 'COMMENTS': ['flock_form_comments']})
         if action == "save":
             try:
-                if view.record_id: bird_count = normalize_numeric_bind(bird_count_input,"BIRD_COUNT",1,integer=True)
+                if view.record_id: bird_count = normalize_numeric_bind(bird_count_input,"BIRD_COUNT",1,integer=True) if field_changed("flock_form_","BIRD_COUNT") else current.get("BIRD_COUNT")
                 birds_disposed = normalize_numeric_bind(birds_disposed_input,"BIRDS_DISPOSED",1,integer=True)
             except RepositoryError as exc:
                 show_data_error(exc)
@@ -199,12 +203,17 @@ else:
             else:
                 try:
                     if view.record_id:
+                        record=preserve_form(record,current,'flock_form_')
                         repo.check_flock_reference_change(record)
-                        changes = changed_attributes(current,record)
-                        saved_id = repo.revise_record("FLOCK",view.record_id,changes,revision_reason,st.session_state.flock_form_revision_request,expected_updated_at=st.session_state.get(expected_key)) if changes else view.record_id
+                        saved_id = save_form(repo,'FLOCK',record,current,'flock_form_',revision_reason)
                     elif initial_confirmed:
                         if not placement_date or not initial_reason.strip(): raise RepositoryError('Confirmed initial position requires placement date, time and evidence.')
                         saved_id = repo.create_flock_with_initial_position(record,dt.datetime.combine(placement_date,initial_time,ZoneInfo('America/Halifax')),initial_reason,st.session_state.flock_form_initial_request)
-                    else: saved_id = repo.upsert_flock(record)
-                    clear_widget_prefix("flock_form_"); open_view("detail", saved_id)
-                except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    else: saved_id = save_form(repo,'FLOCK',record,current,'flock_form_')
+                    open_saved_record(saved_id)
+                except Exception as exc: show_data_error(exc)
+
+_pending=st.session_state.get('flock_form___delete_pending')
+if _pending and delete_confirmation(repo,'delete_flock',_pending,'flock_form___delete'):
+    st.session_state.pop('flock_form___delete_pending',None)
+    open_view("list")

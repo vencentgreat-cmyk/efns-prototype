@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from app.services.form_safety import open_saved_record, stored_index, capture_form, preserve_form, save_form, stored_options, start_new_form, begin_form, field_changed, delete_confirmation
+from data.producer_identity import text as stored_text
+from data.business_time import halifax_today
+
 import datetime as dt
 
 import pandas as pd
@@ -74,10 +78,10 @@ if view.name == "list":
     row_ids = st.session_state.get("quota_reg_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("quota_reg_list", selected=bool(selected_id))
-    if action == "new": open_view("new")
+    if action == "new": start_new_form('quota_reg_form_'); open_view("new")
     if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": st.rerun()
-    if action == "delete" and selected_id: st.session_state.quota_reg_delete_pending = selected_id
+    if action == "delete" and selected_id: st.session_state['quota_reg_form___delete_pending']=selected_id
 
     pending_delete = st.session_state.get("quota_reg_delete_pending")
     if pending_delete:
@@ -89,7 +93,7 @@ if view.name == "list":
                         repo.delete_quota_registration(pending_delete)
                         st.session_state.pop("quota_reg_delete_pending", None)
                         st.rerun()
-                    except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    except Exception as exc: show_data_error(exc)
                 if st.button("Cancel", key="quota_reg_cancel_delete"):
                     st.session_state.pop("quota_reg_delete_pending", None); st.rerun()
 
@@ -141,10 +145,10 @@ else:
     is_form = view.name in {"new", "edit"}
     page_header("New Quota Registration" if view.name == "new" else quota_title(current), "Account allocation and effective dates. Available balance is not calculated.", "QUOTA REGISTRATION")
     action = record_command_bar("quota_reg_record", view.name)
-    if action in {"back", "cancel"}: open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
+    if action in {"back", "cancel"}: start_new_form("quota_reg_form_"); open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "refresh": st.rerun()
-    if action == "edit": clear_widget_prefix("quota_reg_form_"); open_view("edit", view.record_id)
-    if action == "delete" and view.record_id: st.session_state.quota_reg_record_delete_pending = True
+    if action == "edit": start_new_form("quota_reg_form_"); open_view("edit", view.record_id)
+    if action == "delete" and view.record_id: st.session_state['quota_reg_form___delete_pending']=view.record_id
     if st.session_state.get("quota_reg_record_delete_pending"):
         with st.container(border=True):
             st.warning("Delete this Quota Registration? Existing Transactions or Flocks will block deletion.")
@@ -153,7 +157,7 @@ else:
                     try:
                         repo.delete_quota_registration(view.record_id)
                         st.session_state.pop("quota_reg_record_delete_pending", None); open_view("list")
-                    except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    except Exception as exc: show_data_error(exc)
                 if st.button("Keep record", key="quota_reg_record_keep"):
                     st.session_state.pop("quota_reg_record_delete_pending", None); st.rerun()
 
@@ -193,6 +197,7 @@ else:
             related_records_table("Flocks", flocks, id_column="FLOCK_ID", label_column="FLOCK_NUMBER", page_slug="Flocks", key="quota_related_flocks")
     else:
         current = current or {}
+        begin_form('quota_reg_form_',view.record_id)
         if accounts.empty:
             st.error("Create an Account before creating a Quota Registration."); st.stop()
         ensure_record_form_state("quota_reg_form_", view.record_id)
@@ -205,20 +210,27 @@ else:
             account_label = left.selectbox("Account *", list(account_options), index=option_index(list(account_options), label_for_id(account_options, selected_account_id)), key="quota_reg_form_account")
             registration = left.text_input("Registration Number *", value=str(current.get("REGISTRATION_NUMBER") or ""), key="quota_reg_form_number")
             quota_name = left.text_input("Quota Name", value=str(current.get("QUOTA_NAME") or ""), key="quota_reg_form_name")
-            quota_type = right.selectbox("Quota Type *", QUOTA_TYPES, index=option_index(list(QUOTA_TYPES), current.get("QUOTA_TYPE")), key="quota_reg_form_type")
-            status = right.selectbox("Status", QUOTA_STATUSES, index=option_index(list(QUOTA_STATUSES), current.get("STATUS")), key="quota_reg_form_status")
-            effective = right.date_input("Effective Date", value=as_date(current.get("EFFECTIVE_DATE"), dt.date.today()), key="quota_reg_form_effective")
+            quota_type = right.selectbox("Quota Type *", stored_options(QUOTA_TYPES,current.get("QUOTA_TYPE"),bool(view.record_id)), index=(stored_index(QUOTA_TYPES,current.get("QUOTA_TYPE")) if view.record_id else option_index(list(QUOTA_TYPES), current.get("QUOTA_TYPE"))), key="quota_reg_form_type")
+            status = right.selectbox("Status", stored_options(QUOTA_STATUSES,current.get("STATUS"),bool(view.record_id)), index=(stored_index(QUOTA_STATUSES,current.get("STATUS")) if view.record_id else option_index(list(QUOTA_STATUSES), current.get("STATUS"))), key="quota_reg_form_status")
+            effective = right.date_input("Effective Date", value=as_date(current.get("EFFECTIVE_DATE"), None if view.record_id else halifax_today()), key="quota_reg_form_effective")
             end_date = right.date_input("End Date", value=as_date(current.get("END_DATE")), key="quota_reg_form_end")
             comments = st.text_area("Comments", value=str(current.get("COMMENTS") or ""), key="quota_reg_form_comments")
+        capture_form('quota_reg_form_',current,{'ACCOUNT_ID': ['quota_reg_form_account'], 'REGISTRATION_NUMBER': ['quota_reg_form_number'], 'QUOTA_NAME': ['quota_reg_form_name', 'quota_reg_form_number'], 'QUOTA_TYPE': ['quota_reg_form_type'], 'STATUS': ['quota_reg_form_status'], 'EFFECTIVE_DATE': ['quota_reg_form_effective'], 'END_DATE': ['quota_reg_form_end'], 'COMMENTS': ['quota_reg_form_comments']})
+        if view.record_id: st.text_input("Reason for correction *",key='quota_reg_form_revision_reason')
         if action == "save":
             record = {"QUOTA_ID": view.record_id, "ACCOUNT_ID": account_options[account_label], "REGISTRATION_NUMBER": registration.strip(), "QUOTA_NAME": quota_name.strip() or registration.strip(), "QUOTA_TYPE": quota_type, "STATUS": status, "EFFECTIVE_DATE": effective, "END_DATE": end_date, "COMMENTS": comments.strip() or None}
             if not view.record_id: record.pop("QUOTA_ID")
             else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
-            errors = validate_quota_registration(repo, record)
+            errors = validate_quota_registration(repo, record) if not view.record_id else []
             if errors:
                 for error in errors: st.error(error)
             else:
                 try:
-                    saved_id = repo.upsert_quota_registration(record)
-                    clear_widget_prefix("quota_reg_form_"); open_view("detail", saved_id)
-                except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    saved_id = save_form(repo,'QUOTA_REGISTRATION',record,current,'quota_reg_form_')
+                    open_saved_record(saved_id)
+                except Exception as exc: show_data_error(exc)
+
+_pending=st.session_state.get('quota_reg_form___delete_pending')
+if _pending and delete_confirmation(repo,'delete_quota_registration',_pending,'quota_reg_form___delete'):
+    st.session_state.pop('quota_reg_form___delete_pending',None)
+    open_view("list")

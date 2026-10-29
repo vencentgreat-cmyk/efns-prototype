@@ -124,7 +124,7 @@ class BaseRepository(ABC):
     def get_record_revisions(self):
         raise NotImplementedError
 
-    def stage_production_upload(self, batch, raw_rows):
+    def stage_production_upload(self, batch, raw_rows, actor=None, review_again=False):
         raise NotImplementedError
 
     def stage_operational_review(self, batch, raw_rows):
@@ -157,7 +157,10 @@ class BaseRepository(ABC):
     def get_source_raw_rows(self, file_id):
         raise NotImplementedError
 
-    def record_current_flock_quantity(self, record, request_id, expected_updated_at, reason, *, confirmed=False, actor=None):
+    def record_current_flock_quantity(self, record, request_id, expected_updated_at, reason, *, confirmed=False, actor=None, expected_bird_count=...):
+        raise NotImplementedError
+
+    def create_record_once(self, entity, record, request_id, actor=None):
         raise NotImplementedError
 
     def get_source_review_rows(self, file_id):

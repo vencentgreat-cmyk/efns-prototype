@@ -29,13 +29,13 @@ def utc_time(value):
     value = pd.Timestamp(value)
     if pd.isna(value) or value.tzinfo is None:
         raise RepositoryError("Business time must include an explicit timezone.")
-    return value.tz_convert("UTC").tz_localize(None).to_pydatetime()
+    return value.tz_convert("UTC").tz_localize(None)
 
 
 def changed_attributes(before, record):
     changes = {}
     for field,value in record.items():
-        if field in {"EXPECTED_UPDATED_AT", "FLOCK_ID", "FACILITY_ID"}: continue
+        if field in {"EXPECTED_UPDATED_AT", "CREATED_AT", "UPDATED_AT"} or field.startswith("_"): continue
         old = before.get(field)
         if text(old) is None and text(value) is None: continue
         if field.endswith("_DATE") or field == "EST_DISPOSAL":
@@ -50,6 +50,7 @@ def changed_attributes(before, record):
 class ContinuityRepository:
     def _init_continuity(self):
         self._continuity_lock = threading.RLock()
+        self._continuity_local = threading.local()
         self._continuity_rows = {table: [] for table in TABLES}
         self._original_bytes = {}
 
@@ -64,25 +65,28 @@ class ContinuityRepository:
 
     @contextmanager
     def _continuity_transaction(self):
+        # Nested repository helpers join the one owning transaction. They must
+        # not independently commit, re-lock or replace the outer snapshot.
         with self._continuity_lock:
+            if getattr(self._continuity_local,'active',False):
+                yield self._continuity_local.tx
+                return
             if not self._is_memory:
                 with self._executor().transaction() as tx:
-                    # Standard-table keys are informational. One provisioned
-                    # control row serializes these new intake/history writers
-                    # across sessions; row-CAS still detects older writers.
-                    locked = tx.execute(f"UPDATE {self.database}.RAW.INTAKE_LOCK SET VERSION=VERSION+1 WHERE LOCK_ID='continuity'", ())
-                    if locked != 1:
-                        raise RepositoryError("The intake transaction lock is missing or not unique.")
-                    yield tx
+                    locked=tx.execute(f"UPDATE {self.database}.RAW.INTAKE_LOCK SET VERSION=VERSION+1 WHERE LOCK_ID='continuity'",())
+                    if locked!=1:raise RepositoryError('The intake transaction lock is missing or not unique.')
+                    self._continuity_local.active=True;self._continuity_local.tx=tx
+                    try:yield tx
+                    finally:self._continuity_local.active=False;self._continuity_local.tx=None
                 return
-            names = ("_continuity_rows", "_flocks", "_facilities", "_production", "_raw_rows", "_import_batches", "_flock_transactions", "_migration_review_audit")
-            snapshot = {name: copy.deepcopy(getattr(self, name)) for name in names}
-            try:
-                yield None
+            names=("_continuity_rows","_flocks","_facilities","_production","_raw_rows","_import_batches","_flock_transactions","_migration_review_audit","_accounts","_farm_locations","_facility_details","_quota_registrations","_quota_transactions","_salmonella_tests")
+            snapshot={name:copy.deepcopy(getattr(self,name)) for name in names if hasattr(self,name)}
+            self._continuity_local.active=True;self._continuity_local.tx=None
+            try:yield None
             except Exception:
-                for name, value in snapshot.items():
-                    setattr(self, name, value)
+                for name,value in snapshot.items():setattr(self,name,value)
                 raise
+            finally:self._continuity_local.active=False
 
     def _history_rows(self, table, key=None, value=None, tx=None):
         if self._is_memory:
@@ -99,7 +103,8 @@ class ContinuityRepository:
             return
         columns = list(record)
         placeholders = ["PARSE_JSON(%s)" if field in JSON_FIELDS else "%s" for field in columns]
-        params = [evidence_json(record[field]) if field in JSON_FIELDS else record[field] for field in columns]
+        from data.repositories.snowflake import normalize_timestamp_bind
+        params = [evidence_json(record[field]) if field in JSON_FIELDS else normalize_timestamp_bind(record[field],field) if field.endswith("_AT") else record[field] for field in columns]
         tx.execute(f"INSERT INTO {self._continuity_table(table)} ({', '.join(columns)}) SELECT {', '.join(placeholders)}", tuple(params))
 
     def archive_source_file(self, filename, content, route, actor=None):
@@ -167,16 +172,33 @@ class ContinuityRepository:
             if actor:
                 self._append_history(tx,'RECORD_REVISION',dict(REVISION_ID=str(uuid.uuid4()),ENTITY_TYPE='SOURCE_FILE',ENTITY_ID=file_id,CHANGE_KIND='PARSE_REVIEW',BUSINESS_AT=None,RECORDED_AT=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),RECORDED_BY=actor,REASON='Parser outcome; business-row validation is recorded separately',BEFORE_DATA=before,AFTER_DATA=dict(before,PARSE_STATUS=status,PARSE_ERROR=error)))
 
-    def stage_production_upload(self, batch, raw_rows):
+    def stage_production_upload(self, batch, raw_rows, actor=None, review_again=False):
         file_id = batch.get("SOURCE_FILE_ID")
         if not file_id or len(self._history_rows("SOURCE_FILE", "SOURCE_FILE_ID", file_id)) != 1:
             raise RepositoryError("Archive the original workbook before staging rows.")
+        from data.production_intake import review_token
+        batch=dict(batch)
+        notes=json.dumps({'_EFNS_PREVIEW_TOKEN':review_token(raw_rows),'operator_notes':batch.get('NOTES')},sort_keys=True,default=str)
+        if len(notes)>2000:raise RepositoryError('Production review notes exceed the existing batch limit.')
+        batch['NOTES']=notes
         import_id = stable_id("production-upload", file_id)
         if len({row['SOURCE_ROW_NUMBER'] for row in raw_rows}) != len(raw_rows):
             raise RepositoryError("Source row numbers must be unique within a workbook.")
         with self._continuity_transaction() as tx:
             existing = self.find_import_by_hash(batch["FILE_HASH"])
             if existing:
+                if review_again and existing.get('STATUS')=='Staged':
+                    if not text(actor):raise RepositoryError('An authenticated reviewer is required.')
+                    stored=self.get_raw_rows(existing['IMPORT_ID']).to_dict('records')
+                    canonical=lambda rows:sorted((int(r['SOURCE_ROW_NUMBER']),evidence_json(json.loads(r['RAW_DATA']) if isinstance(r['RAW_DATA'],str) else r['RAW_DATA'])) for r in rows)
+                    if canonical(stored)!=canonical(raw_rows):raise RepositoryError('Re-review must use exactly the previously retained source rows; RAW was not changed.')
+                    if existing.get('NOTES')!=notes:
+                        if self._is_memory:
+                            for row in self._import_batches:
+                                if row['IMPORT_ID']==existing['IMPORT_ID']:row['NOTES']=notes
+                        elif tx.execute(f"UPDATE {self._table('IMPORT_BATCH',self.schema_raw)} SET NOTES=%s,UPDATED_AT={NOW} WHERE IMPORT_ID=%s AND STATUS='Staged'",(notes,existing['IMPORT_ID']))!=1:
+                            raise ConcurrencyError('Staged review changed concurrently.')
+                        self._append_history(tx,'RECORD_REVISION',dict(REVISION_ID=str(uuid.uuid4()),ENTITY_TYPE='IMPORT_BATCH',ENTITY_ID=existing['IMPORT_ID'],CHANGE_KIND='PREVIEW_REVALIDATION',BUSINESS_AT=None,RECORDED_AT=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),RECORDED_BY=actor,REASON='Explicit producer matching re-review; retained RAW unchanged',BEFORE_DATA={'review_metadata':existing.get('NOTES')},AFTER_DATA={'review_metadata':notes}))
                 return existing["IMPORT_ID"]
             values = dict(batch, IMPORT_ID=import_id, STATUS="Staged", ROW_COUNT=0)
             if self._is_memory:
@@ -237,9 +259,13 @@ class ContinuityRepository:
         if self._is_memory: return pd.DataFrame([row for row in self._raw_rows if row.get("SOURCE_FILE_ID")==file_id])
         return self._query(f"SELECT * FROM {self._table('IMPORT_RAW_ROW',self.schema_raw)} WHERE SOURCE_FILE_ID=%s ORDER BY IMPORT_ID,SOURCE_ROW_NUMBER",(file_id,))
 
-    def record_current_flock_quantity(self, record, request_id, expected_updated_at, reason, *, confirmed=False, actor=None):
+    def record_current_flock_quantity(self, record, request_id, expected_updated_at, reason, *, confirmed=False, actor=None, expected_bird_count=...):
         from data.flock_quantity import record_current_quantity
-        return record_current_quantity(self,record,request_id,expected_updated_at,reason,confirmed=confirmed,actor=actor)
+        return record_current_quantity(self,record,request_id,expected_updated_at,reason,confirmed=confirmed,actor=actor,expected_bird_count=expected_bird_count)
+
+    def create_record_once(self, entity, record, request_id, actor=None):
+        from data.record_safety import create_once
+        return create_once(self,entity,record,request_id,actor)
 
     def _guard_applied_quantity_transaction(self, transaction_id):
         if not transaction_id: return
@@ -311,7 +337,12 @@ class ContinuityRepository:
                 payload = row["RAW_DATA"]
                 payload = json.loads(payload) if isinstance(payload, str) else dict(payload)
                 rows.append(dict(payload, SOURCE_ROW_NUMBER=row["SOURCE_ROW_NUMBER"]))
-            records, _, _, _ = prepare_workbook(pd.DataFrame(rows), batch["SOURCE_FILE_ID"], self.get_accounts())
+            records, reviewed_rows, _, _ = prepare_workbook(pd.DataFrame(rows), batch["SOURCE_FILE_ID"], self.get_accounts())
+            from data.production_intake import review_token
+            try:metadata=json.loads(batch.get('NOTES') or '{}')
+            except (TypeError,ValueError):metadata={}
+            if not isinstance(metadata,dict) or metadata.get('_EFNS_PREVIEW_TOKEN')!=review_token(reviewed_rows):
+                raise ConcurrencyError('Producer matching or validation changed after preview, or the staged batch has no review token. Re-review the staged source; no business records committed.')
             if new_observations_confirmed is not True:
                 raise RepositoryError("Workbook upload is not an automatic correction. A corrected workbook needs the original Production ID: use Production corrections. Otherwise explicitly confirm these are independent new observations. RAW remains Staged; no CORE write occurred.")
             count = self.insert_production_records(records, import_id) if self._is_memory else self._insert_production(tx, records, import_id)
@@ -338,7 +369,7 @@ class ContinuityRepository:
     def match_production_producer(self, production_id, account_id=None, basis=None, actor=None):
         """Resolve exact source identity or record an explicit staff decision."""
         with self._continuity_transaction() as tx:
-            frame = self._production[self._production.PRODUCTION_ID == production_id] if self._is_memory else tx.query(f"SELECT * FROM {self._table('PRODUCTION_RECORD')} WHERE PRODUCTION_ID=%s", (production_id,))
+            frame = self._production[self._production.PRODUCTION_ID == production_id] if self._is_memory else tx.query(f"SELECT * REPLACE (TO_CHAR(UPDATED_AT,'YYYY-MM-DD\"T\"HH24:MI:SS.FF9') AS UPDATED_AT) FROM {self._table('PRODUCTION_RECORD')} WHERE PRODUCTION_ID=%s", (production_id,))
             if len(frame) != 1:
                 raise RepositoryError("Production identity is missing or ambiguous.")
             before = frame.iloc[0].to_dict()
@@ -378,6 +409,9 @@ class ContinuityRepository:
         return decision
 
     def create_manual_production(self, record, request_id, actor=None):
+        from data.record_safety import actor_id,history_audit
+        actor_metadata=actor
+        actor=actor_id(actor)
         from data.repositories.snowflake import PRODUCTION_DECIMAL_COLUMNS, normalize_numeric_bind
         if set(record)-({"PRODUCER_ACCOUNT_ID","REPORTING_YEAR","REPORTING_WEEK"}|PRODUCTION_DECIMAL_COLUMNS):
             raise RepositoryError("Manual intake accepts producer, reporting period and measured quantities only.")
@@ -399,7 +433,14 @@ class ContinuityRepository:
             item[field] = normalize_numeric_bind(item[field], field, 1, integer=False)
         with self._continuity_transaction() as tx:
             existing = self._production[self._production.PRODUCTION_ID == item["PRODUCTION_ID"]] if self._is_memory else tx.query(f"SELECT PRODUCTION_ID FROM {self._table('PRODUCTION_RECORD')} WHERE PRODUCTION_ID=%s", (item["PRODUCTION_ID"],))
-            if not existing.empty: return item["PRODUCTION_ID"]
+            if not existing.empty:
+                raw=self.get_raw_rows(stable_id("manual-production-batch",request_id))
+                if len(raw)!=1: raise RepositoryError("Manual request source receipt is missing or ambiguous.")
+                old=raw.iloc[0].RAW_DATA
+                old=json.loads(old) if isinstance(old,str) else old
+                if evidence_json(old)!=evidence_json(record):
+                    raise RepositoryError("This manual production request already has different values; start another record.")
+                return item["PRODUCTION_ID"]
             import_id = stable_id("manual-production-batch", request_id)
             batch = dict(IMPORT_ID=import_id,FILENAME="Manual entry",SOURCE="Manual business entry",STATUS="Committed",ROW_COUNT=1,SOURCE_RECORD_COUNT=1)
             source = dict(RAW_ROW_ID=stable_id("manual-raw",request_id),SOURCE_ROW_NUMBER=1,RAW_DATA=dict(record),VALIDATION_STATUS="VALID",MATCH_STATUS="STAFF_CONFIRMED",VALIDATION_MESSAGES=[],TARGET_ENTITY="PRODUCTION_RECORD",TARGET_ID=item['PRODUCTION_ID'])
@@ -412,6 +453,7 @@ class ContinuityRepository:
                 self._insert_raw(tx,import_id,[source])
                 self._insert_production(tx, [item], import_id)
             self._append_match(tx, item, actor, "STAFF")
+            history_audit(self,tx,'PRODUCTION_RECORD',item['PRODUCTION_ID'],request_id,actor_metadata,'Explicit manual production entry','CREATE',None,item)
         return item["PRODUCTION_ID"]
 
     def get_flock_events(self, flock_id):
@@ -545,55 +587,15 @@ class ContinuityRepository:
         return event_id
 
     def revise_record(self, entity, record_id, changes, reason, request_id, actor=None, business_at=None, expected_updated_at=None):
-        """Attribute corrections are not quantity activities, movement, or lifecycle ends."""
-        from data.repositories.snowflake import MODEL
-        if entity == 'PRODUCTION_RECORD':
-            return self._revise_production(record_id, changes, reason, request_id, actor, business_at, expected_updated_at)
-        if entity not in {"FLOCK", "FACILITY"} or not text(reason) or not text(actor) or not text(request_id):
-            raise RepositoryError("Select a Flock or Facility and supply a reason, recorder and request ID.")
-        key, attributes = MODEL[entity]
-        if not changes or not set(changes).issubset(set(attributes.split())):
-            raise RepositoryError("Only known mutable attributes can be corrected.")
-        if entity == "FLOCK" and {"FACILITY_ID", "DISPOSAL_DATE"}.intersection(changes):
-            raise RepositoryError("Use explicit movement/end events for those changes, not an attribute correction.")
-        revision_id = stable_id("revision", entity, record_id, request_id)
-        with self._continuity_transaction() as tx:
-            if not self._history_rows("RECORD_REVISION", "REVISION_ID", revision_id, tx).empty: return record_id
-            before = self.get_flock(record_id) if entity == "FLOCK" else self.get_facility(record_id)
-            if not before: raise RepositoryError("The record no longer exists.")
-            if expected_updated_at is not None and pd.Timestamp(expected_updated_at) != pd.Timestamp(before.get("UPDATED_AT")):
-                raise ConcurrencyError("This record changed after it was opened; reload it before correcting attributes.")
-            kind = "QUANTITY_CORRECTION" if {"BIRD_COUNT", "BIRDS_DISPOSED"}.intersection(changes) else "ATTRIBUTE_CORRECTION"
-            for field in {"BIRD_COUNT", "BIRDS_DISPOSED"}.intersection(changes):
-                from data.repositories.snowflake import normalize_numeric_bind
-                changes[field] = normalize_numeric_bind(changes[field],field,1,integer=True)
-                if field == "BIRD_COUNT" and changes[field] is not None and changes[field] < 0:
-                    raise RepositoryError("Corrected Bird Count must be a known nonnegative integer.")
-            updated = dict(before, **changes, EXPECTED_UPDATED_AT=before.get("UPDATED_AT"))
-            # Validate changed identity/relationships without reclassifying
-            # preserved historical attributes under today's entry rules.
-            if {"ACCOUNT_ID", "FACILITY_DETAIL_ID", "QUOTA_ID"}.intersection(changes):
-                from data.validation import validate_flock
-                if entity == "FLOCK":
-                    errors = validate_flock(self,updated)
-                    if errors: raise RepositoryError(" ".join(errors))
-                else:
-                    parents = self.get_accounts()
-                    if len(parents[parents.ACCOUNT_ID == updated["ACCOUNT_ID"]]) != 1:
-                        raise RepositoryError("Facility Account is missing or ambiguous.")
-                    linked = self.get_flocks(facility_id=record_id)
-                    if not linked.empty and (linked.ACCOUNT_ID != updated["ACCOUNT_ID"]).any():
-                        raise RepositoryError("Changing Facility ownership would conflict with existing Flock Accounts; confirmation is required.")
-            name = "FLOCK_NUMBER" if entity == "FLOCK" else "FACILITY_NAME"
-            if name in changes and not text(changes[name]): raise RepositoryError("The business name/number cannot be empty.")
-            if self._is_memory:
-                self._upsert_frame("_flocks" if entity == "FLOCK" else "_facilities",key,updated)
-            else:
-                self._upsert_with_executor(tx,entity,{key:record_id,**changes,"EXPECTED_UPDATED_AT":before["UPDATED_AT"]})
-            self._append_history(tx, "RECORD_REVISION", dict(REVISION_ID=revision_id,ENTITY_TYPE=entity,ENTITY_ID=record_id, CHANGE_KIND=kind,BUSINESS_AT=utc_time(business_at) if business_at else None, RECORDED_AT=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),RECORDED_BY=actor,REASON=reason, BEFORE_DATA=before,AFTER_DATA={key: value for key,value in updated.items() if key != "EXPECTED_UPDATED_AT"}))
-        return record_id
+        if entity=='PRODUCTION_RECORD':
+            return self._revise_production(record_id,changes,reason,request_id,actor,business_at,expected_updated_at)
+        from data.record_safety import revise_entity
+        return revise_entity(self,entity,record_id,changes,reason,request_id,actor,business_at,expected_updated_at)
 
     def _revise_production(self, record_id, changes, reason, request_id, actor, business_at, expected_updated_at):
+        from data.record_safety import actor_id,history_audit
+        actor_metadata=actor
+        actor=actor_id(actor)
         from data.repositories.snowflake import PRODUCTION_DECIMAL_COLUMNS, normalize_numeric_bind, normalize_timestamp_bind
         allowed = PRODUCTION_DECIMAL_COLUMNS | {'REPORTING_YEAR', 'REPORTING_WEEK'}
         if not changes or not set(changes).issubset(allowed) or not all(text(v) for v in (reason, request_id, actor)) or expected_updated_at is None:
@@ -602,17 +604,21 @@ class ContinuityRepository:
         for field, maximum in (('REPORTING_YEAR',9999),('REPORTING_WEEK',53)):
             if field in values and (values[field] is None or not 1 <= values[field] <= maximum):
                 raise RepositoryError(f"{field} must be between 1 and {maximum}.")
+        fingerprint=evidence_json(dict(values=values,reason=reason,actor=actor,business_at=business_at))
         revision_id = stable_id('revision','PRODUCTION_RECORD',record_id,request_id)
         with self._continuity_transaction() as tx:
             saved = self._history_rows('RECORD_REVISION','REVISION_ID',revision_id,tx)
             if not saved.empty:
                 after = saved.iloc[0].AFTER_DATA
                 after = json.loads(after) if isinstance(after,str) else after
+                if after.get('_REVISION_REQUEST') is not None:
+                    if after['_REVISION_REQUEST']!=fingerprint:raise RepositoryError('This correction request already has different values or reason.')
+                    return record_id
                 from decimal import Decimal
                 if saved.iloc[0].REASON != reason or any((text(after.get(k)) is None) != (v is None) or (v is not None and Decimal(str(after[k])) != v) for k,v in values.items()):
                     raise RepositoryError('This correction request already has different values or reason; start a new correction.')
                 return record_id
-            found = self._production[self._production.PRODUCTION_ID == record_id] if self._is_memory else tx.query(f"SELECT * FROM {self._table('PRODUCTION_RECORD')} WHERE PRODUCTION_ID=%s",(record_id,))
+            found = self._production[self._production.PRODUCTION_ID == record_id] if self._is_memory else tx.query(f"SELECT * REPLACE (TO_CHAR(UPDATED_AT,'YYYY-MM-DD\"T\"HH24:MI:SS.FF9') AS UPDATED_AT) FROM {self._table('PRODUCTION_RECORD')} WHERE PRODUCTION_ID=%s",(record_id,))
             if len(found) != 1: raise RepositoryError('The original Production ID is missing or ambiguous; no record was created.')
             before = found.iloc[0].to_dict()
             if pd.Timestamp(expected_updated_at) != pd.Timestamp(before.get('UPDATED_AT')):
@@ -626,9 +632,10 @@ class ContinuityRepository:
                 sets = ','.join(f'{field}=%s' for field in values)
                 changed = tx.execute(f"UPDATE {self._table('PRODUCTION_RECORD')} SET {sets},UPDATED_AT={NOW} WHERE PRODUCTION_ID=%s AND UPDATED_AT=%s",(*values.values(),record_id,normalize_timestamp_bind(before['UPDATED_AT'])))
                 if changed != 1: raise ConcurrencyError('Production changed concurrently; no correction saved.')
-                written = tx.query(f"SELECT * FROM {self._table('PRODUCTION_RECORD')} WHERE PRODUCTION_ID=%s",(record_id,))
+                written = tx.query(f"SELECT * REPLACE (TO_CHAR(UPDATED_AT,'YYYY-MM-DD\"T\"HH24:MI:SS.FF9') AS UPDATED_AT) FROM {self._table('PRODUCTION_RECORD')} WHERE PRODUCTION_ID=%s",(record_id,))
                 if len(written) != 1: raise RepositoryError('Corrected production identity is no longer unique.')
                 after = written.iloc[0].to_dict()
             kind = 'QUANTITY_CORRECTION' if PRODUCTION_DECIMAL_COLUMNS.intersection(values) else 'ATTRIBUTE_CORRECTION'
-            self._append_history(tx,'RECORD_REVISION',dict(REVISION_ID=revision_id,ENTITY_TYPE='PRODUCTION_RECORD',ENTITY_ID=record_id,CHANGE_KIND=kind,BUSINESS_AT=utc_time(business_at) if business_at else None,RECORDED_AT=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),RECORDED_BY=actor,REASON=reason,BEFORE_DATA=before,AFTER_DATA=after))
+            self._append_history(tx,'RECORD_REVISION',dict(REVISION_ID=revision_id,ENTITY_TYPE='PRODUCTION_RECORD',ENTITY_ID=record_id,CHANGE_KIND=kind,BUSINESS_AT=utc_time(business_at) if business_at else None,RECORDED_AT=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),RECORDED_BY=actor,REASON=reason,BEFORE_DATA=before,AFTER_DATA={**after,'_REVISION_REQUEST':fingerprint}))
+            history_audit(self,tx,'PRODUCTION_RECORD',record_id,request_id,actor_metadata,reason,kind,before,after)
         return record_id

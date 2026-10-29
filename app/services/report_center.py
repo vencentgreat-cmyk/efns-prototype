@@ -157,6 +157,13 @@ def _query_dataset(repo, name: str, filters: dict) -> pd.DataFrame:
         "Salmonella Tests": ("account_id", "facility_id", "flock_id", "test_result", "date_from", "date_to"),
         "Production Records": ("reporting_year", "reporting_week", "grader_number", "barn_identity", "egg_colour", "account_id"),
     }[name]
+    derived=set()
+    if name in {'Flocks','Flock Transactions','Production Records'}:
+        derived.update(('facility_id','flock_id','facility_account_id','flock_account_id'))
+    if name=='Flocks':derived.update(('date_from','date_to','date_field'))
+    if name=='Production Records':derived.add('source_scope')
+    unsupported=[key for key,value in filters.items() if value not in (None,'',(),[],False) and key not in set(supported)|derived]
+    if unsupported:raise ValueError('Unsupported filter(s) for this dataset: '+', '.join(unsupported))
     return method(**{key: value for key, value in filters.items() if key in supported and value not in (None, "", ())})
 
 

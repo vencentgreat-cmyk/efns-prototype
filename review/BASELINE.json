@@ -1,40 +1,7 @@
 {
-  "application_baseline": "zero_count_revision/candidate_app",
-  "runtime_file_count": 78,
-  "runtime_bytes_changed": true,
-  "descriptor_included_unchanged": true,
-  "root_worktree_used_for_application": false,
-  "old_git_history_included": false,
-  "old_head": "123108c63064dcabf09062538c0c93832c5227e3",
-  "root_branch": "codex/identity-history-archives",
-  "company_connections_this_review": false,
-  "deployment_performed": false,
-  "database_verified_this_review": false,
-  "versions": {
-    "streamlit": "1.52.2",
-    "pandas": "2.3.3",
-    "numpy": "2.5.3",
-    "openpyxl": "3.1.5",
-    "pytest": "9.1.1",
-    "PyYAML": "6.0.3",
-    "python-dotenv": "1.2.3",
-    "snowflake-connector-python": "4.7.3",
-    "snowflake-snowpark-python": "1.55.0"
-  },
-  "excluded_test_files": [
-    "test_company_application_deployment.py",
-    "test_company_deployment.py",
-    "test_dev_synthetic_sql.py"
-  ],
-  "excluded_sql_files": [
-    "07_initial_admin.sql",
-    "10_dev_synthetic_cleanup.sql"
-  ],
-  "excluded_test": "test_upgrade_and_fresh_schema_have_identical_manual_decision_columns",
-  "excluded_test_reason": "Requires company preparation scripts plus dated GET_DDL snapshot deliberately not shared.",
-  "review_only_runtime_exception": {
-    "path": "app/security.py",
-    "change": "Four default prototype password hashes disabled for sharing. No authorization logic or company identity changes.",
-    "deployment_candidate_modified": false
-  }
+  "review_commit": "8f3733e89938cf2d6d6846e2e42583d9ff9c5730",
+  "runtime_source": "zero_count_revision/candidate_app",
+  "saved_live": "live-rollback-20261028T134845Z/sources",
+  "company_access": false,
+  "external_repro_supplied": false
 }

@@ -122,7 +122,7 @@ def normalize_date_bind(value, field: str = "Date") -> dt.date | None:
     raise RepositoryError(f"{field.replace('_', ' ').title()} must be a date value.")
 
 
-def normalize_timestamp_bind(value, field: str = "Timestamp") -> dt.datetime | None:
+def normalize_timestamp_bind(value, field: str = "Timestamp") -> str | None:
     """Return a Connector/Snowpark-compatible UTC-naive TIMESTAMP_NTZ bind."""
     if value is None:
         return None
@@ -137,7 +137,7 @@ def normalize_timestamp_bind(value, field: str = "Timestamp") -> dt.datetime | N
         raise RepositoryError(f"{field.replace('_', ' ').title()} is not a valid timestamp.") from exc
     if converted.tzinfo is not None:
         converted = converted.tz_convert("UTC").tz_localize(None)
-    return converted.to_pydatetime()
+    return converted.isoformat()
 
 
 def _is_missing_bind(value) -> bool:
@@ -295,10 +295,14 @@ class SnowflakeRepository(FlockDateRepairRepository, FlockSupplementRepository, 
         return f"{self.database}.{schema or self.schema_core}.{table}"
 
     def _query(self, sql, params=None):
+        for table in (*MODEL,'PRODUCTION_RECORD'):
+            target=re.escape(self._table(table))
+            sql=re.sub(rf'^(SELECT (?:DISTINCT )?)\* FROM ({target})(?=\s|$)',lambda m:m[1]+"* REPLACE (TO_CHAR(UPDATED_AT,'YYYY-MM-DD\"T\"HH24:MI:SS.FF9') AS UPDATED_AT) FROM "+m[2],sql,flags=re.I)
         return self._executor().query(sql, params)
 
     def _one(self, table, column, value, schema=None):
         frame = self._query(f"SELECT * FROM {self._table(table, schema)} WHERE {column} = %s", (value,))
+        if len(frame)>1:raise RepositoryError('Record identity is duplicated; no single-record operation accepted.')
         return frame.iloc[0].to_dict() if not frame.empty else None
 
     @staticmethod
@@ -344,7 +348,7 @@ class SnowflakeRepository(FlockDateRepairRepository, FlockSupplementRepository, 
         update_sql = (
             f"UPDATE {target_table} SET "
             + ", ".join(f"{name} = %s" for name in values)
-            + f", UPDATED_AT = {UTC_NOW_NTZ} "
+            + f", UPDATED_AT = GREATEST({UTC_NOW_NTZ},DATEADD(nanosecond,1,COALESCE(UPDATED_AT,{UTC_NOW_NTZ}))) "
             + f"WHERE {key} = %s{lock}"
         )
 
@@ -433,20 +437,32 @@ class SnowflakeRepository(FlockDateRepairRepository, FlockSupplementRepository, 
                 f"{table.replace('_', ' ').title()} record."
             )
 
+        if affected!=1:raise RepositoryError('Update did not affect exactly one record; nothing accepted.')
         return entity_id
 
-    def _upsert(self, table: str, record: dict) -> str:
+    def _upsert(self, table: str, record: dict, *, _business=False) -> str:
+        if _business:
+            with self._continuity_transaction() as tx:
+                from data.record_safety import validate_parents_in_transaction
+                validate_parents_in_transaction(self,table,record,tx)
+                return self._upsert_with_executor(tx,table,record)
+        # Primitive SQL-contract callers own their validation/serialization.
+        # All employee-facing typed writers opt into the business boundary.
         with self._executor().transaction() as tx:
-            return self._upsert_with_executor(tx, table, record)
+            return self._upsert_with_executor(tx,table,record)
 
     def _delete(self, table, key, entity_id, references=()):
-        with self._executor().transaction() as tx:
+        with self._continuity_transaction() as tx:
+            from data.record_safety import guard_references
+            guard_references(self,table,entity_id,tx)
             for ref_table, ref_col in references:
                 schema = self.schema_core
                 existing = tx.query(f"SELECT 1 AS FOUND FROM {self._table(ref_table, schema)} WHERE {ref_col} = %s LIMIT 1", (entity_id,))
                 if not existing.empty:
                     raise RepositoryError(f"This {table.replace('_', ' ').title()} still has related records and cannot be deleted.")
             affected = tx.execute(f"DELETE FROM {self._table(table)} WHERE {key} = %s", (entity_id,))
+            if affected > 1:
+                raise RepositoryError('Delete affected multiple records with the same identity; transaction rolled back.')
             if affected >= 0:
                 return affected > 0
             remaining = tx.query(
@@ -507,7 +523,7 @@ class SnowflakeRepository(FlockDateRepairRepository, FlockSupplementRepository, 
                 raise RepositoryError("Account cannot reference itself in an Account lookup.")
             if record.get(field) and self.get_account(record[field]) is None:
                 raise RepositoryError(f"{field} must reference an existing Account.")
-        return self._upsert("ACCOUNT", record)
+        return self._upsert("ACCOUNT",record,_business=True)
     def delete_account(self, value): return self._delete("ACCOUNT", "ACCOUNT_ID", value, (("ACCOUNT", "PARENT_ACCOUNT_ID"), ("ACCOUNT", "GRADING_STATION_ACCOUNT_ID"), ("ACCOUNT", "PULLET_GROWER_ACCOUNT_ID"), ("FARM_LOCATION", "ACCOUNT_ID"), ("FACILITY", "ACCOUNT_ID"), ("FLOCK", "ACCOUNT_ID"), ("QUOTA_REGISTRATION", "ACCOUNT_ID"), ("SALMONELLA_TEST", "ACCOUNT_ID")))
 
     def get_contacts(self, account_id=None, statuses=None, keyword=None):
@@ -540,14 +556,14 @@ class SnowflakeRepository(FlockDateRepairRepository, FlockSupplementRepository, 
     def upsert_farm_location(self, record):
         errors = validate_farm_location(self, record)
         if errors: raise RepositoryError(" ".join(errors))
-        return self._upsert("FARM_LOCATION", record)
+        return self._upsert("FARM_LOCATION",record,_business=True)
     def delete_farm_location(self, value): return self._delete("FARM_LOCATION", "FARM_LOCATION_ID", value)
 
     def get_facilities(self, account_id=None, statuses=None): return self._filtered("FACILITY", (("ACCOUNT_ID", account_id), ("STATUS", statuses)))
     def upsert_facility(self, record):
         with self._continuity_transaction():
             self.check_facility_ownership(record)
-            return self._upsert("FACILITY", record)
+            return self._upsert("FACILITY",record,_business=True)
     def delete_facility(self, value):
         self.check_facility_history(value)
         return self._delete("FACILITY", "FACILITY_ID", value, (("FACILITY_DETAIL", "FACILITY_ID"), ("FLOCK", "FACILITY_ID")))
@@ -559,7 +575,7 @@ class SnowflakeRepository(FlockDateRepairRepository, FlockSupplementRepository, 
             return self._query(f"SELECT DISTINCT fd.* FROM {self._table('FACILITY_DETAIL')} fd JOIN {self._table('FACILITY')} f ON f.FACILITY_ID = fd.FACILITY_ID WHERE " + " AND ".join(conditions), tuple(params))
         return self._filtered("FACILITY_DETAIL", (("FACILITY_ID", facility_id), ("STATUS", statuses)))
     def get_facility_detail(self, value): return self._one("FACILITY_DETAIL", "FACILITY_DETAIL_ID", value)
-    def upsert_facility_detail(self, record): return self._upsert("FACILITY_DETAIL", record)
+    def upsert_facility_detail(self, record): return self._upsert("FACILITY_DETAIL",record,_business=True)
     def delete_facility_detail(self, value): return self._delete("FACILITY_DETAIL", "FACILITY_DETAIL_ID", value, (("FLOCK", "FACILITY_DETAIL_ID"),))
 
     def get_flocks(self, account_id=None, facility_id=None, facility_detail_id=None, statuses=None): return self._filtered("FLOCK", (("ACCOUNT_ID", account_id), ("FACILITY_ID", facility_id), ("FACILITY_DETAIL_ID", facility_detail_id), ("STATUS", statuses)))
@@ -571,7 +587,7 @@ class SnowflakeRepository(FlockDateRepairRepository, FlockSupplementRepository, 
             self.check_flock_reference_change(record)
             errors = validate_flock(self, record)
             if errors: raise RepositoryError(" ".join(errors))
-            return self._upsert("FLOCK", record)
+            return self._upsert("FLOCK",record,_business=True)
     def delete_flock(self, value):
         if not self.get_flock_events(value).empty: raise RepositoryError("Flock cannot be deleted while business history exists.")
         return self._delete("FLOCK", "FLOCK_ID", value, (("FLOCK_TRANSACTION", "FLOCK_ID"), ("SALMONELLA_TEST", "FLOCK_ID"), ("PRODUCTION_RECORD", "FLOCK_ID")))
@@ -590,7 +606,7 @@ class SnowflakeRepository(FlockDateRepairRepository, FlockSupplementRepository, 
         from data.validation import validate_flock_transaction
         errors = validate_flock_transaction(self, record)
         if errors: raise RepositoryError(' '.join(errors))
-        return self._upsert("FLOCK_TRANSACTION", record)
+        return self._upsert("FLOCK_TRANSACTION",record,_business=True)
     def delete_flock_transaction(self, value):
         self._guard_applied_quantity_transaction(value)
         return self._delete("FLOCK_TRANSACTION", "FLOCK_TRANSACTION_ID", value)
@@ -607,7 +623,7 @@ class SnowflakeRepository(FlockDateRepairRepository, FlockSupplementRepository, 
         record = self._normalize_date_fields("QUOTA_REGISTRATION", record)
         errors = validate_quota_registration(self, record)
         if errors: raise RepositoryError(" ".join(errors))
-        return self._upsert("QUOTA_REGISTRATION", record)
+        return self._upsert("QUOTA_REGISTRATION",record,_business=True)
     def delete_quota_registration(self, value): return self._delete("QUOTA_REGISTRATION", "QUOTA_ID", value, (("QUOTA_TRANSACTION", "QUOTA_ID"), ("FLOCK", "QUOTA_ID")))
 
     def get_quota_transactions(self, account_id=None, quota_id=None, quota_type=None, transaction_type=None, date_from=None, date_to=None):
@@ -676,7 +692,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
         record = self._normalize_date_fields("SALMONELLA_TEST", record)
         errors = validate_salmonella_test(self, record)
         if errors: raise RepositoryError(" ".join(errors))
-        return self._upsert("SALMONELLA_TEST", record)
+        return self._upsert("SALMONELLA_TEST",record,_business=True)
     def delete_salmonella_test(self, value): return self._delete("SALMONELLA_TEST", "SALMONELLA_TEST_ID", value, (("SALMONELLA_TEST_SAMPLE", "SALMONELLA_TEST_ID"),))
     def get_salmonella_test_samples(self, test_id=None): return self._filtered("SALMONELLA_TEST_SAMPLE", (("SALMONELLA_TEST_ID", test_id),))
 
@@ -1261,7 +1277,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
             raise RepositoryError("Migration batch status is not eligible for commit.")
         try:
             counts = {}
-            with self._executor().transaction() as tx:
+            with self._continuity_transaction() as tx:
                 rows = tx.query(
                     f"SELECT SOURCE_ENTITY, SOURCE_ROW_NUMBER, NORMALIZED_DATA FROM {self._table('MIGRATION_RAW_ROW', self.schema_raw)} WHERE MIGRATION_BATCH_ID = %s AND VALIDATION_STATUS = %s ORDER BY SOURCE_ENTITY, SOURCE_ROW_NUMBER",
                     (batch_id, "READY"),
@@ -1405,7 +1421,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                 "idempotent": True,
             }
         counts: dict[str, int] = {}
-        with self._executor().transaction() as tx:
+        with self._continuity_transaction() as tx:
             sources = tx.query(source_sql, (batch_id,))
             validate_correction_sources(batch_id, preview.rows, sources)
             if existing_batch is None:
@@ -1504,7 +1520,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
 
     def import_production_bundle(self, batch, raw_rows, records, allow_duplicate=False):
         import_id, file_hash = batch.get("IMPORT_ID") or str(uuid.uuid4()), batch.get("FILE_HASH")
-        with self._executor().transaction() as tx:
+        with self._continuity_transaction() as tx:
             if file_hash and not allow_duplicate:
                 existing = tx.query(f"SELECT IMPORT_ID FROM {self._table('IMPORT_BATCH', self.schema_raw)} WHERE FILE_HASH = %s LIMIT 1", (file_hash,))
                 if not existing.empty: raise RepositoryError("This exact file has already been imported.")
@@ -1522,7 +1538,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
         file_hash = batch.get("FILE_HASH")
         created_count = 0
         updated_count = 0
-        with self._executor().transaction() as tx:
+        with self._continuity_transaction() as tx:
             if file_hash:
                 existing = tx.query(
                     f"SELECT IMPORT_ID FROM {self._table('IMPORT_BATCH', self.schema_raw)} WHERE FILE_HASH = %s LIMIT 1",
@@ -1661,7 +1677,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
         }
         counts = {entity: 0 for entity in keys}
         created_count = updated_count = 0
-        with self._executor().transaction() as tx:
+        with self._continuity_transaction() as tx:
             if file_hash:
                 duplicate = tx.query(
                     f"SELECT IMPORT_ID FROM {self._table('IMPORT_BATCH', self.schema_raw)} "
@@ -1676,9 +1692,10 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                     action = record.pop("ACTION", "")
                     entity_id = record.get(key)
                     exists = tx.query(
-                        f"SELECT {key} FROM {self._table(entity)} WHERE {key} = %s LIMIT 1",
+                        f"SELECT * FROM {self._table(entity)} WHERE {key} = %s",
                         (entity_id,),
                     )
+                    if len(exists)>1:raise RepositoryError('Target identity is duplicated; nothing committed.')
                     if action not in {"CREATE", "UPDATE"}:
                         raise RepositoryError("Unsupported operational import action.")
                     if action == "CREATE" and not exists.empty:
@@ -1722,6 +1739,14 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                             if quota.empty or str(quota.iloc[0]["ACCOUNT_ID"]) != str(record.get("ACCOUNT_ID")):
                                 raise RepositoryError("Quota Registration no longer belongs to the selected Account.")
                     elif entity == "FLOCK_TRANSACTION":
+                        from data.validation import validate_flock_transaction
+                        from data.business_time import same_value
+                        from types import SimpleNamespace
+                        old=exists.iloc[0].to_dict() if len(exists)==1 else {}
+                        if action=='CREATE' or any(not same_value(record.get(k),old.get(k)) for k in ('FLOCK_ID','TRANSACTION_TYPE','QUANTITY','TRANSACTION_DATE')):
+                            errors=validate_flock_transaction(SimpleNamespace(get_flock=lambda fid: {'FLOCK_ID':fid}),record)
+                            if errors:raise RepositoryError(' '.join(errors))
+                        self._guard_applied_quantity_transaction(entity_id)
                         flock = tx.query(
                             f"SELECT FLOCK_ID FROM {self._table('FLOCK')} WHERE FLOCK_ID = %s",
                             (record.get("FLOCK_ID"),),

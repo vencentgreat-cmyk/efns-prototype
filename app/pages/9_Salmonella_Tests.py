@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from app.services.form_safety import open_saved_record, stored_index, capture_form, preserve_form, save_form, stored_options, start_new_form, begin_form, field_changed, delete_confirmation
+from data.producer_identity import text as stored_text
+from data.business_time import halifax_today
+
 import datetime as dt
 import pandas as pd
 import streamlit as st
@@ -48,10 +52,10 @@ if view.name == "list":
     row_ids = st.session_state.get("salmonella_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("salmonella_list", selected=bool(selected_id))
-    if action == "new": open_view("new")
+    if action == "new": start_new_form('salmonella_form_'); open_view("new")
     if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": clear_widget_prefix("salmonella_filter_"); st.rerun()
-    if action == "delete" and selected_id: st.session_state.salmonella_delete_pending = selected_id
+    if action == "delete" and selected_id: st.session_state['salmonella_form___delete_pending']=selected_id
     pending_delete = st.session_state.get("salmonella_delete_pending")
     if pending_delete:
         with st.container(border=True):
@@ -61,7 +65,7 @@ if view.name == "list":
                     try:
                         repo.delete_salmonella_test(pending_delete)
                         st.session_state.pop("salmonella_delete_pending", None); st.rerun()
-                    except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    except Exception as exc: show_data_error(exc)
                 if st.button("Cancel", key="salmonella_cancel_delete"):
                     st.session_state.pop("salmonella_delete_pending", None); st.rerun()
     filters = st.columns([2, 1, 1])
@@ -97,11 +101,9 @@ else:
     is_form = view.name in {"new", "edit"}
     page_header("New Salmonella Test" if view.name == "new" else test_label(current), "Test result, sample count, case and invoice information.", "SALMONELLA TEST")
     action = record_command_bar("salmonella_record", view.name)
-    if action in {"back", "cancel"}: open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
-    if action == "edit": clear_widget_prefix("salmonella_form_"); open_view("edit", view.record_id)
-    if action == "delete" and view.record_id:
-        if not repo.get_salmonella_test_samples(view.record_id).empty: st.error("Salmonella Test cannot be deleted while related samples exist.")
-        else: repo.delete_salmonella_test(view.record_id); open_view("list")
+    if action in {"back", "cancel"}: start_new_form("salmonella_form_"); open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
+    if action == "edit": start_new_form("salmonella_form_"); open_view("edit", view.record_id)
+    if action == "delete" and view.record_id: st.session_state['salmonella_form___delete_pending']=view.record_id
     if not is_form:
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
         summary, details, related = st.tabs(["Summary", "Details", "Related Records"])
@@ -134,6 +136,7 @@ else:
             else: st.dataframe(sample_rows, width="stretch", hide_index=True)
     else:
         current = current or {}
+        begin_form('salmonella_form_',view.record_id)
         expected_key = f"salmonella_form_expected_{view.record_id}"
         if view.name == "edit" and view.record_id:
             st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
@@ -147,27 +150,34 @@ else:
                 flock = repo.get_flock(flock_options[flock_label])
                 left.text_input("Account", value=account_names.get(flock["ACCOUNT_ID"], ""), disabled=True)
                 left.text_input("Permit Number", value=str(flock.get("PERMIT_NUMBER") or ""), disabled=True)
-                testing_date = right.date_input("Testing Date *", value=optional_form_date(current.get("TESTING_DATE")) or dt.date.today(), key="salmonella_form_testing")
-                samples = right.number_input("Number of Samples *", min_value=0, value=int(current.get("NUMBER_OF_SAMPLES") or 0), key="salmonella_form_samples")
+                testing_date = right.date_input("Testing Date *", value=(optional_form_date(current.get("TESTING_DATE")) if view.record_id else halifax_today()), key="salmonella_form_testing")
+                samples = right.text_input("Number of Samples *",value=stored_text(current.get("NUMBER_OF_SAMPLES")),key='salmonella_form_samples') if view.record_id else right.number_input("Number of Samples *", min_value=0, value=int(current.get("NUMBER_OF_SAMPLES") or 0), key="salmonella_form_samples")
                 inspector = right.text_input("Inspector", value=str(current.get("INSPECTOR") or ""), key="salmonella_form_inspector")
             with result_details:
                 left, right = st.columns(2)
-                result = left.selectbox("Test Result", SALMONELLA_RESULTS, index=option_index(list(SALMONELLA_RESULTS), current.get("TEST_RESULT")), key="salmonella_form_result")
+                result = left.selectbox("Test Result", stored_options(SALMONELLA_RESULTS,current.get("TEST_RESULT"),bool(view.record_id)), index=(stored_index(SALMONELLA_RESULTS,current.get("TEST_RESULT")) if view.record_id else option_index(list(SALMONELLA_RESULTS), current.get("TEST_RESULT"))), key="salmonella_form_result")
                 received = left.date_input("Date Received", value=optional_form_date(current.get("DATE_RECEIVED")), key="salmonella_form_received")
                 result_sent = left.date_input("Date Result Sent", value=optional_form_date(current.get("DATE_RESULT_SENT")), key="salmonella_form_sent")
                 case_number = left.text_input("Case / File Number", value=str(current.get("CASE_FILE_NUMBER") or ""), key="salmonella_form_case")
                 invoice_number = right.text_input("Invoice Number", value=str(current.get("INVOICE_NUMBER") or ""), key="salmonella_form_invoice")
                 invoice_date = right.date_input("Invoice Date", value=optional_form_date(current.get("INVOICE_DATE")), key="salmonella_form_invoice_date")
                 comments = right.text_area("Comments", value=str(current.get("COMMENTS") or ""), key="salmonella_form_comments")
+        capture_form('salmonella_form_',current,{'FLOCK_ID': ['salmonella_form_flock'], 'ACCOUNT_ID': ['salmonella_form_flock'], 'PERMIT_NUMBER': ['salmonella_form_flock'], 'TESTING_DATE': ['salmonella_form_testing'], 'INSPECTOR': ['salmonella_form_inspector'], 'NUMBER_OF_SAMPLES': ['salmonella_form_samples'], 'TEST_RESULT': ['salmonella_form_result'], 'DATE_RECEIVED': ['salmonella_form_received'], 'DATE_RESULT_SENT': ['salmonella_form_sent'], 'CASE_FILE_NUMBER': ['salmonella_form_case'], 'INVOICE_NUMBER': ['salmonella_form_invoice'], 'INVOICE_DATE': ['salmonella_form_invoice_date'], 'COMMENTS': ['salmonella_form_comments']})
+        if view.record_id: st.text_input("Reason for correction *",key='salmonella_form_revision_reason')
         if action == "save":
             record = {"SALMONELLA_TEST_ID": view.record_id, "FLOCK_ID": flock["FLOCK_ID"], "ACCOUNT_ID": flock["ACCOUNT_ID"], "PERMIT_NUMBER": flock["PERMIT_NUMBER"], "TESTING_DATE": testing_date, "INSPECTOR": inspector or None, "NUMBER_OF_SAMPLES": samples, "TEST_RESULT": result, "DATE_RECEIVED": received, "DATE_RESULT_SENT": result_sent, "CASE_FILE_NUMBER": case_number or None, "INVOICE_NUMBER": invoice_number or None, "INVOICE_DATE": invoice_date, "COMMENTS": comments or None}
             if not view.record_id: record.pop("SALMONELLA_TEST_ID")
             else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
-            errors = validate_salmonella_test(repo, record)
+            errors = validate_salmonella_test(repo, record) if not view.record_id else []
             if errors:
                 for error in errors: st.error(error)
             else:
                 try:
-                    saved_id = repo.upsert_salmonella_test(record)
-                    clear_widget_prefix("salmonella_form_"); open_view("detail", saved_id)
-                except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    saved_id = save_form(repo,'SALMONELLA_TEST',record,current,'salmonella_form_')
+                    open_saved_record(saved_id)
+                except Exception as exc: show_data_error(exc)
+
+_pending=st.session_state.get('salmonella_form___delete_pending')
+if _pending and delete_confirmation(repo,'delete_salmonella_test',_pending,'salmonella_form___delete'):
+    st.session_state.pop('salmonella_form___delete_pending',None)
+    open_view("list")

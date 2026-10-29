@@ -181,12 +181,14 @@ def test_custom_builder_enforces_dataset_fields_filters_sort_and_column_order():
         user=user(),
         dataset="Accounts",
         selected_fields=["ORGANIZATION_NAME", "CITY"],
-        filters={"statuses": ("Active",), "quota_type": "ignored"},
+        filters={"statuses": ("Active",)},
         sort_by="ORGANIZATION_NAME",
     )
     assert repo.filters == {"statuses": ("Active",)}
     assert list(result.columns) == ["Account Name", "City"]
     assert result["Account Name"].tolist() == ["Alpha", "Beta"]
+    with pytest.raises(ValueError, match="Unsupported filter"):
+        build_custom_report(repo, user=user(), dataset="Accounts", selected_fields=["ACCOUNT_ID"], filters={"quota_type":"Egg Production"})
     with pytest.raises(ValueError, match="Dataset"):
         build_custom_report(repo, user=user(), dataset="CORE.ACCOUNT", selected_fields=["ACCOUNT_ID"])
     with pytest.raises(ValueError, match="allowlisted"):

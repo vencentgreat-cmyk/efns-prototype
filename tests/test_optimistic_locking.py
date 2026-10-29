@@ -143,6 +143,7 @@ class _FakeCtx:
 
 def _snowflake_repo(cursor):
     repo = SnowflakeRepository.__new__(SnowflakeRepository)
+    repo._init_continuity()
     repo.database = "EFNS_DEV"
     repo.schema_core = "CORE"
     repo._cursor = lambda transaction=False: _FakeCtx(cursor)
@@ -163,11 +164,11 @@ def test_snowflake_update_binds_expected_stamp_in_where_clause():
         }
     )
 
-    update_sql, update_params = next(call for call in cursor.calls if call[0].startswith("UPDATE"))
+    update_sql, update_params = next(call for call in cursor.calls if call[0].startswith("UPDATE EFNS_DEV.CORE.ACCOUNT"))
     assert "WHERE ACCOUNT_ID = %s AND UPDATED_AT = %s" in update_sql
     # The stamp is bound as a parameter, never interpolated into the SQL text.
     assert "2026-01-01T00:00:00" not in update_sql
-    assert update_params[-1] == dt.datetime(2026, 1, 1)
+    assert update_params[-1] == '2026-01-01T00:00:00'
 
 
 def test_snowflake_update_without_stamp_has_no_lock_clause():
@@ -178,5 +179,5 @@ def test_snowflake_update_without_stamp_has_no_lock_clause():
         {"ACCOUNT_ID": "a1", "ORGANIZATION_NAME": "X", "REGISTRATION_NUMBER": "R1"}
     )
 
-    update_sql, _ = next(call for call in cursor.calls if call[0].startswith("UPDATE"))
+    update_sql, _ = next(call for call in cursor.calls if call[0].startswith("UPDATE EFNS_DEV.CORE.ACCOUNT"))
     assert "AND UPDATED_AT = %s" not in update_sql

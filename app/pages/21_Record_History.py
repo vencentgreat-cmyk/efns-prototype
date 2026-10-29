@@ -10,6 +10,8 @@ import streamlit as st
 from app.auth import can_current, require_page_permission
 from app.security import Permission
 from app.ui import apply_theme, page_header, show_data_error
+from app.services.form_safety import request_for,finish_request
+from data.business_time import halifax_today
 from data.repositories import get_repository
 from data.producer_identity import production_identities
 from data.source_trace import trace_summary
@@ -43,7 +45,7 @@ with producer:
             except Exception as exc: show_data_error(exc)
     with st.expander("New production record"):
         manual_account = st.selectbox("Producer Account", ["Choose an Account", *account_options], key="manual_producer")
-        year = st.number_input("Reporting year", min_value=1, max_value=9999, value=dt.date.today().year)
+        year = st.number_input("Reporting year", min_value=1, max_value=9999, value=halifax_today().year)
         week = st.number_input("Reporting week", min_value=1, max_value=53, value=1)
         total = st.text_input("Source Total", help="Leave empty when unknown; 0 is a known zero.")
         st.session_state.setdefault("manual_production_request", uuid.uuid4().hex)
@@ -51,12 +53,17 @@ with producer:
             try:
                 value = Decimal(total) if total.strip() else None
                 if value is not None and not value.is_finite(): raise InvalidOperation()
-                saved = repo.create_manual_production(dict(PRODUCER_ACCOUNT_ID=account_options[manual_account],REPORTING_YEAR=year,REPORTING_WEEK=week,TOTAL=value), st.session_state.manual_production_request)
+                payload=dict(PRODUCER_ACCOUNT_ID=account_options[manual_account],REPORTING_YEAR=year,REPORTING_WEEK=week,TOTAL=value)
+                request=request_for('manual_production',payload)
+                st.session_state.manual_production_request=request
+                saved = repo.create_manual_production(payload,request)
+                finish_request('manual_production',saved)
                 st.success(f"Saved production record {saved}.")
             except InvalidOperation: st.error("Source Total must be a finite number or empty.")
             except Exception as exc: show_data_error(exc)
         if st.button("Start another new production record"):
             st.session_state.manual_production_request = uuid.uuid4().hex
+            st.session_state.pop('_efns_request_manual_production',None)
             st.rerun()
 with flock:
     flocks = repo.get_flocks()
@@ -71,7 +78,7 @@ with flock:
         facilities = repo.get_facilities(account_id=current["ACCOUNT_ID"])
         destinations = {f"{row.FACILITY_NAME} | {row.FACILITY_ID}": row.FACILITY_ID for row in facilities.itertuples()}
         destination = st.selectbox("Destination Facility", ["Choose a Facility", *destinations], disabled=event_type == "Actual lifecycle end")
-        day = st.date_input("Business date", value=dt.date.today(), max_value=dt.date.today())
+        day = st.date_input("Business date", value=halifax_today(), max_value=halifax_today())
         clock = st.time_input("Business time (Atlantic / Halifax)", value=dt.time(12))
         reason = st.text_area("Reason for the event")
         st.write("Recorded original Facility:",current.get('FACILITY_ID') or 'Unknown')
@@ -118,17 +125,29 @@ with correction:
     key = entity + "_ID"
     if not records.empty:
         record_id = st.selectbox("Record ID", records[key].tolist())
+        review_key='attribute_review_'+entity+'_'+record_id
+        st.session_state.setdefault(review_key,records[records[key]==record_id].iloc[0].to_dict())
+        reviewed=st.session_state[review_key]
         field = st.selectbox("Attribute", ["FLOCK_NUMBER", "COMMENTS"] if entity == "FLOCK" else ["FACILITY_NAME", "COMMENTS"])
+        st.caption(f"Reviewed stored value: {reviewed.get(field)}; version {reviewed.get('UPDATED_AT')}")
         value = st.text_input("Corrected value")
+        if st.button('Reload attribute correction'):
+            st.session_state.pop(review_key,None)
+            st.session_state.pop('_efns_request_attribute_revision',None)
+            st.rerun()
         reason = st.text_area("Reason for attribute correction", key="revision_reason")
         st.session_state.setdefault("revision_request", uuid.uuid4().hex)
         if st.button("Save attribute correction", disabled=not can_current(Permission.UPDATE_DATA) or not reason.strip()):
             try:
-                repo.revise_record(entity,record_id,{field:value or None},reason,st.session_state.revision_request)
+                request=request_for('attribute_revision',dict(entity=entity,id=record_id,changes={field:value or None},reason=reason))
+                repo.revise_record(entity,record_id,{field:value or None},reason,request,expected_updated_at=reviewed.get('UPDATED_AT'))
+                finish_request('attribute_revision',record_id)
+                st.session_state[review_key]=(repo.get_flock(record_id) if entity=='FLOCK' else repo.get_facility(record_id))
                 st.success("Correction recorded with previous and new values. It is not a movement or quantity transaction.")
             except Exception as exc: show_data_error(exc)
         if st.button("Start another correction"):
             st.session_state.revision_request = uuid.uuid4().hex
+            st.session_state.pop('_efns_request_attribute_revision',None)
             st.rerun()
     st.dataframe(repo.get_record_revisions(), hide_index=True, width="stretch")
 with originals:

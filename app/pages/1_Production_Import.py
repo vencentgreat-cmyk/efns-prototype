@@ -82,6 +82,16 @@ prepared_id = repo.stage_production_upload({
     "SOURCE_FILE_ID": archive["SOURCE_FILE_ID"], "ERROR_COUNT": len(errors),
 }, source_rows)
 already_committed = bool(existing_import and str(existing_import.get("STATUS", "")).lower() == "committed")
+if st.button('Refresh reviewed producer matching',disabled=already_committed,key='production_refresh_review'):
+    try:
+        repo.stage_production_upload({
+            'FILENAME':uploaded.name,'SOURCE':'EIMS Production Workbook - EIMS 3',
+            'FILE_HASH':file_hash,'SOURCE_FILE_ID':archive['SOURCE_FILE_ID'],
+            'SOURCE_RECORD_COUNT':len(raw_df),
+        },source_rows,review_again=True)
+        st.success('Reviewed producer matching refreshed. Retained RAW was not changed.')
+    except Exception as exc:show_data_error(exc)
+
 
 metric_columns = st.columns(4)
 metric_columns[0].metric("Production Records", len(raw_df))

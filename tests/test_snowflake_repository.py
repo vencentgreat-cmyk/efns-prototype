@@ -9,6 +9,7 @@ from data.repositories.snowflake import SnowflakeRepository
 
 def repository_without_connection():
     repo = SnowflakeRepository.__new__(SnowflakeRepository)
+    repo._init_continuity()
     repo.database = "EFNS_DEV"
     repo.schema_core = "CORE"
     repo.schema_raw = "RAW"
@@ -43,7 +44,7 @@ class FakeCursor:
         self.duplicate = duplicate
     def execute(self, sql, params=()):
         self.calls.append((sql, params))
-        self.rowcount = 0 if sql.startswith("UPDATE") else 1
+        self.rowcount = 1 if "RAW.INTAKE_LOCK" in sql else 0 if sql.startswith("UPDATE") else 1
         return self
     def executemany(self, sql, params):
         self.calls.append((sql, list(params)))

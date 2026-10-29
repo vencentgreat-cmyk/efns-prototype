@@ -292,7 +292,7 @@ def test_committed_trace_pointing_to_a_different_source_is_not_counted_as_resolv
 def test_snowflake_followup_failure_rolls_back_core_and_tracking(monkeypatch):
     from data.connection import SnowparkExecutor
     from data.repositories.snowflake import SnowflakeRepository
-    from tests.test_connection import FakeSession, FakeStatement
+    from tests.test_connection import FakeRow, FakeSession, FakeStatement
     repo = _repository()
     repo.commit_historical_corrections(BATCH_ID)
     repo._flocks = pd.concat([
@@ -302,7 +302,9 @@ def test_snowflake_followup_failure_rolls_back_core_and_tracking(monkeypatch):
     raw_frame = repo.get_migration_raw_rows(BATCH_ID)
     session = FakeSession(lambda sql, params: FakeStatement(
         raw_frame.to_dict("records"), list(raw_frame.columns)
-    ) if "FROM EFNS_DEV.RAW.MIGRATION_RAW_ROW" in sql else FakeStatement([], []))
+    ) if "FROM EFNS_DEV.RAW.MIGRATION_RAW_ROW" in sql else FakeStatement(
+        [FakeRow(**{'number of rows updated':1})], ['number of rows updated']
+    ) if 'RAW.INTAKE_LOCK' in sql else FakeStatement([], []))
     snowflake_repo = SnowflakeRepository(SnowparkExecutor(session))
     monkeypatch.setattr(snowflake_repo, "preview_historical_corrections", lambda batch_id: preview)
 
@@ -318,7 +320,7 @@ def test_snowflake_followup_failure_rolls_back_core_and_tracking(monkeypatch):
     assert statements.count("BEGIN") == 1 and statements.count("ROLLBACK") == 1
     assert "COMMIT" not in statements
     assert any("INSERT INTO EFNS_DEV.RAW.MIGRATION_CORRECTION_ROW" in sql for sql in statements)
-    assert not any(sql.startswith("UPDATE") for sql in statements)
+    assert all('RAW.INTAKE_LOCK' in sql for sql in statements if sql.startswith("UPDATE"))
 
 
 @pytest.mark.parametrize("quantity", ["-5", "0"])

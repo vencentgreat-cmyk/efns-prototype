@@ -1,10 +1,16 @@
 """Source-preserving workbook preparation, independent of database writes."""
 import uuid
+import hashlib
 
 import pandas as pd
 
 from data.importing import build_raw_rows, normalize_eims_records, validate_eims_records
 from data.producer_identity import resolve_producer
+from data.source_evidence import evidence_json
+
+def review_token(rows):
+    reviewed=[dict(source_row=r['SOURCE_ROW_NUMBER'],target=r.get('TARGET_ID'),status=r.get('VALIDATION_STATUS'),match=r.get('MATCH_STATUS'),account=r.get('REVIEWED_PRODUCER_ACCOUNT_ID')) for r in rows]
+    return hashlib.sha256(evidence_json(sorted(reviewed,key=lambda r:r['source_row'])).encode()).hexdigest()
 
 
 def prepare_workbook(raw, file_id, accounts):
@@ -22,6 +28,7 @@ def prepare_workbook(raw, file_id, accounts):
         record.update(PRODUCER_ACCOUNT_ID=decision["account_id"], MATCH_STATUS=decision["status"],
                       MATCH_METHOD=decision["method"], MATCH_BASIS=decision["basis"])
         source["MATCH_STATUS"] = decision["status"]
+        source['REVIEWED_PRODUCER_ACCOUNT_ID']=decision['account_id']
         row_errors = [error for error in errors if error.startswith(f"Excel row {ordinal}:") or error.startswith("Missing required columns:")]
         source["VALIDATION_STATUS"] = "REJECTED" if row_errors else "VALID"
         source["TARGET_ENTITY"] = "PRODUCTION_RECORD" if not row_errors else None

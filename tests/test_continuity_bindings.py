@@ -34,11 +34,11 @@ def test_event_converts_saved_pandas_timestamp_to_native_bind():
     ex=Executor(); repo=repository(ex)
     repo.record_flock_event('f','MOVE',dt.datetime(2026,2,1,tzinfo=dt.timezone.utc),'Synthetic','request','new',actor='staff',position_confirmed=True)
     params=next(params for sql,params in ex.calls if 'UPDATE EFNS_DEV.CORE.FLOCK ' in sql)
-    assert type(params[-1]) is dt.datetime
+    assert params[-1] == '2026-01-01T00:00:00'
 
 
 def test_matching_converts_saved_pandas_timestamp_to_native_bind():
     ex=Executor(); repo=repository(ex)
     repo.match_production_producer('p',actor='automatic')
     params=next(params for sql,params in ex.calls if 'UPDATE EFNS_DEV.CORE.PRODUCTION_RECORD ' in sql)
-    assert type(params[-2]) is dt.datetime
+    assert params[-2] == '2026-01-01T00:00:00'

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from functools import wraps
+import datetime as dt
+import uuid
 
 from app.security import AuthStore, Permission, User, Role, require_permission
 from data.repositories.base import RepositoryError
@@ -63,11 +65,20 @@ class AuthorizedRepository:
         self.actor = actor
         self.repository_name = type(repository).__name__.replace("Repository", "")
         self.last_audit_warning = None
+        self.audit_alerts = getattr(repository,'_secondary_audit_alerts',[])
+        repository._secondary_audit_alerts=self.audit_alerts
 
     def __getattr__(self, name):
         attribute = getattr(self.repository, name)
         if not callable(attribute):
             return attribute
+        if name=='create_record_once':
+            @wraps(attribute)
+            def create_call(*args,**kwargs):
+                self._require(Permission.CREATE_DATA)
+                kwargs['actor']={'user_id':self.actor.user_id,'email':self.actor.email}
+                return attribute(*args,**kwargs)
+            return create_call
         if name == 'record_current_flock_quantity':
             @wraps(attribute)
             def quantity_call(*args,**kwargs):
@@ -111,13 +122,14 @@ class AuthorizedRepository:
             @wraps(attribute)
             def continuity_call(*args, **kwargs):
                 self._require(Permission.CREATE_DATA if name in {"create_manual_production", "create_flock_with_initial_position"} else Permission.UPDATE_DATA)
-                kwargs["actor"] = self.actor.user_id
+                kwargs["actor"] = {'user_id':self.actor.user_id,'email':self.actor.email} if name in {'revise_record','create_manual_production'} else self.actor.user_id
                 result = attribute(*args, **kwargs)
+                if name in {'revise_record','create_manual_production'}:return result
                 entity_id = args[0] if name == "match_production_producer" else result
                 try:
                     self.auth_store.record_action(self.actor, "CREATE" if name in {"create_manual_production", "create_flock_with_initial_position"} else "UPDATE", name, str(entity_id))
-                except Exception:
-                    self.last_audit_warning="The business change committed with its history; secondary audit logging was unavailable."
+                except Exception as exc:
+                    self._audit_warning(name,str(entity_id),exc)
                 return result
             return continuity_call
         if name in {"get_source_file_bytes", "get_source_review_rows", "get_source_raw_rows"}:
@@ -151,7 +163,8 @@ class AuthorizedRepository:
             permission = Permission.UPDATE_DATA if action == "UPDATE" else Permission.CREATE_DATA
             self._require(permission)
             result = method(record, *args, **kwargs)
-            self.auth_store.record_action(self.actor, action, entity_type, str(result))
+            try:self.auth_store.record_action(self.actor, action, entity_type, str(result))
+            except Exception as exc:self._audit_warning(action,str(result),exc,entity_type)
             return result
 
         return call
@@ -162,12 +175,33 @@ class AuthorizedRepository:
         @wraps(method)
         def call(record_id, *args, **kwargs):
             self._require(Permission.DELETE_DATA)
-            result = method(record_id, *args, **kwargs)
+            if name!='cleanup_synthetic_migration':
+                from data.record_safety import delete_with_history
+                result=delete_with_history(self.repository,entity_type,record_id,method,
+                    {'user_id':self.actor.user_id,'email':self.actor.email},kwargs.pop('request_id',None) or uuid.uuid4().hex,
+                    kwargs.pop('reason',None) or 'Explicit record deletion request')
+            else:result = method(record_id, *args, **kwargs)
             if result:
-                self.auth_store.record_action(self.actor, "DELETE", entity_type, str(record_id))
+                try:self.auth_store.record_action(self.actor, "DELETE", entity_type, str(record_id))
+                except Exception as exc:self._audit_warning('DELETE',str(record_id),exc,entity_type)
             return result
 
         return call
+
+    def _audit_warning(self,operation,entity_id,error,entity_type='RECORD'):
+        self.last_audit_warning='Business save committed; do not resubmit. Secondary audit logging failed; an audit warning requires administrator review.'
+        alert=dict(operation=operation,entity_type=entity_type,entity_id=entity_id,
+                   error_type=type(error).__name__,status='REVIEW_REQUIRED',saved=True,
+                   recorded_at=dt.datetime.now(dt.timezone.utc).isoformat(),persisted=False)
+        self.audit_alerts.append(alert)
+        try:
+            from data.repositories.continuity import stable_id
+            from data.record_safety import actor_id
+            with self.repository._continuity_transaction() as tx:
+                self.repository._append_history(tx,'RECORD_REVISION',dict(REVISION_ID=uuid.uuid4().hex,ENTITY_TYPE=entity_type,ENTITY_ID=entity_id,CHANGE_KIND='AUDIT_WARNING',BUSINESS_AT=None,RECORDED_AT=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),RECORDED_BY=self.actor.user_id,REASON='Secondary audit failed after committed business save; administrator review required',BEFORE_DATA=None,AFTER_DATA={**alert,'persisted':True}))
+            alert['persisted']=True
+        except Exception:
+            self.last_audit_warning+=' Durable warning storage is also unavailable; preserve this notice and the saved record ID.'
 
     def _authorized_import(self, name, method):
         entity_type = IMPORT_METHODS[name]
@@ -175,7 +209,7 @@ class AuthorizedRepository:
         @wraps(method)
         def call(*args, **kwargs):
             self._require(Permission.IMPORT_DATA)
-            if name in {"archive_source_file", "record_source_parse", "commit_staged_production", "commit_staged_operational"}:
+            if name in {"archive_source_file", "record_source_parse", "stage_production_upload", "commit_staged_production", "commit_staged_operational"}:
                 kwargs["actor"] = self.actor.user_id
             result = method(*args, **kwargs)
             if name in {"import_flock_quota_batch", "import_operational_flock_quota_batch", "commit_staged_operational"} and isinstance(result, dict):
@@ -207,15 +241,17 @@ class AuthorizedRepository:
                 try:
                     self.auth_store.record_action(self.actor, "IMPORT", entity_type, str(entity_id), details)
                     result["audit_recorded"] = True
-                except Exception:
+                except Exception as exc:
                     # Core rows are already committed by the repository transaction.
                     # Audit uses a separate store/transaction and is reported independently.
                     result["audit_recorded"] = False
+                    self._audit_warning('IMPORT',str(entity_id),exc,entity_type)
             elif name=='commit_staged_production':
                 try: self.auth_store.record_action(self.actor,"IMPORT",entity_type,str(entity_id),details)
-                except Exception: self.last_audit_warning="The production commit succeeded; secondary audit logging was unavailable."
+                except Exception as exc:self._audit_warning('IMPORT',str(entity_id),exc,entity_type)
             else:
-                self.auth_store.record_action(self.actor, "IMPORT", entity_type, str(entity_id), details)
+                try:self.auth_store.record_action(self.actor, "IMPORT", entity_type, str(entity_id), details)
+                except Exception as exc:self._audit_warning('IMPORT',str(entity_id),exc,entity_type)
             return result
 
         return call

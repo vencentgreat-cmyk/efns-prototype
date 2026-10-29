@@ -413,9 +413,10 @@ def _validate_row(
         if account:
             values["ACCOUNT_ID"] = account["ACCOUNT_ID"]
             merged["ACCOUNT_ID"] = account["ACCOUNT_ID"]
-        values.setdefault("STATUS", merged.get("STATUS") or "Active")
-        values.setdefault("QUOTA_NAME", merged.get("QUOTA_NAME") or merged.get("REGISTRATION_NUMBER"))
-        merged.update({"STATUS": values["STATUS"], "QUOTA_NAME": values["QUOTA_NAME"]})
+        if action=='CREATE':
+            values.setdefault("STATUS", merged.get("STATUS") or "Active")
+            values.setdefault("QUOTA_NAME", merged.get("QUOTA_NAME") or merged.get("REGISTRATION_NUMBER"))
+            merged.update({"STATUS": values["STATUS"], "QUOTA_NAME": values["QUOTA_NAME"]})
     elif entity == "FLOCK":
         account = _resolve_reference(accounts, _LOOKUPS["ACCOUNT"], merged.get("ACCOUNT_ID"), "Account", errors, True)
         if account:
@@ -442,10 +443,11 @@ def _validate_row(
             merged["QUOTA_ID"] = quota["QUOTA_ID"]
             if account and str(quota.get("ACCOUNT_ID")) != str(account.get("ACCOUNT_ID")):
                 errors.append("Quota Registration does not belong to the selected Account.")
-        values.setdefault("STATUS", merged.get("STATUS") or "Planned")
-        values.setdefault("BIRDS_DISPOSED", merged.get("BIRDS_DISPOSED") or 0)
-        merged.update({"STATUS": values["STATUS"], "BIRDS_DISPOSED": values["BIRDS_DISPOSED"]})
-        if _missing(merged.get("FACILITY_ID")):
+        if action=='CREATE':
+            values.setdefault("STATUS", merged.get("STATUS") or "Planned")
+            values.setdefault("BIRDS_DISPOSED", merged.get("BIRDS_DISPOSED") or 0)
+            merged.update({"STATUS": values["STATUS"], "BIRDS_DISPOSED": values["BIRDS_DISPOSED"]})
+        if action=='CREATE' and _missing(merged.get("FACILITY_ID")):
             errors.append("Facility is required.")
         bird_count = merged.get("BIRD_COUNT")
         birds_disposed = merged.get("BIRDS_DISPOSED") or 0
@@ -453,8 +455,7 @@ def _validate_row(
             errors.append("Bird Count cannot be negative.")
         if birds_disposed < 0:
             errors.append("Birds Disposed cannot be negative.")
-        if bird_count is not None and birds_disposed > bird_count:
-            errors.append("Birds Disposed cannot exceed Bird Count.")
+        # Stored Bird Count and cumulative Birds Disposed are different measures.
         hatch, placement, disposal = merged.get("HATCH_DATE"), merged.get("PLACEMENT_DATE"), merged.get("DISPOSAL_DATE")
         if isinstance(disposal, dt.date) and isinstance(hatch, dt.date) and disposal < hatch:
             errors.append("Disposal Date cannot be earlier than Hatch Date.")
@@ -465,9 +466,11 @@ def _validate_row(
         if flock:
             values["FLOCK_ID"] = flock["FLOCK_ID"]
             merged["FLOCK_ID"] = flock["FLOCK_ID"]
-        quantity = merged.get("QUANTITY")
-        if quantity is not None and quantity < 0:
-            errors.append("Quantity cannot be negative.")
+        from types import SimpleNamespace
+        from data.validation import validate_flock_transaction
+        from data.business_time import same_value
+        if action=='CREATE' or any(not same_value(merged.get(k),(existing or {}).get(k)) for k in ('FLOCK_ID','TRANSACTION_TYPE','QUANTITY','TRANSACTION_DATE')):
+            errors.extend(validate_flock_transaction(SimpleNamespace(get_flock=lambda _id:flock),merged))
     elif entity == "QUOTA_TRANSACTION":
         quota = _resolve_reference(quotas, _LOOKUPS["QUOTA_REGISTRATION"], merged.get("QUOTA_ID"), "Quota Registration", errors, True)
         if quota:
@@ -485,10 +488,11 @@ def _validate_row(
                 values[field] = related[target_id]
                 merged[field] = related[target_id]
 
-    for required in spec["required"]:
+    for required in spec["required"] if action=='CREATE' else set(spec['required'])&set(values):
         if _missing(merged.get(required)):
             errors.append(f"{required.replace('_', ' ').title()} is required.")
     for field, rule in spec.get("numeric_rules", {}).items():
+        if action=='UPDATE' and field not in values:continue
         number = merged.get(field)
         if number is not None and "min" in rule and number < Decimal(str(rule["min"])):
             errors.append(f"{field.replace('_', ' ').title()} must be at least {rule['min']}.")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from data.business_time import halifax_today
 
 import pandas as pd
 import streamlit as st
@@ -98,7 +99,7 @@ if section == "Report Library":
             accounts = repo.get_accounts()
             account_options = {"All Accounts": None, **{f"{r.ORGANIZATION_NAME} · {r.REGISTRATION_NUMBER or str(r.ACCOUNT_ID)[:8]}": r.ACCOUNT_ID for r in accounts.itertuples()}}
             params = st.columns(4)
-            as_of = params[0].date_input("As of Date", value=dt.date.today(), key="quota_summary_as_of")
+            as_of = params[0].date_input("As of Date", value=halifax_today(), key="quota_summary_as_of")
             quota_type = params[1].selectbox("Quota Type", QUOTA_TYPES, key="quota_summary_type")
             account_label = params[2].selectbox("Account", list(account_options), key="quota_summary_account")
             status = params[3].selectbox("Status", ["Active", "Inactive", "Expired", "All"], key="quota_summary_status")
@@ -145,6 +146,11 @@ if section == "Report Library":
 elif section == "Customize Report":
     require_page_permission(Permission.USE_REPORT_BUILDER)
     dataset = st.selectbox("Dataset", list(CUSTOM_DATASETS), key="custom_report_dataset")
+    if st.session_state.get('_custom_dataset_context')!=dataset:
+        for key in list(st.session_state):
+            if key.startswith('custom_filter_') or key in ('custom_report_columns','custom_report_group','custom_report_aggregate_field','custom_report_operation','custom_report_result'):
+                st.session_state.pop(key,None)
+        st.session_state['_custom_dataset_context']=dataset
     _method, _id, definitions = CUSTOM_DATASETS[dataset]
     labels = {field.label: field.source for field in definitions}
     default_columns = list(labels)[:5]
@@ -162,10 +168,10 @@ elif section == "Customize Report":
     flock_options = {"All": None, **{f"{r.FLOCK_NUMBER} · {str(r.FLOCK_ID)[:8]}": r.FLOCK_ID for r in flocks.itertuples()}}
     filters = {}
     filter_cols = st.columns(4)
-    account_label = "Producer Account" if dataset == "Production Records" else "Flock Account" if dataset in {"Flocks", "Flock Transactions"} else "Account"
-    filters["account_id"] = account_options[filter_cols[0].selectbox(account_label, list(account_options), key="custom_filter_account")]
-    filters["facility_id"] = facility_options[filter_cols[1].selectbox("Facility", list(facility_options), key="custom_filter_facility")]
-    filters["flock_id"] = flock_options[filter_cols[2].selectbox("Flock", list(flock_options), key="custom_filter_flock")]
+    account_label = "Producer Account" if dataset == "Production Records" else "Flock Account" if dataset in {"Flocks", "Flock Transactions"} else "Owner or Related Account" if dataset=="Quota Transactions" else "Account"
+    filters["account_id"] = account_options[filter_cols[0].selectbox(account_label, list(account_options), key="custom_filter_account",disabled=dataset=="Accounts")]
+    filters["facility_id"] = facility_options[filter_cols[1].selectbox("Facility", list(facility_options), key="custom_filter_facility",disabled=dataset not in {"Facility Details","Flocks","Flock Transactions","Salmonella Tests","Production Records"})]
+    filters["flock_id"] = flock_options[filter_cols[2].selectbox("Flock", list(flock_options), key="custom_filter_flock",disabled=dataset not in {"Flocks","Flock Transactions","Salmonella Tests","Production Records"})]
     status_values = {"Accounts": ACCOUNT_STATUSES, "Farm Locations": FARM_LOCATION_STATUSES, "Facilities": FACILITY_STATUSES, "Facility Details": FACILITY_DETAIL_STATUSES, "Flocks": FLOCK_STATUSES, "Quota Registrations": QUOTA_STATUSES}.get(dataset, ())
     status = filter_cols[3].selectbox("Status", ["All", *status_values], disabled=not status_values, key="custom_filter_status")
     if status != "All": filters["statuses"] = (status,)
@@ -191,13 +197,13 @@ elif section == "Customize Report":
     extra = st.columns(4)
     farm_location_label = extra[0].selectbox("Farm Location", list(farm_location_options), disabled=dataset != "Farm Locations", key="custom_filter_farm_location")
     filters["farm_location_id"] = farm_location_options[farm_location_label] if dataset == "Farm Locations" else None
-    quota_value = extra[1].selectbox("Quota Type", ["All", *QUOTA_TYPES], key="custom_filter_quota")
+    quota_value = extra[1].selectbox("Quota Type", ["All", *QUOTA_TYPES], key="custom_filter_quota",disabled=dataset not in {"Quota Registrations","Quota Transactions"})
     filters["quota_type"] = None if quota_value == "All" else quota_value
     transaction_values = FLOCK_TRANSACTION_TYPES if dataset == "Flock Transactions" else QUOTA_TRANSACTION_TYPES if dataset == "Quota Transactions" else ()
     transaction_value = extra[2].selectbox("Transaction Type", ["All", *transaction_values], disabled=not transaction_values, key="custom_filter_transaction")
     filters["transaction_type"] = None if transaction_value == "All" else transaction_value
-    use_dates = extra[3].checkbox("Use date range", disabled=dataset == "Production Records", key="custom_filter_use_dates")
-    date_range = st.date_input("Date range", value=(dt.date.today() - dt.timedelta(days=365), dt.date.today()), disabled=not use_dates or dataset == "Production Records", key="custom_filter_dates")
+    use_dates = extra[3].checkbox("Use date range", disabled=dataset not in {"Flocks","Flock Transactions","Quota Transactions","Salmonella Tests"}, key="custom_filter_use_dates")
+    date_range = st.date_input("Date range", value=(halifax_today() - dt.timedelta(days=365), halifax_today()), disabled=not use_dates or dataset == "Production Records", key="custom_filter_dates")
     if dataset != "Production Records" and use_dates and isinstance(date_range, (tuple, list)) and len(date_range) == 2:
         filters["date_from"], filters["date_to"] = date_range
         if dataset == 'Flocks':

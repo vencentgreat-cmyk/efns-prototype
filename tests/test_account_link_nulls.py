@@ -24,7 +24,7 @@ def test_snowflake_account_write_normalizes_and_checks_links(monkeypatch):
     repo = SnowflakeRepository(executor=object())
     monkeypatch.setattr(repo, "get_account", lambda value: None)
     captured = []
-    monkeypatch.setattr(repo, "_upsert", lambda table, record: captured.append(record) or "synthetic-id")
+    monkeypatch.setattr(repo, "_upsert", lambda table, record, **kwargs: captured.append(record) or "synthetic-id")
     repo.upsert_account({"ORGANIZATION_NAME": "Synthetic", "PARENT_ACCOUNT_ID": "None"})
     assert captured[0]["PARENT_ACCOUNT_ID"] is None
     with pytest.raises(Exception, match="existing Account"):

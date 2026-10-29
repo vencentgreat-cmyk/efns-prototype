@@ -376,6 +376,7 @@ def test_snowflake_migration_raw_identifiers_are_type_stable_varchar_binds():
 
     executor = Executor()
     repository = SnowflakeRepository.__new__(SnowflakeRepository)
+    repository._init_continuity()
     repository.executor = executor
     repository.database = "EFNS_DEV"
     repository.schema_core = "CORE"
@@ -603,6 +604,7 @@ def test_snowflake_commit_preserves_initial_error_when_failed_status_write_also_
             raise RuntimeError("secondary failure-status write")
 
     repository = SnowflakeRepository.__new__(SnowflakeRepository)
+    repository._init_continuity()
     repository.executor = Executor()
     repository.database = "EFNS_DEV"
     repository.schema_core = "CORE"
@@ -660,6 +662,7 @@ def test_snowflake_commit_persists_sanitized_failure_after_rollback():
 
     executor = Executor()
     repository = SnowflakeRepository.__new__(SnowflakeRepository)
+    repository._init_continuity()
     repository.executor = executor
     repository.database = "EFNS_DEV"
     repository.schema_core = "CORE"
@@ -730,6 +733,7 @@ def test_snowflake_commit_persists_unexpected_variant_null_context_after_rollbac
 
     executor = Executor()
     repository = SnowflakeRepository.__new__(SnowflakeRepository)
+    repository._init_continuity()
     repository.executor = executor
     repository.database = "EFNS_DEV"
     repository.schema_core = "CORE"

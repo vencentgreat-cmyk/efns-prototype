@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from app.services.form_safety import open_saved_record, stored_index, capture_form, preserve_form, save_form, stored_options, start_new_form, begin_form, field_changed, delete_confirmation
+from data.producer_identity import text as stored_text
+from data.business_time import halifax_today
+
 import streamlit as st
 
 from app.auth import require_operational_page
@@ -43,9 +47,9 @@ if view.name == "list":
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("facility_detail_list", selected=bool(selected_id))
     if action == "view" and selected_id: open_view("detail", selected_id)
-    if action == "new": open_view("new")
+    if action == "new": start_new_form('facility_detail_form_'); open_view("new")
     if action == "refresh": st.rerun()
-    if action == "delete" and selected_id: st.session_state.facility_detail_delete_pending = selected_id
+    if action == "delete" and selected_id: st.session_state['facility_detail_form___delete_pending']=selected_id
     if st.session_state.get("facility_detail_delete_pending"):
         with st.container(border=True):
             st.warning("Delete the selected Facility Detail? A referencing Flock will block deletion.")
@@ -54,7 +58,7 @@ if view.name == "list":
                     try:
                         repo.delete_facility_detail(st.session_state.facility_detail_delete_pending)
                         st.session_state.pop("facility_detail_delete_pending", None); st.rerun()
-                    except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    except Exception as exc: show_data_error(exc)
                 if st.button("Cancel", key="facility_detail_cancel_delete"):
                     st.session_state.pop("facility_detail_delete_pending", None); st.rerun()
     search_row = st.columns([5, 1])
@@ -88,12 +92,10 @@ else:
     is_form = view.name in {"new", "edit"}
     page_header("New Facility Detail" if view.name == "new" else current.get("DETAIL_NAME") or "Facility Detail", "Facility relationship and existing provisional detail fields.", "FACILITY DETAIL")
     action = record_command_bar("facility_detail_record", view.name)
-    if action in {"back", "cancel"}: open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
+    if action in {"back", "cancel"}: start_new_form("facility_detail_form_"); open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "refresh": st.rerun()
-    if action == "edit": clear_widget_prefix("facility_detail_form_"); open_view("edit", view.record_id)
-    if action == "delete" and view.record_id:
-        try: repo.delete_facility_detail(view.record_id); open_view("list")
-        except (ValueError, RepositoryError) as exc: show_data_error(exc)
+    if action == "edit": start_new_form("facility_detail_form_"); open_view("edit", view.record_id)
+    if action == "delete" and view.record_id: st.session_state['facility_detail_form___delete_pending']=view.record_id
     if not is_form:
         facility_id = current.get("FACILITY_ID")
         account_id = facility_accounts.get(facility_id)
@@ -117,6 +119,7 @@ else:
                 open_module("Accounts_&_Facilities", "detail", account_id)
     else:
         current = current or {}
+        begin_form('facility_detail_form_',view.record_id)
         if facilities.empty:
             st.error("Create a Facility before creating a Facility Detail."); st.stop()
         ensure_record_form_state("facility_detail_form_", view.record_id)
@@ -131,8 +134,10 @@ else:
             left.text_input("Account", value=account_names.get(facility_accounts.get(selected_facility_id), "Unknown"), disabled=True, key="facility_detail_form_account")
             detail_name = left.text_input("Detail Name *", value=str(current.get("DETAIL_NAME") or ""), key="facility_detail_form_name")
             detail_type = right.text_input("Detail Type", value=str(current.get("DETAIL_TYPE") or ""), key="facility_detail_form_type")
-            status = right.selectbox("Status", FACILITY_DETAIL_STATUSES, index=option_index(list(FACILITY_DETAIL_STATUSES), current.get("STATUS")), key="facility_detail_form_status")
+            status = right.selectbox("Status", stored_options(FACILITY_DETAIL_STATUSES,current.get("STATUS"),bool(view.record_id)), index=(stored_index(FACILITY_DETAIL_STATUSES,current.get("STATUS")) if view.record_id else option_index(list(FACILITY_DETAIL_STATUSES), current.get("STATUS"))), key="facility_detail_form_status")
             comments = right.text_area("Comments", value=str(current.get("COMMENTS") or ""), key="facility_detail_form_comments")
+        capture_form('facility_detail_form_',current,{'FACILITY_ID': ['facility_detail_form_facility'], 'DETAIL_NAME': ['facility_detail_form_name'], 'DETAIL_TYPE': ['facility_detail_form_type'], 'STATUS': ['facility_detail_form_status'], 'COMMENTS': ['facility_detail_form_comments']})
+        if view.record_id: st.text_input("Reason for correction *",key='facility_detail_form_revision_reason')
         if action == "save":
             if not detail_name.strip(): st.error("Detail Name is required.")
             else:
@@ -140,6 +145,11 @@ else:
                 if not view.record_id: record.pop("FACILITY_DETAIL_ID")
                 else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
                 try:
-                    saved_id = repo.upsert_facility_detail(record)
-                    clear_widget_prefix("facility_detail_form_"); open_view("detail", saved_id)
-                except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    saved_id = save_form(repo,'FACILITY_DETAIL',record,current,'facility_detail_form_')
+                    open_saved_record(saved_id)
+                except Exception as exc: show_data_error(exc)
+
+_pending=st.session_state.get('facility_detail_form___delete_pending')
+if _pending and delete_confirmation(repo,'delete_facility_detail',_pending,'facility_detail_form___delete'):
+    st.session_state.pop('facility_detail_form___delete_pending',None)
+    open_view("list")

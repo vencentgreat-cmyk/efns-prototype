@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from app.services.form_safety import open_saved_record, stored_index, capture_form, preserve_form, save_form, stored_options, start_new_form, begin_form, field_changed, delete_confirmation
+from data.producer_identity import text as stored_text
+from data.business_time import halifax_today
+
 import pandas as pd
 import streamlit as st
 
@@ -93,12 +97,12 @@ if view.name == "list":
     if action == "view" and selected_id:
         open_view("detail", selected_id)
     if action == "new":
+        start_new_form('account_form_')
         open_view("new")
     if action == "refresh":
         clear_widget_prefix("account_filter_")
         st.rerun()
-    if action == "delete" and selected_id:
-        st.session_state.account_delete_pending = selected_id
+    if action == "delete" and selected_id: st.session_state['account_form___delete_pending']=selected_id
 
     pending_delete = st.session_state.get("account_delete_pending")
     if pending_delete:
@@ -112,7 +116,7 @@ if view.name == "list":
                             repo.delete_account(pending_delete)
                             st.session_state.pop("account_delete_pending", None)
                             st.rerun()
-                        except (ValueError, RepositoryError) as exc:
+                        except Exception as exc:
                             show_data_error(exc)
                     if st.button("Cancel", key="account_cancel_delete"):
                         st.session_state.pop("account_delete_pending", None)
@@ -165,15 +169,17 @@ else:
     page_header(title, subtitle, "ACCOUNT RECORD")
     action = record_command_bar("account_record", view.name)
     if action in {"back", "cancel"}:
+        start_new_form('account_form_')
         if action == "back":
+            start_new_form('account_form_')
             st.session_state.pop("account_selected_id", None)
             st.session_state.pop("account_list_grid", None)
         open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "edit":
+        start_new_form('account_form_')
         clear_widget_prefix("account_form_")
         open_view("edit", view.record_id)
-    if action == "delete" and view.record_id:
-        st.session_state.account_record_delete_pending = True
+    if action == "delete" and view.record_id: st.session_state['account_form___delete_pending']=view.record_id
 
     if st.session_state.get("account_record_delete_pending"):
         with st.container(border=True):
@@ -184,7 +190,7 @@ else:
                         repo.delete_account(view.record_id)
                         st.session_state.pop("account_record_delete_pending", None)
                         open_view("list")
-                    except (ValueError, RepositoryError) as exc:
+                    except Exception as exc:
                         show_data_error(exc)
                 if st.button("Keep Account", key="account_record_keep"):
                     st.session_state.pop("account_record_delete_pending", None)
@@ -210,6 +216,35 @@ else:
                 right.markdown(f"**Province of Registration**  \n{current.get('PROVINCE_OF_REGISTRATION') or '—'}")
                 right.markdown(f"**Default on Reports**  \n{'Yes' if current.get('DEFAULT_ON_REPORTS') else 'No'}")
                 right.markdown(f"**No SVG**  \n{'Yes' if current.get('NO_SVG') else 'No'}")
+            # BEGIN MANUAL ACCOUNT RELATIONSHIPS
+            section_intro("Account Relationships")
+            with st.container(border=True):
+                for label, field in (
+                    ("Grading Station", "GRADING_STATION_ACCOUNT_ID"),
+                    ("Pullet Grower Account", "PULLET_GROWER_ACCOUNT_ID"),
+                ):
+                    st.write(f"**{label}**")
+                    target_id = current.get(field)
+                    if target_id is None or pd.isna(target_id) or not str(target_id).strip():
+                        st.caption("Not recorded")
+                        continue
+                    target_id = str(target_id).strip()
+                    try:
+                        target_account = repo.get_account(target_id)
+                    except RepositoryError as exc:
+                        show_data_error(exc)
+                        continue
+                    if target_account is None:
+                        st.warning("The linked Account could not be found.")
+                        continue
+                    st.write(target_account.get("ORGANIZATION_NAME") or target_id)
+                    if st.button(
+                        f"Open {label}",
+                        key=f"account_relationship_{current['ACCOUNT_ID']}_{field}",
+                    ):
+                        open_view("detail", target_id)
+            # END MANUAL ACCOUNT RELATIONSHIPS
+
             section_intro("Address")
             with st.container(border=True):
                 st.write(" · ".join(str(value) for value in (current.get("ADDRESS_LINE1"), current.get("ADDRESS_LINE2"), current.get("ADDRESS_LINE3"), current.get("CITY"), current.get("PROVINCE"), current.get("POSTAL_CODE"), current.get("COUNTRY_REGION")) if value) or "No address recorded")
@@ -261,6 +296,7 @@ else:
 
     else:
         current = current or {}
+        begin_form('account_form_',view.record_id)
         # Snapshot the version stamp when the edit form opens so a concurrent
         # save by another user is detected on submit (optimistic locking).
         expected_stamp_key = f"account_form_expected_{view.record_id}"
@@ -277,14 +313,14 @@ else:
                 fax = left.text_input("Fax", value=str(current.get("FAX") or ""), key="account_form_fax")
                 website = left.text_input("Website", value=str(current.get("WEBSITE") or ""), placeholder="https://", key="account_form_website")
                 registration = left.text_input("Registration Number", value=str(current.get("REGISTRATION_NUMBER") or ""), key="account_form_registration")
-                province_registration = left.selectbox("Province of Registration", PROVINCES, index=option_index(list(PROVINCES), current.get("PROVINCE_OF_REGISTRATION") or "NS"), key="account_form_province_registration")
+                province_registration = left.selectbox("Province of Registration", stored_options(PROVINCES,current.get("PROVINCE_OF_REGISTRATION"),bool(view.record_id)), index=(stored_index(PROVINCES,current.get("PROVINCE_OF_REGISTRATION")) if view.record_id else option_index(list(PROVINCES), current.get("PROVINCE_OF_REGISTRATION") or "NS")), key="account_form_province_registration")
                 parent_label = right.selectbox("Parent Account", list(lookup_options), index=option_index(list(lookup_options), lookup_label(lookup_options, current.get("PARENT_ACCOUNT_ID"))), key="account_form_parent")
                 grading_label = right.selectbox("Grading Station", list(lookup_options), index=option_index(list(lookup_options), lookup_label(lookup_options, current.get("GRADING_STATION_ACCOUNT_ID"))), key="account_form_grading")
                 pullet_label = right.selectbox("Pullet Grower Account", list(lookup_options), index=option_index(list(lookup_options), lookup_label(lookup_options, current.get("PULLET_GROWER_ACCOUNT_ID"))), key="account_form_pullet")
                 spent_fowl_plans = right.text_area("Spent Fowl Plans", value=str(current.get("SPENT_FOWL_PLANS") or ""), key="account_form_spent_fowl")
                 default_reports = right.checkbox("Default on Reports", value=bool(current.get("DEFAULT_ON_REPORTS")), key="account_form_default_reports")
                 no_svg = right.checkbox("No SVG", value=bool(current.get("NO_SVG")), key="account_form_no_svg")
-                status = right.selectbox("Status", ACCOUNT_STATUSES, index=option_index(list(ACCOUNT_STATUSES), current.get("STATUS")), key="account_form_status")
+                status = right.selectbox("Status", stored_options(ACCOUNT_STATUSES,current.get("STATUS"),bool(view.record_id)), index=(stored_index(ACCOUNT_STATUSES,current.get("STATUS")) if view.record_id else option_index(list(ACCOUNT_STATUSES), current.get("STATUS"))), key="account_form_status")
                 description = right.text_area("Description", value=str(current.get("DESCRIPTION") or ""), key="account_form_description")
         with address_tab:
             with st.container(border=True):
@@ -293,7 +329,7 @@ else:
                 street2 = left.text_input("Address 1: Street 2", value=str(current.get("ADDRESS_LINE2") or ""), key="account_form_street2")
                 street3 = left.text_input("Address 1: Street 3", value=str(current.get("ADDRESS_LINE3") or ""), key="account_form_street3")
                 city = left.text_input("Address 1: City", value=str(current.get("CITY") or ""), key="account_form_city")
-                province = right.selectbox("Address 1: State/Province", PROVINCES, index=option_index(list(PROVINCES), current.get("PROVINCE") or "NS"), key="account_form_province")
+                province = right.selectbox("Address 1: State/Province", stored_options(PROVINCES,current.get("PROVINCE"),bool(view.record_id)), index=(stored_index(PROVINCES,current.get("PROVINCE")) if view.record_id else option_index(list(PROVINCES), current.get("PROVINCE") or "NS")), key="account_form_province")
                 postal_code = right.text_input("Address 1: ZIP/Postal Code", value=str(current.get("POSTAL_CODE") or ""), key="account_form_postal")
                 country = right.text_input("Address 1: Country/Region", value=str(current.get("COUNTRY_REGION") or "Canada"), key="account_form_country")
                 latitude_text = right.text_input("Address 1: Latitude", value="" if pd.isna(current.get("LATITUDE")) else str(current["LATITUDE"]), key="account_form_latitude")
@@ -307,6 +343,8 @@ else:
                 for index, (field, label) in enumerate(ROLE_FIELDS):
                     role_values[field] = columns[index % 3].checkbox(label, value=bool(current.get(field)), key=f"account_form_role_{field.lower()}")
 
+        capture_form('account_form_',current,{'ORGANIZATION_NAME': ['account_form_name'], 'CONTACT_EMAIL': ['account_form_email'], 'CONTACT_PHONE': ['account_form_phone'], 'FAX': ['account_form_fax'], 'WEBSITE': ['account_form_website'], 'REGISTRATION_NUMBER': ['account_form_registration'], 'PROVINCE_OF_REGISTRATION': ['account_form_province_registration'], 'PARENT_ACCOUNT_ID': ['account_form_parent'], 'GRADING_STATION_ACCOUNT_ID': ['account_form_grading'], 'PULLET_GROWER_ACCOUNT_ID': ['account_form_pullet'], 'SPENT_FOWL_PLANS': ['account_form_spent_fowl'], 'DEFAULT_ON_REPORTS': ['account_form_default_reports'], 'NO_SVG': ['account_form_no_svg'], 'STATUS': ['account_form_status'], 'DESCRIPTION': ['account_form_description'], 'ADDRESS_LINE1': ['account_form_street1'], 'ADDRESS_LINE2': ['account_form_street2'], 'ADDRESS_LINE3': ['account_form_street3'], 'CITY': ['account_form_city'], 'PROVINCE': ['account_form_province'], 'POSTAL_CODE': ['account_form_postal'], 'COUNTRY_REGION': ['account_form_country'], 'LATITUDE': ['account_form_latitude'], 'LONGITUDE': ['account_form_longitude'], 'PRODUCER_ROLE': ['account_form_role_producer_role'], 'BREEDER_ROLE': ['account_form_role_breeder_role'], 'HATCHERY_ROLE': ['account_form_role_hatchery_role'], 'PULLET_GROWER_ROLE': ['account_form_role_pullet_grower_role'], 'GRADER_ROLE': ['account_form_role_grader_role'], 'PROCESSOR_BREAKER_ROLE': ['account_form_role_processor_breaker_role'], 'DISPOSAL_PLANT_ROLE': ['account_form_role_disposal_plant_role'], 'UNREGULATED_ROLE': ['account_form_role_unregulated_role'], 'PROV_BOARD_EFC_ROLE': ['account_form_role_prov_board_efc_role'], 'GOVERNMENT_ROLE': ['account_form_role_government_role'], 'VENDOR_ROLE': ['account_form_role_vendor_role'], 'RESEARCH_EXEMPT_ROLE': ['account_form_role_research_exempt_role'], 'SHIPPER_ROLE': ['account_form_role_shipper_role'], 'OTHER_ROLE': ['account_form_role_other_role']})
+        if view.record_id: st.text_input("Reason for correction *",key='account_form_revision_reason')
         if action == "save":
             errors = []
             coordinate_errors = []
@@ -316,7 +354,7 @@ else:
                 ("LONGITUDE", longitude_text, longitude_error),
             ):
                 try:
-                    coordinates[field] = parse_optional_coordinate(text, field)
+                    coordinates[field] = parse_optional_coordinate(text, field) if not view.record_id or field_changed("account_form_",field) else current.get(field)
                 except ValueError as exc:
                     error_slot.error(str(exc))
                     coordinate_errors.append(str(exc))
@@ -364,8 +402,12 @@ else:
                 elif view.name == "edit":
                     record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_stamp_key)
                 try:
-                    saved_id = repo.upsert_account(record)
-                    clear_widget_prefix("account_form_")
-                    open_view("detail", saved_id)
-                except (ValueError, RepositoryError) as exc:
+                    saved_id = save_form(repo,'ACCOUNT',record,current,'account_form_')
+                    open_saved_record(saved_id)
+                except Exception as exc:
                     show_data_error(exc)
+
+_pending=st.session_state.get('account_form___delete_pending')
+if _pending and delete_confirmation(repo,'delete_account',_pending,'account_form___delete'):
+    st.session_state.pop('account_form___delete_pending',None)
+    open_view("list")

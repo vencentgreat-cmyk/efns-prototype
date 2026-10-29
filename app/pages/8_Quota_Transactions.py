@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from app.services.form_safety import open_saved_record, stored_index, capture_form, preserve_form, save_form, stored_options, start_new_form, begin_form, field_changed, delete_confirmation
+from data.producer_identity import text as stored_text
+from data.business_time import halifax_today
+
 import datetime as dt
 
 import pandas as pd
@@ -66,10 +70,10 @@ if view.name == "list":
     row_ids = st.session_state.get("quota_tx_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("quota_tx_list", selected=bool(selected_id))
-    if action == "new": open_view("new")
+    if action == "new": start_new_form('quota_tx_form_'); open_view("new")
     if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": st.rerun()
-    if action == "delete" and selected_id: st.session_state.quota_tx_delete_pending = selected_id
+    if action == "delete" and selected_id: st.session_state['quota_tx_form___delete_pending']=selected_id
     pending_delete = st.session_state.get("quota_tx_delete_pending")
     if pending_delete:
         with st.container(border=True):
@@ -79,7 +83,7 @@ if view.name == "list":
                     try:
                         repo.delete_quota_transaction(pending_delete)
                         st.session_state.pop("quota_tx_delete_pending", None); st.rerun()
-                    except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    except Exception as exc: show_data_error(exc)
                 if st.button("Cancel", key="quota_tx_cancel_delete"):
                     st.session_state.pop("quota_tx_delete_pending", None); st.rerun()
 
@@ -129,10 +133,10 @@ else:
     is_form = view.name in {"new", "edit"}
     page_header("New Quota Transaction" if view.name == "new" else transaction_title(current), "Quota activity record. Available balance is not calculated.", "QUOTA TRANSACTION")
     action = record_command_bar("quota_tx_record", view.name)
-    if action in {"back", "cancel"}: open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
+    if action in {"back", "cancel"}: start_new_form("quota_tx_form_"); open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "refresh": st.rerun()
-    if action == "edit": clear_widget_prefix("quota_tx_form_"); open_view("edit", view.record_id)
-    if action == "delete" and view.record_id: st.session_state.quota_tx_record_delete_pending = True
+    if action == "edit": start_new_form("quota_tx_form_"); open_view("edit", view.record_id)
+    if action == "delete" and view.record_id: st.session_state['quota_tx_form___delete_pending']=view.record_id
     if st.session_state.get("quota_tx_record_delete_pending"):
         with st.container(border=True):
             st.warning("Delete this Quota Transaction?")
@@ -141,7 +145,7 @@ else:
                     try:
                         repo.delete_quota_transaction(view.record_id)
                         st.session_state.pop("quota_tx_record_delete_pending", None); open_view("list")
-                    except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    except Exception as exc: show_data_error(exc)
                 if st.button("Keep record", key="quota_tx_record_keep"):
                     st.session_state.pop("quota_tx_record_delete_pending", None); st.rerun()
 
@@ -185,6 +189,7 @@ else:
                 else: st.markdown("**Related Transaction**  \n—")
     else:
         current = current or {}
+        begin_form('quota_tx_form_',view.record_id)
         if quotas.empty:
             st.error("Create a Quota Registration before creating a Quota Transaction."); st.stop()
         ensure_record_form_state("quota_tx_form_", view.record_id)
@@ -201,26 +206,33 @@ else:
             quota_id = quota_options[quota_label]
             owner_id = quota_accounts[quota_id]
             left.text_input("Owner Account", value=account_names.get(owner_id, "Unknown"), disabled=True, key="quota_tx_form_owner")
-            transaction_type = left.selectbox("Transaction Type *", QUOTA_TRANSACTION_TYPES, index=option_index(list(QUOTA_TRANSACTION_TYPES), current.get("TRANSACTION_TYPE")), key="quota_tx_form_type")
-            effective_date = left.date_input("Effective Date *", value=as_date(current.get("EFFECTIVE_DATE"), dt.date.today()), key="quota_tx_form_effective")
+            transaction_type = left.selectbox("Transaction Type *", stored_options(QUOTA_TRANSACTION_TYPES,current.get("TRANSACTION_TYPE"),bool(view.record_id)), index=(stored_index(QUOTA_TRANSACTION_TYPES,current.get("TRANSACTION_TYPE")) if view.record_id else option_index(list(QUOTA_TRANSACTION_TYPES), current.get("TRANSACTION_TYPE"))), key="quota_tx_form_type")
+            effective_date = left.date_input("Effective Date *", value=as_date(current.get("EFFECTIVE_DATE"), None if view.record_id else halifax_today()), key="quota_tx_form_effective")
             end_date = left.date_input("End Date", value=as_date(current.get("END_DATE")), key="quota_tx_form_end")
-            quota_count = left.number_input("Quota Count *", min_value=0.0, value=float(current.get("QUOTA_COUNT") or 0), step=1.0, key="quota_tx_form_count")
+            quota_count = left.text_input("Quota Count *",value=stored_text(current.get("QUOTA_COUNT")),key='quota_tx_form_count') if view.record_id else left.number_input("Quota Count *", min_value=0.0, value=float(current.get("QUOTA_COUNT") or 0), step=1.0, key="quota_tx_form_count")
             related_account_label = right.selectbox("Related Account *", list(optional_accounts), index=option_index(list(optional_accounts), label_for_id(optional_accounts, current.get("RELATED_ACCOUNT_ID"), UNASSIGNED_LABEL)), key="quota_tx_form_related_account")
             related_quota_label = right.selectbox("Related Quota", list(optional_quotas), index=option_index(list(optional_quotas), label_for_id(optional_quotas, current.get("RELATED_QUOTA_ID"), UNASSIGNED_LABEL)), key="quota_tx_form_related_quota")
             related_transaction_label = right.selectbox("Related Transaction", list(transaction_options), index=option_index(list(transaction_options), label_for_id(transaction_options, current.get("RELATED_TRANSACTION_ID"), UNASSIGNED_LABEL)), key="quota_tx_form_related_transaction")
-            price = right.number_input("Price", min_value=0.0, value=float(current.get("PRICE") or 0), step=1.0, key="quota_tx_form_price")
+            price = right.text_input("Price",value=stored_text(current.get("PRICE")),key='quota_tx_form_price') if view.record_id else right.number_input("Price", min_value=0.0, value=float(current.get("PRICE") or 0), step=1.0, key="quota_tx_form_price")
             lease_options = ["Not applicable", *QUOTA_LEASE_TYPES]
             lease_type = right.selectbox("Quota Lease Type", lease_options, index=option_index(lease_options, current.get("QUOTA_LEASE_TYPE") or "Not applicable"), key="quota_tx_form_lease")
             comments = right.text_area("Comments", value=str(current.get("COMMENTS") or ""), key="quota_tx_form_comments")
+        capture_form('quota_tx_form_',current,{'QUOTA_ID': ['quota_tx_form_quota'], 'OWNER_ACCOUNT_ID': ['quota_tx_form_quota'], 'TRANSACTION_TYPE': ['quota_tx_form_type'], 'EFFECTIVE_DATE': ['quota_tx_form_effective'], 'END_DATE': ['quota_tx_form_end'], 'QUOTA_COUNT': ['quota_tx_form_count'], 'RELATED_ACCOUNT_ID': ['quota_tx_form_related_account'], 'RELATED_QUOTA_ID': ['quota_tx_form_related_quota'], 'RELATED_TRANSACTION_ID': ['quota_tx_form_related_transaction'], 'PRICE': ['quota_tx_form_price'], 'QUOTA_LEASE_TYPE': ['quota_tx_form_lease'], 'COMMENTS': ['quota_tx_form_comments']})
+        if view.record_id: st.text_input("Reason for correction *",key='quota_tx_form_revision_reason')
         if action == "save":
             record = {"QUOTA_TRANSACTION_ID": view.record_id, "QUOTA_ID": quota_id, "OWNER_ACCOUNT_ID": owner_id, "TRANSACTION_TYPE": transaction_type, "EFFECTIVE_DATE": effective_date, "END_DATE": end_date, "QUOTA_COUNT": quota_count, "RELATED_ACCOUNT_ID": optional_accounts[related_account_label], "RELATED_QUOTA_ID": optional_quotas[related_quota_label], "RELATED_TRANSACTION_ID": transaction_options[related_transaction_label], "PRICE": price, "QUOTA_LEASE_TYPE": None if lease_type == "Not applicable" else lease_type, "COMMENTS": comments.strip() or None}
             if not view.record_id: record.pop("QUOTA_TRANSACTION_ID")
             else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
-            errors = validate_quota_transaction(repo, record)
+            errors = validate_quota_transaction(repo, record) if not view.record_id else []
             if errors:
                 for error in errors: st.error(error)
             else:
                 try:
-                    saved_id = repo.upsert_quota_transaction(record)
-                    clear_widget_prefix("quota_tx_form_"); open_view("detail", saved_id)
-                except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    saved_id = save_form(repo,'QUOTA_TRANSACTION',record,current,'quota_tx_form_')
+                    open_saved_record(saved_id)
+                except Exception as exc: show_data_error(exc)
+
+_pending=st.session_state.get('quota_tx_form___delete_pending')
+if _pending and delete_confirmation(repo,'delete_quota_transaction',_pending,'quota_tx_form___delete'):
+    st.session_state.pop('quota_tx_form___delete_pending',None)
+    open_view("list")

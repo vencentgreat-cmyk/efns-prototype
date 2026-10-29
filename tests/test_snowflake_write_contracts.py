@@ -348,18 +348,15 @@ def test_update_preserves_created_at_and_advances_only_updated_at():
     assert result == "account-1"
     assert sql.startswith("UPDATE EFNS_DEV.CORE.ACCOUNT")
     assert "CREATED_AT" not in sql
-    assert f"UPDATED_AT = {UTC_NOW_NTZ}" in sql
-    assert params == ("Updated", "account-1", dt.datetime(2026, 2, 2, 12, 0))
+    assert f"UPDATED_AT = GREATEST({UTC_NOW_NTZ}" in sql
+    assert "DATEADD(nanosecond,1" in sql
+    assert params == ("Updated", "account-1", "2026-02-02T12:00:00")
     assert len(params) == sql.count("%s")
 
 
 def test_optimistic_lock_timestamp_is_connector_compatible_and_canonical_utc():
-    assert normalize_timestamp_bind(pd.Timestamp("2026-09-15T12:34:56")) == dt.datetime(
-        2026, 9, 15, 12, 34, 56
-    )
-    assert normalize_timestamp_bind("2026-09-15T15:34:56+03:00") == dt.datetime(
-        2026, 9, 15, 12, 34, 56
-    )
+    assert normalize_timestamp_bind(pd.Timestamp("2026-09-15T12:34:56.123456789")) == "2026-09-15T12:34:56.123456789"
+    assert normalize_timestamp_bind("2026-09-15T15:34:56+03:00") == "2026-09-15T12:34:56"
     assert normalize_timestamp_bind(pd.NaT) is None
 
 
@@ -400,14 +397,8 @@ def test_every_entity_normalizes_pandas_optimistic_lock_timestamp(table):
     assert sql.startswith(
         f"UPDATE EFNS_DEV.{expected_schema}.{table}"
     )
-    assert params[-1] == dt.datetime(
-        2026,
-        2,
-        2,
-        12,
-        0,
-    )
-    assert type(params[-1]) is dt.datetime
+    assert params[-1] == "2026-02-02T12:00:00"
+    assert isinstance(params[-1], str)
 
 def test_unknown_insert_affected_rows_is_verified_and_returned():
     executor = RecordingExecutor(affected=-1)
@@ -432,7 +423,8 @@ def test_every_entity_delete_binds_id_and_commits(table):
     repo = _repo(executor)
     key = MODEL[table][0]
     assert repo._delete(table, key, "record-1") is True
-    _, sql, params = next(call for call in executor.calls if call[0] == "execute")
+    assert any(call[0] == "execute" and "RAW.INTAKE_LOCK" in call[1] for call in executor.calls)
+    _, sql, params = next(call for call in executor.calls if call[0] == "execute" and call[1].startswith("DELETE FROM"))
     assert sql == f"DELETE FROM EFNS_DEV.CORE.{table} WHERE {key} = %s"
     assert params == ("record-1",)
     assert executor.commits == 1 and executor.rollbacks == 0
@@ -625,6 +617,14 @@ def test_date_and_datetime_values_bind_as_dates():
 
 def test_flock_create_binds_unset_optional_dates_as_sql_null():
     executor = RecordingExecutor()
+    original_query=executor.query
+    def query_with_verified_parents(sql,params=None):
+        if sql.startswith('SELECT ACCOUNT_ID FROM EFNS_DEV.CORE.ACCOUNT WHERE ACCOUNT_ID=') and params==('account-1',):
+            return pd.DataFrame([{'ACCOUNT_ID':'account-1'}])
+        if sql.startswith('SELECT FACILITY_ID FROM EFNS_DEV.CORE.FACILITY WHERE FACILITY_ID=') and params==('facility-1',):
+            return pd.DataFrame([{'FACILITY_ID':'facility-1'}])
+        return original_query(sql,params)
+    executor.query=query_with_verified_parents
     repo = _repo(executor)
     repo.get_account = lambda account_id: {"ACCOUNT_ID": account_id} if account_id == 'account-1' else None
     repo.get_facilities = lambda account_id=None: pd.DataFrame([

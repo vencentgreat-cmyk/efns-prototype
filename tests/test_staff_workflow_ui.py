@@ -82,6 +82,7 @@ def test_employee_pages_save_cancel_and_refresh(chain,tmp_path,monkeypatch):
     app.switch_page('app/pages/9_Salmonella_Tests.py').run()
     app.button(key='salmonella_record_edit').click().run()
     app.selectbox(key='salmonella_form_result').select('Negative')
+    app.text_input(key='salmonella_form_revision_reason').input('Synthetic result correction evidence')
     app.button(key='salmonella_record_save').click().run()
     assert not app.exception and not app.error
     assert r.get_salmonella_tests(flock_id=flock).iloc[0].TEST_RESULT=='Negative'

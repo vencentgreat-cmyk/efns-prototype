@@ -19,7 +19,7 @@ ACTOR={'user_id':'synthetic-staff','email':'synthetic.staff@nsegg.ca'}
 
 
 def current(r,fid,kind,quantity,request='request',**kwargs):
-    return r.record_current_flock_quantity(dict(FLOCK_ID=fid,TRANSACTION_TYPE=kind,QUANTITY=quantity,TRANSACTION_DATE=dt.date.today()),request,r.get_flock(fid)['UPDATED_AT'],'Synthetic current observation/removal',confirmed=True,actor=ACTOR,**kwargs)
+    return r.record_current_flock_quantity(dict(FLOCK_ID=fid,TRANSACTION_TYPE=kind,QUANTITY=quantity,TRANSACTION_DATE=dt.date.today()),request,r.get_flock(fid)['UPDATED_AT'],'Synthetic current observation/removal',confirmed=True,actor=ACTOR,**kwargs, expected_bird_count=(r.get_flock((dict(FLOCK_ID=fid,TRANSACTION_TYPE=kind,QUANTITY=quantity,TRANSACTION_DATE=dt.date.today())).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))
 
 
 @pytest.mark.parametrize('baseline,total,missing,compatible,percent,remaining',[
@@ -54,9 +54,9 @@ def test_count_partial_and_complete_removal_refresh_without_replay(chain):
     current(r,fid,'Count',12,'count')
     version=r.get_flock(fid)['UPDATED_AT']
     request=dict(FLOCK_ID=fid,TRANSACTION_TYPE='Removal',QUANTITY=5,TRANSACTION_DATE=dt.date.today())
-    first=r.record_current_flock_quantity(request,'partial',version,'Synthetic partial disposal',confirmed=True,actor=ACTOR)
+    first=r.record_current_flock_quantity(request,'partial',version,'Synthetic partial disposal',confirmed=True,actor=ACTOR, expected_bird_count=(r.get_flock((request).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))
     assert r.get_flock(fid)['BIRD_COUNT']==7
-    assert r.record_current_flock_quantity(request,'partial',version,'Synthetic partial disposal',confirmed=True,actor=ACTOR)==first
+    assert r.record_current_flock_quantity(request,'partial',version,'Synthetic partial disposal',confirmed=True,actor=ACTOR, expected_bird_count=(r.get_flock((request).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))==first
     assert r.get_flock(fid)['BIRD_COUNT']==7
     current(r,fid,'Removal',7,'complete')
     after=r.get_flock(fid)
@@ -81,7 +81,7 @@ def test_stale_invalid_and_audit_failure_leave_no_partial_writes(chain,monkeypat
     r._flocks.loc[r._flocks.FLOCK_ID==fid,'UPDATED_AT']=pd.Timestamp('2020-01-01T00:00:00Z')
     old=r.get_flock(fid)['UPDATED_AT']; current(r,fid,'Count',15,'initial')
     request=dict(FLOCK_ID=fid,TRANSACTION_TYPE='Removal',QUANTITY=3,TRANSACTION_DATE=dt.date.today())
-    with pytest.raises(ConcurrencyError): r.record_current_flock_quantity(request,'stale',old,'Synthetic',confirmed=True,actor=ACTOR)
+    with pytest.raises(ConcurrencyError): r.record_current_flock_quantity(request,'stale',old,'Synthetic',confirmed=True,actor=ACTOR, expected_bird_count=(r.get_flock((request).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))
     before=r._flocks.copy(deep=True); transactions=r._flock_transactions.copy(deep=True); audits=deepcopy(r._migration_review_audit)
     def fail(*args): raise RuntimeError('Synthetic audit failure')
     monkeypatch.setattr(r,'_review_insert',fail)
@@ -94,10 +94,10 @@ def test_concurrent_same_request_once_and_changed_payload_rejected(chain):
     r,a,o,f,q,fid,record=chain
     version=r.get_flock(fid)['UPDATED_AT']
     payload=dict(FLOCK_ID=fid,TRANSACTION_TYPE='Removal',QUANTITY=2,TRANSACTION_DATE=dt.date.today())
-    def submit(_):return r.record_current_flock_quantity(payload,'same',version,'Synthetic',confirmed=True,actor=ACTOR)
+    def submit(_):return r.record_current_flock_quantity(payload,'same',version,'Synthetic',confirmed=True,actor=ACTOR, expected_bird_count=(r.get_flock((payload).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))
     with ThreadPoolExecutor(max_workers=2) as pool: ids=list(pool.map(submit,range(2)))
     assert ids[0]==ids[1] and r.get_flock(fid)['BIRD_COUNT']==8
-    with pytest.raises(RepositoryError): r.record_current_flock_quantity(dict(payload,QUANTITY=3),'same',version,'Synthetic',confirmed=True,actor=ACTOR)
+    with pytest.raises(RepositoryError): r.record_current_flock_quantity(dict(payload,QUANTITY=3),'same',version,'Synthetic',confirmed=True,actor=ACTOR, expected_bird_count=(r.get_flock((dict(payload,QUANTITY=3)).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))
 
 
 def test_permission_and_operator_are_authenticated(chain):
@@ -105,9 +105,9 @@ def test_permission_and_operator_are_authenticated(chain):
     class Audit:
         def record_action(self,*args,**kwargs):pass
     args=(dict(FLOCK_ID=fid,TRANSACTION_TYPE='Count',QUANTITY=8,TRANSACTION_DATE=dt.date.today()),'auth',r.get_flock(fid)['UPDATED_AT'],'Synthetic')
-    with pytest.raises(RepositoryError): AuthorizedRepository(r,Audit(),user(Role.REPORTING_VIEWER)).record_current_flock_quantity(*args,confirmed=True)
+    with pytest.raises(RepositoryError): AuthorizedRepository(r,Audit(),user(Role.REPORTING_VIEWER)).record_current_flock_quantity(*args,confirmed=True, expected_bird_count=(AuthorizedRepository(r,Audit(),user(Role.REPORTING_VIEWER)).get_flock((args[0]).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))
     editor=user(Role.DATA_EDITOR)
-    AuthorizedRepository(r,Audit(),editor).record_current_flock_quantity(*args,confirmed=True,actor={'user_id':'spoof','email':'spoof@nsegg.ca'})
+    AuthorizedRepository(r,Audit(),editor).record_current_flock_quantity(*args,confirmed=True,actor={'user_id':'spoof','email':'spoof@nsegg.ca'}, expected_bird_count=(AuthorizedRepository(r,Audit(),editor).get_flock((args[0]).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))
     assert r._migration_review_audit[0]['ACTOR_EMAIL']==editor.email
 
 
@@ -166,7 +166,7 @@ def test_unknown_count_overdraw_and_historical_activity(chain):
     historical=dict(FLOCK_ID=fid,TRANSACTION_TYPE='Count',QUANTITY=999,TRANSACTION_DATE=dt.date.today()-dt.timedelta(days=1))
     r.upsert_flock_transaction(historical)
     assert r.get_flock(fid)['BIRD_COUNT']==4
-    with pytest.raises(RepositoryError): r.record_current_flock_quantity(historical,'old',r.get_flock(fid)['UPDATED_AT'],'Historical observation',confirmed=True,actor=ACTOR)
+    with pytest.raises(RepositoryError): r.record_current_flock_quantity(historical,'old',r.get_flock(fid)['UPDATED_AT'],'Historical observation',confirmed=True,actor=ACTOR, expected_bird_count=(r.get_flock((historical).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))
 
 
 def test_current_count_not_deducted_again_by_disposed_attribute(chain):

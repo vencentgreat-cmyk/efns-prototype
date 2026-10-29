@@ -81,8 +81,8 @@ def quota_usage_context(repo, flock):
 def render_account_usage(repo, account_id, *, quota_type=None):
     import streamlit as st
     context=account_usage_context(repo,account_id)
-    st.subheader('Account quota and Bird Count — provisional')
-    st.caption('Account-wide, including other Flocks. Temporarily treats Bird Count as current quantity; registration quota would be a capacity baseline. Business definition remains to be confirmed. All recorded statuses are included; no lifecycle or unit equivalence is inferred.')
+    st.subheader('Account quota and registered Bird Count — provisional')
+    st.caption('Account-wide, including other Flocks. Stored registration Bird Count is aggregated across all recorded statuses, including ended/Depopulated Flocks; it is not certified real-time inventory. Status/date do not clear counts. Lifecycle inclusion and quantity-correction policy remain to be confirmed. No usable real quota baseline or unit equivalence is inferred.')
     selected=[r for r in context['summaries'] if quota_type is None or r['quota_type']==quota_type]
     if not selected: st.info('No Flock or Quota Registration found for this Account/type.')
     for row in selected:
@@ -93,7 +93,7 @@ def render_account_usage(repo, account_id, *, quota_type=None):
             columns[1].metric('Known Bird Count',str(row['known_bird_count']) if row['known_bird_count'] is not None else 'Unknown')
             columns[2].metric('Remaining capacity','Cannot calculate')
             columns[3].metric('Account usage','Cannot calculate')
-            st.caption(f"{row['flock_count']} unique Flocks; {row['known_count']} known / {row['missing_count']} missing or invalid Bird Count. Incomplete totals are not complete occupancy. {row['registration_count']} registration record(s). Status breakdown: {row['status_counts']}")
+            st.caption(f"{row['flock_count']} unique Flocks; {row['known_count']} known / {row['missing_count']} missing or invalid Bird Count. Incomplete totals are not complete occupancy; even complete stored values do not prove current inventory. {row['registration_count']} registration record(s). Status breakdown: {row['status_counts']}")
     st.info('No quantity/unit field exists on the current Quota Registration. Registration dates/status are not capacity. Quota transaction direction, lease rules and units are not confirmed, so transactions are not added into a balance. Zero baselines would not divide; genuine over-capacity percentages would remain above 100%.')
     for reason in context['reasons']: st.warning(reason)
     details=context['facility_details']

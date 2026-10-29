@@ -312,6 +312,10 @@ class _CaptureExecutor:
 
     def query(self, sql, params=None):
         self.calls.append((sql, tuple(params or ())))
+        if sql.startswith('SELECT ACCOUNT_ID FROM EFNS_DEV.CORE.ACCOUNT WHERE ACCOUNT_ID=') and params==('account-id',):
+            return pd.DataFrame([{'ACCOUNT_ID':'account-id'}])
+        if sql.startswith('SELECT FACILITY_ID FROM EFNS_DEV.CORE.FACILITY WHERE FACILITY_ID=') and params==('facility-id',):
+            return pd.DataFrame([{'FACILITY_ID':'facility-id'}])
         return pd.DataFrame()
 
 
@@ -338,7 +342,7 @@ class _BatchExecutor(_CaptureExecutor):
         self.calls.append((sql, values))
         if self.fail_flock and "INSERT INTO EFNS_DEV.CORE.FLOCK " in sql:
             raise RepositoryError("injected flock failure")
-        return 0 if sql.startswith("UPDATE") else 1
+        return 1 if 'RAW.INTAKE_LOCK' in sql else 0 if sql.startswith("UPDATE") else 1
 
     def query(self, sql, params=None):
         values = tuple(params or ())

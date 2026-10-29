@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from app.services.form_safety import open_saved_record, stored_index, capture_form, preserve_form, save_form, stored_options, start_new_form, begin_form, field_changed, delete_confirmation
+from data.producer_identity import text as stored_text
+from data.business_time import halifax_today
+
 import streamlit as st
 
 from app.auth import require_operational_page
@@ -53,10 +57,10 @@ if view.name == "list":
     row_ids = st.session_state.get("farm_location_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("farm_location_list", selected=bool(selected_id))
-    if action == "new": open_view("new")
+    if action == "new": start_new_form('farm_location_form_'); open_view("new")
     if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": st.rerun()
-    if action == "delete" and selected_id: st.session_state.farm_location_delete_pending = selected_id
+    if action == "delete" and selected_id: st.session_state['farm_location_form___delete_pending']=selected_id
     pending = st.session_state.get("farm_location_delete_pending")
     if pending:
         with st.container(border=True):
@@ -67,7 +71,7 @@ if view.name == "list":
                     repo.delete_farm_location(pending)
                     st.session_state.pop("farm_location_delete_pending", None)
                     st.rerun()
-                except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                except Exception as exc: show_data_error(exc)
             if right.button("Cancel"): st.session_state.pop("farm_location_delete_pending", None); st.rerun()
     keyword = st.text_input(
         "Search", placeholder="Location, Account, city, postal code or phone",
@@ -99,19 +103,18 @@ else:
         if st.button("Back to Farm Locations", icon=":material/arrow_back:"): open_view("list")
         st.stop()
     current = current or {}
+    begin_form('farm_location_form_',view.record_id)
     page_header(
         "New Farm Location" if view.name == "new" else current.get("LOCATION_NAME", "Farm Location"),
         "Provisional Account-owned address; kept separate from regulated Facilities.",
         "FARM LOCATION",
     )
     action = record_command_bar("farm_location_record", view.name)
-    if action == "back": open_view("list")
-    if action == "cancel": open_view("detail", view.record_id) if view.record_id else open_view("list")
+    if action == "back": start_new_form('farm_location_form_'); open_view("list")
+    if action == "cancel": start_new_form('farm_location_form_'); open_view("detail", view.record_id) if view.record_id else open_view("list")
     if action == "refresh": st.rerun()
-    if action == "edit": clear_widget_prefix("farm_location_form_"); open_view("edit", view.record_id)
-    if action == "delete" and view.record_id:
-        try: repo.delete_farm_location(view.record_id); open_view("list")
-        except (ValueError, RepositoryError) as exc: show_data_error(exc)
+    if action == "edit": start_new_form("farm_location_form_"); open_view("edit", view.record_id)
+    if action == "delete" and view.record_id: st.session_state['farm_location_form___delete_pending']=view.record_id
 
     if view.name == "detail":
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
@@ -148,7 +151,9 @@ else:
             province = right.text_input("Province", value=str(current.get("PROVINCE") or "NS"), key="farm_location_form_province")
             postal = right.text_input("Postal Code", value=str(current.get("POSTAL_CODE") or ""), key="farm_location_form_postal")
             phone = right.text_input("Phone", value=str(current.get("PHONE") or ""), key="farm_location_form_phone")
-            status = right.selectbox("Status", FARM_LOCATION_STATUSES, index=option_index(list(FARM_LOCATION_STATUSES), current.get("STATUS")), key="farm_location_form_status")
+            status = right.selectbox("Status", stored_options(FARM_LOCATION_STATUSES,current.get("STATUS"),bool(view.record_id)), index=(stored_index(FARM_LOCATION_STATUSES,current.get("STATUS")) if view.record_id else option_index(list(FARM_LOCATION_STATUSES), current.get("STATUS"))), key="farm_location_form_status")
+        capture_form('farm_location_form_',current,{'ACCOUNT_ID': ['farm_location_form_account'], 'LOCATION_NAME': ['farm_location_form_name'], 'ADDRESS_1': ['farm_location_form_address1'], 'ADDRESS_2': ['farm_location_form_address2'], 'CITY': ['farm_location_form_city'], 'PROVINCE': ['farm_location_form_province'], 'POSTAL_CODE': ['farm_location_form_postal'], 'PHONE': ['farm_location_form_phone'], 'STATUS': ['farm_location_form_status']})
+        if view.record_id: st.text_input("Reason for correction *",key='farm_location_form_revision_reason')
         if action == "save":
             record = {
                 "FARM_LOCATION_ID": view.record_id, "ACCOUNT_ID": account_options[account_label],
@@ -159,11 +164,16 @@ else:
             }
             if not view.record_id: record.pop("FARM_LOCATION_ID")
             else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
-            errors = validate_farm_location(repo, record)
+            errors = validate_farm_location(repo, record) if not view.record_id else []
             if errors:
                 for error in errors: st.error(error)
             else:
                 try:
-                    saved_id = repo.upsert_farm_location(record)
-                    clear_widget_prefix("farm_location_form_"); open_view("detail", saved_id)
-                except (ValueError, RepositoryError) as exc: show_data_error(exc)
+                    saved_id = save_form(repo,'FARM_LOCATION',record,current,'farm_location_form_')
+                    open_saved_record(saved_id)
+                except Exception as exc: show_data_error(exc)
+
+_pending=st.session_state.get('farm_location_form___delete_pending')
+if _pending and delete_confirmation(repo,'delete_farm_location',_pending,'farm_location_form___delete'):
+    st.session_state.pop('farm_location_form___delete_pending',None)
+    open_view("list")

@@ -144,8 +144,13 @@ def test_admin_cannot_create_external_delete_self_or_remove_last_admin(auth_cont
         store.update_user(admin, admin.user_id, role=Role.REPORTING_VIEWER, active=True)
 
 
-class FakeRepository:
+from data.repositories.mock import MockRepository
+
+
+class FakeRepository(MockRepository):
     def __init__(self):
+        super().__init__()
+        self._accounts=self._accounts.iloc[0:0].copy()
         self.calls = []
 
     def get_accounts(self):
@@ -154,11 +159,11 @@ class FakeRepository:
 
     def upsert_account(self, record):
         self.calls.append("upsert")
-        return record.get("ACCOUNT_ID") or "new-account"
+        return super().upsert_account({"ACCOUNT_ID":record.get("ACCOUNT_ID") or "new-account",**record})
 
     def delete_account(self, account_id):
         self.calls.append("delete")
-        return True
+        return super().delete_account(account_id)
 
     def import_production_bundle(self, *args, **kwargs):
         self.calls.append("import")

@@ -37,6 +37,7 @@ app/services/authorized_repository.py
 app/services/export.py
 app/services/flock_date_repair_workspace.py
 app/services/flock_supplement_workspace.py
+app/services/form_safety.py
 app/services/historical_correction_workspace.py
 app/services/profiling_export.py
 app/services/quota_usage.py
@@ -54,6 +55,7 @@ config/eims_migration_mapping_v3_disposal_r1.json
 config/source_provenance.json
 conftest.py
 data/__init__.py
+data/business_time.py
 data/connection.py
 data/constants.py
 data/correction_decisions.py
@@ -68,6 +70,7 @@ data/operational_flock_quota_import.py
 data/producer_identity.py
 data/production_intake.py
 data/profiling.py
+data/record_safety.py
 data/repositories/__init__.py
 data/repositories/base.py
 data/repositories/continuity.py
@@ -89,10 +92,12 @@ requirements.txt
 review/BASELINE.json
 review/CANDIDATE_CONSISTENCY.json
 review/CHANGE_SCOPE.md
+review/DEPLOYMENT_BOUNDARY.md
 review/GITHUB_UPLOAD.md
 review/KNOWN_REVIEW_FINDINGS.md
 review/LOCAL_VALIDATION.json
 review/LOCAL_VALIDATION.md
+review/PROCESSING_MATRIX.md
 review/SCHEMA_CHECK.md
 review/SHARING_AUDIT.md
 review/SOURCE_ORIGINS.json
@@ -100,6 +105,7 @@ review/SQL_OBJECT_INDEX.csv
 review/SUBMISSION_FILES.txt
 review/SUBMISSION_MANIFEST.json
 review/TEST_HELPER_COVERAGE.json
+review/VALIDATION_RESULTS.md
 scripts/__init__.py
 scripts/check_review_package.py
 scripts/check_snowflake_readiness.py
@@ -171,6 +177,8 @@ tests/test_report_center.py
 tests/test_report_facility_provenance.py
 tests/test_report_nullable_sum.py
 tests/test_review_boundaries.py
+tests/test_review_findings.py
+tests/test_review_integrated.py
 tests/test_snowflake_navigation.py
 tests/test_snowflake_repository.py
 tests/test_snowflake_security.py

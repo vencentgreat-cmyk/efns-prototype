@@ -14,6 +14,7 @@ import pandas as pd
 
 from data.repositories.base import BaseRepository, ConcurrencyError, RepositoryError, migration_commit_failure_details
 from data.synthetic import generate_all
+from data.record_safety import guarded_delete,locked_frame,serialized_write
 from data.repositories.continuity import ContinuityRepository
 from data.repositories.correction_review import CorrectionReviewRepository
 from data.repositories.flock_supplement import FlockSupplementRepository
@@ -105,6 +106,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
         self._import_batches.append(batch)
         self._production["IMPORT_ID"] = import_id
 
+    @locked_frame
     def _upsert_frame(self, attribute: str, key: str, record: dict) -> str:
         """Apply one timestamped, optimistic-locking upsert to a data frame."""
         values = dict(record)
@@ -117,12 +119,18 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
                 frame[column] = None
         matches = frame[frame[key] == entity_id].index
         if len(matches):
+            if len(matches)!=1:raise RepositoryError('Record identity is duplicated; no update accepted.')
+            for column in ('UPDATED_AT',):
+                if column in frame:frame[column]=frame[column].astype(object)
             index = matches[0]
             if expected is not None and _stamp(frame.loc[index].get("UPDATED_AT")) != _stamp(expected):
                 raise ConcurrencyError(
                     "This record changed after it was opened. Reload it before saving again."
                 )
-            values["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
+            now=pd.Timestamp(dt.datetime.now(dt.timezone.utc))
+            previous=pd.Timestamp(frame.loc[index].get("UPDATED_AT"))
+            if previous.tzinfo is None: previous=previous.tz_localize('UTC')
+            values["UPDATED_AT"] = max(now,previous+pd.Timedelta(1,unit='ns'))
             for column, value in values.items():
                 frame.loc[index, column] = value
         else:
@@ -175,6 +183,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
         )
         return self._accounts[matches].copy()
 
+    @serialized_write
     def upsert_account(self, record: dict) -> str:
         record = normalize_optional_account_links(record)
         for field in ("LATITUDE", "LONGITUDE"):
@@ -200,6 +209,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
         record["ACCOUNT_ID"] = aid
         return self._upsert_frame("_accounts", "ACCOUNT_ID", record)
 
+    @guarded_delete
     def delete_account(self, account_id: str) -> bool:
         lookup_columns = (
             "PARENT_ACCOUNT_ID",
@@ -263,12 +273,14 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
         matches = self._farm_locations[self._farm_locations["FARM_LOCATION_ID"] == farm_location_id]
         return matches.iloc[0].to_dict() if not matches.empty else None
 
+    @serialized_write
     def upsert_farm_location(self, record: dict) -> str:
         errors = validate_farm_location(self, record)
         if errors:
             raise ValueError(" ".join(errors))
         return self._upsert_frame("_farm_locations", "FARM_LOCATION_ID", record)
 
+    @guarded_delete
     def delete_farm_location(self, farm_location_id: str) -> bool:
         before = len(self._farm_locations)
         self._farm_locations = self._farm_locations[
@@ -288,11 +300,13 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
             df = df[df["STATUS"].isin(statuses)]
         return df
 
+    @serialized_write
     def upsert_facility(self, record: dict) -> str:
         with self._continuity_transaction():
             self.check_facility_ownership(record)
             return self._upsert_frame("_facilities", "FACILITY_ID", record)
 
+    @guarded_delete
     def delete_facility(self, facility_id: str) -> bool:
         self.check_facility_history(facility_id)
         if not self.get_flocks(facility_id=facility_id).empty or not self.get_facility_details(facility_id).empty:
@@ -318,12 +332,14 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
         ]
         return matches.iloc[0].to_dict() if not matches.empty else None
 
+    @serialized_write
     def upsert_facility_detail(self, record: dict) -> str:
         facility_id = record.get("FACILITY_ID")
         if not facility_id or facility_id not in set(self._facilities["FACILITY_ID"]):
             raise ValueError("Facility Detail requires an existing Facility.")
         return self._upsert_frame("_facility_details", "FACILITY_DETAIL_ID", record)
 
+    @guarded_delete
     def delete_facility_detail(self, detail_id: str) -> bool:
         if "FACILITY_DETAIL_ID" in self._flocks and bool(
             (self._flocks["FACILITY_DETAIL_ID"] == detail_id).any()
@@ -358,6 +374,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
         match = self._flocks[self._flocks["FLOCK_ID"] == flock_id]
         return match.iloc[0].to_dict() if len(match) else None
 
+    @serialized_write
     def upsert_flock(self, record: dict) -> str:
         with self._continuity_transaction():
             record = normalize_flock_dates(record)
@@ -367,6 +384,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
                 raise ValueError(" ".join(errors))
             return self._upsert_frame("_flocks", "FLOCK_ID", record)
 
+    @guarded_delete
     def delete_flock(self, flock_id: str) -> bool:
         if not self.get_flock_events(flock_id).empty:
             raise RepositoryError("Flock cannot be deleted while business history exists.")
@@ -400,6 +418,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
         if date_to is not None: df = df[dates <= pd.Timestamp(date_to)]
         return df
 
+    @serialized_write
     def upsert_flock_transaction(self, record: dict) -> str:
         self._guard_applied_quantity_transaction(record.get('FLOCK_TRANSACTION_ID'))
         from data.validation import validate_flock_transaction
@@ -408,6 +427,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
             raise ValueError(' '.join(errors))
         return self._upsert_frame("_flock_transactions", "FLOCK_TRANSACTION_ID", record)
 
+    @guarded_delete
     def delete_flock_transaction(self, transaction_id: str) -> bool:
         self._guard_applied_quantity_transaction(transaction_id)
         before = len(self._flock_transactions)
@@ -456,12 +476,14 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
         match = self._quota_registrations[self._quota_registrations["QUOTA_ID"] == quota_id]
         return match.iloc[0].to_dict() if len(match) else None
 
+    @serialized_write
     def upsert_quota_registration(self, record: dict) -> str:
         errors = validate_quota_registration(self, record)
         if errors:
             raise ValueError(" ".join(errors))
         return self._upsert_frame("_quota_registrations", "QUOTA_ID", record)
 
+    @guarded_delete
     def delete_quota_registration(self, quota_id: str) -> bool:
         if (
             not self.get_quota_transactions(quota_id=quota_id).empty
@@ -506,6 +528,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
             frame = frame[dates <= pd.Timestamp(date_to)]
         return frame
 
+    @serialized_write
     def upsert_quota_transaction(self, record: dict) -> str:
         errors = validate_quota_transaction(self, record)
         if errors:
@@ -549,6 +572,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
         ]
         return matches.iloc[0].to_dict() if not matches.empty else None
 
+    @guarded_delete
     def delete_quota_transaction(self, transaction_id: str) -> bool:
         if "RELATED_TRANSACTION_ID" in self._quota_transactions and bool(
             (self._quota_transactions["RELATED_TRANSACTION_ID"] == transaction_id).any()
@@ -619,12 +643,14 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
         ]
         return match.iloc[0].to_dict() if len(match) else None
 
+    @serialized_write
     def upsert_salmonella_test(self, record: dict) -> str:
         errors = validate_salmonella_test(self, record)
         if errors:
             raise ValueError(" ".join(errors))
         return self._upsert_frame("_salmonella_tests", "SALMONELLA_TEST_ID", record)
 
+    @guarded_delete
     def delete_salmonella_test(self, test_id: str) -> bool:
         before = len(self._salmonella_tests)
         self._salmonella_tests = self._salmonella_tests[
@@ -664,6 +690,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
                 return dict(batch)
         return None
 
+    @serialized_write
     def import_production_bundle(
         self,
         batch: dict,
@@ -688,6 +715,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
             self._import_batches, self._raw_rows, self._production = snapshots
             raise
 
+    @serialized_write
     def import_flock_quota_batch(
         self,
         batch: dict,
@@ -796,6 +824,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
             self._quota_registrations, self._flocks, self._import_batches = snapshots
             raise
 
+    @serialized_write
     def import_operational_flock_quota_batch(
         self,
         batch: dict,
@@ -862,10 +891,24 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
                             if quota is None or str(quota.get("ACCOUNT_ID")) != str(record.get("ACCOUNT_ID")):
                                 raise ValueError("Quota Registration no longer belongs to the selected Account.")
                         before_flock = self.get_flock(entity_id) if action == 'UPDATE' else None
-                        self.upsert_flock(record)
+                        if before_flock is not None:
+                            from data.record_safety import validate_edit
+                            from data.repositories.continuity import changed_attributes
+                            self.check_flock_reference_change(record)
+                            changes=validate_edit(self,'FLOCK',before_flock,changed_attributes(before_flock,record))
+                            self._upsert_frame('_flocks','FLOCK_ID',dict(FLOCK_ID=entity_id,**changes,EXPECTED_UPDATED_AT=record.get('EXPECTED_UPDATED_AT')))
+                        else:self.upsert_flock(record)
                         if before_flock is not None:
                             self.append_operational_flock_revision(None,batch,before_flock,self.get_flock(entity_id))
                     elif entity == "FLOCK_TRANSACTION":
+                        from data.validation import validate_flock_transaction
+                        from data.business_time import same_value
+                        frame=getattr(self,attribute)
+                        old=frame[frame[key]==entity_id].iloc[0].to_dict() if action=='UPDATE' else {}
+                        if action=='CREATE' or any(not same_value(record.get(k),old.get(k)) for k in ('FLOCK_ID','TRANSACTION_TYPE','QUANTITY','TRANSACTION_DATE')):
+                            errors=validate_flock_transaction(self,record)
+                            if errors:raise RepositoryError(' '.join(errors))
+                        self._guard_applied_quantity_transaction(entity_id)
                         if self.get_flock(record.get("FLOCK_ID")) is None:
                             raise ValueError("Flock no longer exists.")
                         self._upsert_frame(attribute, key, record)
@@ -1235,6 +1278,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
             raise
         return batch_id
 
+    @serialized_write
     def commit_migration_batch(self, batch_id: str) -> dict:
         batch = next((row for row in self._migration_batches if row["MIGRATION_BATCH_ID"] == batch_id), None)
         if not batch:
@@ -1365,6 +1409,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
             return None
         return dict(sorted(matches, key=lambda row: str(row.get("UPDATED_AT") or ""), reverse=True)[0])
 
+    @serialized_write
     def commit_historical_corrections(self, batch_id: str) -> dict:
         if self._review_read('MIGRATION_CORRECTION_DECISION',batch_id):
             raise RepositoryError('Manual decisions require the revalidated review-token commit workflow.')

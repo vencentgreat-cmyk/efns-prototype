@@ -190,7 +190,7 @@ def test_sql_production_correction_uses_same_transaction_and_native_binds():
             assert self.active
             self.calls.append((sql,params))
             if 'UPDATE EFNS_DEV.CORE.PRODUCTION_RECORD' in sql:
-                assert type(params[-1]) is dt.datetime
+                assert params[-1] == '2026-01-01T00:00:00'
                 self.total=params[0]
             return 1
     executor=SQL(); repository=SnowflakeRepository(executor)

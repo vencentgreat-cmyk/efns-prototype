@@ -110,7 +110,7 @@ def test_unidentified_groups_and_exports(repo):
 def history_repo(repo):
     record_event=repo.record_flock_event
     repo.record_flock_event=lambda *args,**kwargs: record_event(*args,position_confirmed=True,**kwargs)
-    repo._flocks=pd.DataFrame([dict(FLOCK_ID='f',FLOCK_NUMBER='Synthetic',ACCOUNT_ID='a',FACILITY_ID='old',DISPOSAL_DATE=None,EST_DISPOSAL=dt.date(2000,1,1))])
+    repo._flocks=pd.DataFrame([dict(FLOCK_ID='f',FLOCK_NUMBER='Synthetic',ACCOUNT_ID='a',FACILITY_ID='old',DISPOSAL_DATE=None,EST_DISPOSAL=dt.date(2000,1,1),UPDATED_AT=pd.Timestamp('2026-01-01T00:00:00Z'))])
     repo._facilities=pd.DataFrame([dict(FACILITY_ID='old',ACCOUNT_ID='a'),dict(FACILITY_ID='new',ACCOUNT_ID='a'),dict(FACILITY_ID='other',ACCOUNT_ID='b')])
     return repo
 
@@ -159,8 +159,9 @@ def test_revision_preserves_unknown_history_and_retry(repo):
     repo=history_repo(repo)
     repo._flocks.loc[0,'BIRDS_DISPOSED']=-5
     repo._flocks.loc[0,'FLOCK_NUMBER']='Original'
-    repo.revise_record('FLOCK','f',{'FLOCK_NUMBER':'Corrected'},'Source correction','same',actor='staff')
-    repo.revise_record('FLOCK','f',{'FLOCK_NUMBER':'Corrected'},'Source correction','same',actor='staff')
+    reviewed_version=repo.get_flock('f')['UPDATED_AT']
+    repo.revise_record('FLOCK','f',{'FLOCK_NUMBER':'Corrected'},'Source correction','same',actor='staff',expected_updated_at=reviewed_version)
+    repo.revise_record('FLOCK','f',{'FLOCK_NUMBER':'Corrected'},'Source correction','same',actor='staff',expected_updated_at=reviewed_version)
     revisions=repo.get_record_revisions()
     assert len(revisions)==1 and revisions.iloc[0].BEFORE_DATA['FLOCK_NUMBER']=='Original'
     assert repo._flocks.iloc[0].BIRDS_DISPOSED==-5
