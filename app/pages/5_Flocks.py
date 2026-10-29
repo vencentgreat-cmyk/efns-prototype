@@ -59,17 +59,6 @@ if view.name == "list":
     if action == "new": start_new_form('flock_form_'); open_view("new")
     if action == "refresh": clear_widget_prefix("flock_filter_"); st.rerun()
     if action == "delete" and selected_id: st.session_state['flock_form___delete_pending']=selected_id
-    if st.session_state.get("flock_delete_pending"):
-        with st.container(border=True):
-            st.warning("Delete the selected Flock? Related Transactions, Tests or Production will block deletion.")
-            with st.container(horizontal=True):
-                if st.button("Confirm delete", type="primary", key="flock_confirm_delete"):
-                    try:
-                        repo.delete_flock(st.session_state.flock_delete_pending)
-                        st.session_state.pop("flock_delete_pending", None); st.rerun()
-                    except Exception as exc: show_data_error(exc)
-                if st.button("Cancel", key="flock_cancel_delete"):
-                    st.session_state.pop("flock_delete_pending", None); st.rerun()
     filters = st.columns([2, 1, 1])
     keyword = filters[0].text_input("Filter by keyword", placeholder="Flock number or permit", key="flock_filter_keyword")
     account_filter = filters[1].selectbox("Account", ["All", *account_options], key="flock_filter_account")

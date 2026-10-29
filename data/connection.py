@@ -268,6 +268,45 @@ class SqlExecutor(ABC):
 
     runtime_name = "Unknown"
 
+    def _commit_result(self):
+        try:self.commit()
+        except Exception as exc:
+            raise RepositoryError('COMMIT outcome is unknown. Do not save again or start a new request. Preserve the request/record ID and verify its receipt and current record using a separate read-only connection. '+str(exc)) from exc
+
+    @contextmanager
+    def intake_transaction(self):
+        """Bound app serialization waits, restoring the session's exact scope."""
+        lock=getattr(self,'_operation_lock',None)
+        if lock is None:lock=self._execution_state.lock
+        if not lock.acquire(timeout=30):
+            raise RepositoryError('System busy: no write transaction started within 30 seconds. Reload before trying again.')
+        changed=False
+        settings_owner=getattr(self,'_execution_state',self)
+        try:
+            if getattr(settings_owner,'_intake_settings_broken',False):
+                raise RepositoryError('Session settings could not be restored previously. Reconnect before saving.')
+            metadata=self.query("SHOW PARAMETERS LIKE 'LOCK_TIMEOUT' IN SESSION")
+            rows=[{str(k).upper():v for k,v in row.items()} for row in metadata.to_dict('records')]
+            rows=[r for r in rows if str(r.get('KEY','')).upper()=='LOCK_TIMEOUT']
+            if len(rows)!=1:raise RepositoryError('Cannot verify session lock timeout; no business write started.')
+            old=int(rows[0]['VALUE']);level=str(rows[0].get('LEVEL','')).upper()
+            if level not in {'SESSION','USER','ACCOUNT',''} or old<0:
+                raise RepositoryError('Unrecognized session lock configuration; no business write started.')
+            if old>30:
+                self.execute('ALTER SESSION SET LOCK_TIMEOUT=30');changed=True
+            try:
+                with self.transaction() as tx:yield tx
+            finally:
+                if changed:
+                    import sys
+                    primary=sys.exc_info()[1]
+                    try:self.execute(f'ALTER SESSION SET LOCK_TIMEOUT={old}' if level=='SESSION' else 'ALTER SESSION UNSET LOCK_TIMEOUT')
+                    except Exception:
+                        settings_owner._intake_settings_broken=True
+                        if primary is not None:_note_cleanup_failure(primary,'restore LOCK_TIMEOUT')
+                        else:raise RepositoryError('Business transaction committed, but session settings restoration failed. Do not repeat the save; reconnect and verify the saved record.')
+        finally:lock.release()
+
     @abstractmethod
     def query(self, sql: str, params: Params = None) -> pd.DataFrame: ...
 
@@ -338,6 +377,8 @@ class ConnectorExecutor(SqlExecutor):
                     cursor.close()
 
     def query(self, sql: str, params: Params = None) -> pd.DataFrame:
+        from data.business_time import precise_version_sql
+        sql=precise_version_sql(sql)
         with self._cursor() as cursor:
             try:
                 cursor.execute(sql, tuple(params or ()))
@@ -460,7 +501,7 @@ class ConnectorExecutor(SqlExecutor):
             self._transaction_depth = 1
             try:
                 yield self
-                self.commit()
+                self._commit_result()
             except Exception as primary:
                 try:
                     self.rollback()
@@ -572,6 +613,8 @@ class SnowparkExecutor(SqlExecutor):
                 raise _operation_error(exc, sql) from exc
 
     def query(self, sql: str, params: Params = None) -> pd.DataFrame:
+        from data.business_time import precise_version_sql
+        sql=precise_version_sql(sql)
         with self._execution_state.lock:
             try:
                 null_safe_sql, bound = _literalize_null_bindings(_qmark(sql), params or ())
@@ -660,7 +703,7 @@ class SnowparkExecutor(SqlExecutor):
             state.transaction_depth = 1
             try:
                 yield self
-                self.commit()
+                self._commit_result()
             except Exception as primary:
                 try:
                     self.rollback()
@@ -765,6 +808,10 @@ class LazySqlExecutor(SqlExecutor):
     def transaction(self):
         with self.resolved.transaction() as executor:
             yield executor
+
+    @contextmanager
+    def intake_transaction(self):
+        with self.resolved.intake_transaction() as executor:yield executor
 
 
 def create_executor(settings: SnowflakeSettings | None = None) -> LazySqlExecutor:

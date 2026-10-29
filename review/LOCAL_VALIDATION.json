@@ -1,25 +1,8 @@
 {
-  "full_offline_suite": {
-    "total": 749,
-    "seconds": 99.25,
-    "passed": 747,
-    "skipped": 1,
-    "xfailed": 1
-  },
-  "final_targeted_suite": {
-    "total": 19,
-    "seconds": 4.828,
-    "passed": 18,
-    "xfailed": 1
-  },
-  "sets_overlap": true,
-  "readiness": "passed; static only",
-  "pip_check": "No broken requirements found",
-  "dependency_install_performed": false,
-  "linux_ci_executed": false,
+  "passed": 842,
+  "skipped": 1,
+  "failed": 0,
+  "xfail": 0,
   "company_access": false,
-  "fresh_browser_acceptance": false,
-  "python": "3.12.14",
-  "platform": "Windows",
-  "final_targeted_includes_new_disabled_seed_test": true
+  "external_round2_tests_supplied": true
 }

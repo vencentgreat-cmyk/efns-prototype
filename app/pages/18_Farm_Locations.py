@@ -61,18 +61,6 @@ if view.name == "list":
     if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": st.rerun()
     if action == "delete" and selected_id: st.session_state['farm_location_form___delete_pending']=selected_id
-    pending = st.session_state.get("farm_location_delete_pending")
-    if pending:
-        with st.container(border=True):
-            st.warning("Delete the selected Farm Location?")
-            left, right = st.columns(2)
-            if left.button("Confirm delete", type="primary", icon=":material/delete:"):
-                try:
-                    repo.delete_farm_location(pending)
-                    st.session_state.pop("farm_location_delete_pending", None)
-                    st.rerun()
-                except Exception as exc: show_data_error(exc)
-            if right.button("Cancel"): st.session_state.pop("farm_location_delete_pending", None); st.rerun()
     keyword = st.text_input(
         "Search", placeholder="Location, Account, city, postal code or phone",
         key="farm_location_keyword",

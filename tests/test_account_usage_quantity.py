@@ -130,7 +130,10 @@ def test_snowflake_quantity_cas_and_actual_rollback_contract(chain,kind,quantity
             if 'SELECT CONVERT_TIMEZONE' in sql:return pd.DataFrame([{'RECORDED_AT':dt.datetime.now()}])
             if '.FLOCK_TRANSACTION ' in sql:return r._flock_transactions[r._flock_transactions.FLOCK_TRANSACTION_ID==params[0]].copy()
             if '.RECORD_REVISION ' in sql:return pd.DataFrame([v for v in r._continuity_rows['RECORD_REVISION'] if v['REVISION_ID']==params[0]])
-            if '.FLOCK ' in sql:return r._flocks[r._flocks.FLOCK_ID==params[0]].copy()
+            if '.FLOCK ' in sql:
+                result=r._flocks[r._flocks.FLOCK_ID==params[0]].copy()
+                result['UPDATED_AT']=result.UPDATED_AT.map(lambda v:pd.Timestamp(v).isoformat() if 'FF9' in sql else pd.Timestamp(v).to_pydatetime(warn=False))
+                return result
             raise AssertionError(sql)
         def execute(self,sql,params=None):
             self.calls.append(sql)
@@ -148,6 +151,9 @@ def test_snowflake_quantity_cas_and_actual_rollback_contract(chain,kind,quantity
     target.get_flock=r.get_flock
     target._upsert_with_executor=lambda tx,table,payload:r._upsert_frame('_flock_transactions','FLOCK_TRANSACTION_ID',payload)
     target._append_history=lambda tx,table,payload:r._append_history(None,table,payload)
+    with pytest.raises(ConcurrencyError,match='changed after review'):
+        target.record_current_flock_quantity(dict(FLOCK_ID=fid,TRANSACTION_TYPE=kind,QUANTITY=quantity,TRANSACTION_DATE=dt.date.today()),'same-microsecond-stale','2026-10-28T10:00:00.123456788','Synthetic',confirmed=True,actor=ACTOR,expected_bird_count=10)
+    assert r.get_flock(fid)['BIRD_COUNT']==10 and r._flock_transactions.empty
     before=r._flocks.copy(deep=True);ex.fail=True
     with pytest.raises(RuntimeError): current(target,fid,kind,quantity,'sql-failure')
     pd.testing.assert_frame_equal(before,r._flocks)

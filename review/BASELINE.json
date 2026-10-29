@@ -1,7 +1,7 @@
 {
-  "review_commit": "8f3733e89938cf2d6d6846e2e42583d9ff9c5730",
+  "review_commit": "9b046113eb88a598127fe21c711bc84aa6658575",
   "runtime_source": "zero_count_revision/candidate_app",
   "saved_live": "live-rollback-20261028T134845Z/sources",
   "company_access": false,
-  "external_repro_supplied": false
+  "external_repro_supplied": true
 }

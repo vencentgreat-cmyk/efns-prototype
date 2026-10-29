@@ -27,6 +27,7 @@
     "app/services/authorized_repository.py",
     "app/services/report_center.py",
     "app/ui.py",
+    "data/connection.py",
     "data/operational_flock_quota_import.py",
     "data/production_intake.py",
     "data/repositories/base.py",

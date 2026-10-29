@@ -181,7 +181,7 @@ class AuthorizedRepository:
                     {'user_id':self.actor.user_id,'email':self.actor.email},kwargs.pop('request_id',None) or uuid.uuid4().hex,
                     kwargs.pop('reason',None) or 'Explicit record deletion request')
             else:result = method(record_id, *args, **kwargs)
-            if result:
+            if result and name=='cleanup_synthetic_migration':
                 try:self.auth_store.record_action(self.actor, "DELETE", entity_type, str(record_id))
                 except Exception as exc:self._audit_warning('DELETE',str(record_id),exc,entity_type)
             return result

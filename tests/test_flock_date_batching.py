@@ -162,6 +162,9 @@ def test_actual_executors_issue_set_sql_not_hidden_row_loops(repo,kind):
     def respond(sql,params):
         canonical=sql.replace('?','%s')
         wire.append((sql,list(params or [])))
+        if sql.startswith('SHOW PARAMETERS'):
+            return [{'key':'LOCK_TIMEOUT','value':'43200','level':'ACCOUNT'}],['key','value','level']
+        if sql.startswith('ALTER SESSION'):return [],[]
         if sql in {'BEGIN','COMMIT','ROLLBACK'}:return [],[]
         if sql.startswith('SELECT '):
             frame=engine.query(canonical,params)
@@ -195,7 +198,8 @@ def test_actual_executors_issue_set_sql_not_hidden_row_loops(repo,kind):
     assert len([sql for sql,_ in wire if 'INSERT INTO EFNS_DEV.APP.RECORD_REVISION ' in sql])==1
     assert not any('UNION ALL' in sql for sql,_ in wire)
     assert all(len(params)==1 for sql,params in wire if 'FLATTEN' in sql)
-    assert wire[-1][0]=='COMMIT'
+    assert wire[-1][0]=='ALTER SESSION UNSET LOCK_TIMEOUT'
+    assert [sql for sql,_ in wire].count('COMMIT')==1
 
 
 def test_nanosecond_version_not_truncated_and_full_readback_uses_ff9(repo):

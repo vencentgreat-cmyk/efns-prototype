@@ -67,13 +67,22 @@ class ContinuityRepository:
     def _continuity_transaction(self):
         # Nested repository helpers join the one owning transaction. They must
         # not independently commit, re-lock or replace the outer snapshot.
-        with self._continuity_lock:
+        if not self._continuity_lock.acquire(timeout=30):
+            raise RepositoryError('System busy: application write lock unavailable after 30 seconds. No write transaction started; reload before trying again.')
+        try:
             if getattr(self._continuity_local,'active',False):
                 yield self._continuity_local.tx
                 return
             if not self._is_memory:
-                with self._executor().transaction() as tx:
-                    locked=tx.execute(f"UPDATE {self.database}.RAW.INTAKE_LOCK SET VERSION=VERSION+1 WHERE LOCK_ID='continuity'",())
+                executor=self._executor()
+                transaction=getattr(executor,'intake_transaction',executor.transaction)
+                with transaction() as tx:
+                    try:
+                        locked=tx.execute(f"UPDATE {self.database}.RAW.INTAKE_LOCK SET VERSION=VERSION+1 WHERE LOCK_ID='continuity'",())
+                    except RepositoryError as exc:
+                        if str(getattr(exc,'error_code','')).lstrip('0')=='604':
+                            raise RepositoryError('System busy: application lock acquisition timed out; no business changes started in this request. Reload before trying again. '+str(exc)) from exc
+                        raise
                     if locked!=1:raise RepositoryError('The intake transaction lock is missing or not unique.')
                     self._continuity_local.active=True;self._continuity_local.tx=tx
                     try:yield tx
@@ -87,6 +96,7 @@ class ContinuityRepository:
                 for name,value in snapshot.items():setattr(self,name,value)
                 raise
             finally:self._continuity_local.active=False
+        finally:self._continuity_lock.release()
 
     def _history_rows(self, table, key=None, value=None, tx=None):
         if self._is_memory:

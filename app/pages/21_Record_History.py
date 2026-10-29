@@ -56,9 +56,10 @@ with producer:
                 payload=dict(PRODUCER_ACCOUNT_ID=account_options[manual_account],REPORTING_YEAR=year,REPORTING_WEEK=week,TOTAL=value)
                 request=request_for('manual_production',payload)
                 st.session_state.manual_production_request=request
+                prior=st.session_state.get('_efns_request_manual_production',{}).get('result')
                 saved = repo.create_manual_production(payload,request)
                 finish_request('manual_production',saved)
-                st.success(f"Saved production record {saved}.")
+                st.success(f"This exact entry was already saved as {saved}. Use Start another new production record for a separate identical entry." if prior else f"Saved production record {saved}.")
             except InvalidOperation: st.error("Source Total must be a finite number or empty.")
             except Exception as exc: show_data_error(exc)
         if st.button("Start another new production record"):

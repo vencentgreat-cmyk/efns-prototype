@@ -4,6 +4,7 @@
 """In-memory repository using pandas DataFrames for local development."""
 
 from __future__ import annotations
+from data.producer_identity import text as optional_reference
 
 import datetime as dt
 import copy
@@ -511,7 +512,7 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
                 (frame["OWNER_ACCOUNT_ID"] == account_id)
                 | (frame["RELATED_ACCOUNT_ID"] == account_id)
             ]
-        if quota_id:
+        if optional_reference(quota_id):
             frame = frame[frame["QUOTA_ID"] == quota_id]
         if transaction_type:
             frame = frame[frame["TRANSACTION_TYPE"] == transaction_type]
@@ -856,6 +857,8 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
                 attribute, key = frames[entity]
                 for source in records_by_entity.get(entity, []):
                     record = dict(source)
+                    for reference in ('FACILITY_ID','FACILITY_DETAIL_ID','QUOTA_ID','RELATED_ACCOUNT_ID','RELATED_QUOTA_ID','RELATED_TRANSACTION_ID'):
+                        if reference in record:record[reference]=optional_reference(record[reference])
                     action = record.pop("ACTION", "")
                     entity_id = record.get(key)
                     current_frame = getattr(self, attribute)
@@ -881,12 +884,12 @@ class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, Corre
                             if facility is None or str(facility.get("ACCOUNT_ID")) != str(record.get("ACCOUNT_ID")):
                                 raise ValueError("Facility no longer belongs to the selected Account.")
                         detail_id = record.get("FACILITY_DETAIL_ID")
-                        if detail_id:
+                        if optional_reference(detail_id):
                             details = self._facility_details[self._facility_details["FACILITY_DETAIL_ID"] == detail_id]
                             if len(details) != 1 or str(details.iloc[0].get("FACILITY_ID")) != str(facility_id):
                                 raise ValueError("Facility Detail no longer belongs to the selected Facility.")
                         quota_id = record.get("QUOTA_ID")
-                        if quota_id:
+                        if optional_reference(quota_id):
                             quota = self.get_quota_registration(quota_id)
                             if quota is None or str(quota.get("ACCOUNT_ID")) != str(record.get("ACCOUNT_ID")):
                                 raise ValueError("Quota Registration no longer belongs to the selected Account.")

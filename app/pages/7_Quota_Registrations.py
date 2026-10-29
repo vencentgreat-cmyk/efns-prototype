@@ -83,20 +83,6 @@ if view.name == "list":
     if action == "refresh": st.rerun()
     if action == "delete" and selected_id: st.session_state['quota_reg_form___delete_pending']=selected_id
 
-    pending_delete = st.session_state.get("quota_reg_delete_pending")
-    if pending_delete:
-        with st.container(border=True):
-            st.warning("Delete the selected Quota Registration? Related Transactions or Flocks will block deletion.")
-            with st.container(horizontal=True):
-                if st.button("Confirm delete", type="primary", icon=":material/delete:", key="quota_reg_confirm_delete"):
-                    try:
-                        repo.delete_quota_registration(pending_delete)
-                        st.session_state.pop("quota_reg_delete_pending", None)
-                        st.rerun()
-                    except Exception as exc: show_data_error(exc)
-                if st.button("Cancel", key="quota_reg_cancel_delete"):
-                    st.session_state.pop("quota_reg_delete_pending", None); st.rerun()
-
     filter_header, reset_column = st.columns([5, 1])
     with filter_header:
         keyword = st.text_input("Search", placeholder="Registration number, quota name or account", key="quota_reg_filter_keyword")
@@ -149,17 +135,6 @@ else:
     if action == "refresh": st.rerun()
     if action == "edit": start_new_form("quota_reg_form_"); open_view("edit", view.record_id)
     if action == "delete" and view.record_id: st.session_state['quota_reg_form___delete_pending']=view.record_id
-    if st.session_state.get("quota_reg_record_delete_pending"):
-        with st.container(border=True):
-            st.warning("Delete this Quota Registration? Existing Transactions or Flocks will block deletion.")
-            with st.container(horizontal=True):
-                if st.button("Confirm delete", type="primary", icon=":material/delete:", key="quota_reg_record_confirm"):
-                    try:
-                        repo.delete_quota_registration(view.record_id)
-                        st.session_state.pop("quota_reg_record_delete_pending", None); open_view("list")
-                    except Exception as exc: show_data_error(exc)
-                if st.button("Keep record", key="quota_reg_record_keep"):
-                    st.session_state.pop("quota_reg_record_delete_pending", None); st.rerun()
 
     if not is_form:
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")

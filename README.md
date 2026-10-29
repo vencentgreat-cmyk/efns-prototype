@@ -1,6 +1,6 @@
 # EFNS independent offline review — 2026-10-28 fixes
 
-Expanded source and synthetic tests based on review commit `8f3733e89938cf2d6d6846e2e42583d9ff9c5730` and the saved `zero_count_revision` runtime. This is **not** a company deployment package: four prototype authentication seeds are disabled here. No original Git history, company export, credentials or live query evidence is included.
+Expanded source and synthetic tests based on review commit `9b046113eb88a598127fe21c711bc84aa6658575` and the saved `zero_count_revision` runtime. This is **not** a company deployment package: four prototype authentication seeds are disabled here. No original Git history, company export, credentials or live query evidence is included.
 
 ## Reproduce
 

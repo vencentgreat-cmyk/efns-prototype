@@ -102,11 +102,20 @@ else:
                 version_key='flock_tx_form_quantity_version_'+reviewed['FLOCK_ID']
                 review_key='flock_tx_form_quantity_review_'+reviewed['FLOCK_ID']
                 st.session_state.setdefault(review_key,{'UPDATED_AT':reviewed.get('UPDATED_AT'),'BIRD_COUNT':reviewed.get('BIRD_COUNT')})
+                prior_flock=st.session_state.get('flock_tx_form_quantity_scope')
+                if prior_flock!=reviewed['FLOCK_ID']:
+                    st.session_state.pop(review_key,None)
+                    st.session_state[review_key]={'UPDATED_AT':reviewed.get('UPDATED_AT'),'BIRD_COUNT':reviewed.get('BIRD_COUNT')}
+                    st.session_state[version_key]=reviewed.get('UPDATED_AT')
+                    st.session_state['flock_tx_form_quantity_scope']=reviewed['FLOCK_ID']
+                    st.session_state.setdefault('flock_tx_form_quantity_intent',False)
+                    st.session_state.pop('flock_tx_form_quantity_request',None)
+                    st.session_state['flock_tx_form_apply_'+reviewed['FLOCK_ID']]=False
                 observed=st.session_state[review_key]
                 st.session_state.setdefault(version_key,observed['UPDATED_AT'])
                 st.caption(f"Reviewed Bird Count: {observed.get('BIRD_COUNT')}. Confirmed Count replaces it, including a genuine zero observation; Removal deducts a positive quantity once. Partial removal does not clear the Flock; Status and Birds Disposed are not changed. Only today's (Halifax) confirmed activity may apply; older rows remain activity only.")
                 if st.button('Reload reviewed Bird Count',key='flock_tx_form_reload_quantity'):
-                    st.session_state['_flock_tx_reason_draft']=st.session_state.get('flock_tx_form_quantity_reason','')
+                    st.session_state['flock_tx_form_quantity_reason_draft']=st.session_state.get('flock_tx_form_quantity_reason','')
                     st.session_state[review_key]={'UPDATED_AT':reviewed.get('UPDATED_AT'),'BIRD_COUNT':reviewed.get('BIRD_COUNT')}
                     st.session_state[version_key]=reviewed.get('UPDATED_AT')
                     st.session_state['flock_tx_form_apply_'+reviewed['FLOCK_ID']]=False
@@ -114,7 +123,8 @@ else:
                     st.rerun()
                 apply_current=st.checkbox('Apply this confirmed current Count/Removal to Bird Count',key='flock_tx_form_apply_'+reviewed['FLOCK_ID'],disabled=not can_current(Permission.UPDATE_DATA))
                 if 'flock_tx_form_quantity_reason' not in st.session_state:
-                    st.session_state['flock_tx_form_quantity_reason']=st.session_state.get('_flock_tx_reason_draft','')
+                    st.session_state['flock_tx_form_quantity_reason']=st.session_state.get('flock_tx_form_quantity_reason_draft','')
+                if apply_current: st.session_state['flock_tx_form_quantity_intent']=True
                 quantity_reason=st.text_input('Reason/evidence for current quantity',key='flock_tx_form_quantity_reason')
                 st.session_state.setdefault('flock_tx_form_quantity_request',uuid.uuid4().hex)
         capture_form('flock_tx_form_',current,{'FLOCK_ID': ['flock_tx_form_flock'], 'TRANSACTION_TYPE': ['flock_tx_form_type'], 'QUANTITY': ['flock_tx_form_quantity'], 'TRANSACTION_DATE': ['flock_tx_form_date'], 'NOTES': ['flock_tx_form_notes']})
@@ -127,6 +137,8 @@ else:
                 if apply_current:
                     saved_id=repo.record_current_flock_quantity(record,st.session_state.flock_tx_form_quantity_request,st.session_state.get(version_key),quantity_reason,confirmed=True,expected_bird_count=st.session_state[review_key]['BIRD_COUNT'])
                 else:
+                    if transaction_type in ('Count','Removal') and st.session_state.get('flock_tx_form_quantity_intent'):
+                        raise RepositoryError('Current quantity is not confirmed. Review the reloaded Bird Count and confirm again, or cancel and start a new activity-only entry.')
                     saved_id=save_form(repo,'FLOCK_TRANSACTION',record,current,'flock_tx_form_')
                 open_saved_record(saved_id)
             except Exception as exc: show_data_error(exc)

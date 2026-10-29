@@ -45,6 +45,8 @@ def test_account_coordinates_reach_persistence_with_correct_types(runtime, coord
         calls = connection.cursor_instance.calls
     else:
         def respond(sql, params):
+            if sql.startswith('SHOW PARAMETERS'):
+                return FakeStatement([FakeRow(key='LOCK_TIMEOUT',value='43200',level='ACCOUNT')],['key','value','level'])
             if "RAW.INTAKE_LOCK" in sql:
                 return FakeStatement([FakeRow(**{"number of rows updated": 1})], ["number of rows updated"])
             if sql.startswith("INSERT"):

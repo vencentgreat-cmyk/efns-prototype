@@ -22,7 +22,7 @@ def record_current_quantity(repo, record, request_id, expected_updated_at, reaso
         raise RepositoryError('Only an explicit current Count or quantified Removal can update Bird Count. Delivery/Sale remain activity only.')
     record['QUANTITY']=int(Decimal(str(record['QUANTITY'])))
     business_date=pd.Timestamp(record['TRANSACTION_DATE']).date()
-    from data.business_time import halifax_today,same_value
+    from data.business_time import halifax_today,same_value,precise_version_sql
     if business_date != halifax_today():
         raise RepositoryError('Current quantity entry is limited to today (Halifax). Save historical activity without applying it to current Bird Count.')
     txid=stable_id('current-flock-quantity',request_id)
@@ -34,8 +34,8 @@ def record_current_quantity(repo, record, request_id, expected_updated_at, reaso
             existing=repo._flock_transactions[repo._flock_transactions.FLOCK_TRANSACTION_ID==txid]
             current=repo.get_flock(record['FLOCK_ID'])
         else:
-            existing=tx.query(f"SELECT * FROM {repo._table('FLOCK_TRANSACTION')} WHERE FLOCK_TRANSACTION_ID=%s",(txid,))
-            frames=tx.query(f"SELECT * FROM {repo._table('FLOCK')} WHERE FLOCK_ID=%s",(record['FLOCK_ID'],))
+            existing=tx.query(precise_version_sql(f"SELECT * FROM {repo._table('FLOCK_TRANSACTION')} WHERE FLOCK_TRANSACTION_ID=%s"),(txid,))
+            frames=tx.query(precise_version_sql(f"SELECT * FROM {repo._table('FLOCK')} WHERE FLOCK_ID=%s"),(record['FLOCK_ID'],))
             if len(frames)!=1: raise RepositoryError('Flock identity is missing or duplicated.')
             current=frames.iloc[0].to_dict()
         revisions=repo._history_rows('RECORD_REVISION','REVISION_ID',revision_id,tx)
@@ -75,7 +75,7 @@ def record_current_quantity(repo, record, request_id, expected_updated_at, reaso
             version=pd.Timestamp(expected_updated_at).tz_localize(None).isoformat()
             affected=tx.execute(f"UPDATE {repo._table('FLOCK')} SET BIRD_COUNT=%s,UPDATED_AT={NOW} WHERE FLOCK_ID=%s AND UPDATED_AT=TO_TIMESTAMP_NTZ(%s) AND BIRD_COUNT IS NOT DISTINCT FROM %s",(int(new),current['FLOCK_ID'],version,old))
             if affected!=1: raise ConcurrencyError('Flock changed during quantity save; nothing may commit.')
-            reread=tx.query(f"SELECT * FROM {repo._table('FLOCK')} WHERE FLOCK_ID=%s",(current['FLOCK_ID'],))
+            reread=tx.query(precise_version_sql(f"SELECT * FROM {repo._table('FLOCK')} WHERE FLOCK_ID=%s"),(current['FLOCK_ID'],))
             if len(reread)!=1 or reread.iloc[0].BIRD_COUNT!=new: raise RepositoryError('Quantity update could not be verified.')
             after=reread.iloc[0].to_dict()
             timestamp=pd.Timestamp(tx.query(f'SELECT {NOW} RECORDED_AT').iloc[0].RECORDED_AT).to_pydatetime()

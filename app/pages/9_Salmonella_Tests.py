@@ -56,18 +56,7 @@ if view.name == "list":
     if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": clear_widget_prefix("salmonella_filter_"); st.rerun()
     if action == "delete" and selected_id: st.session_state['salmonella_form___delete_pending']=selected_id
-    pending_delete = st.session_state.get("salmonella_delete_pending")
-    if pending_delete:
-        with st.container(border=True):
-            st.warning("Delete the selected Salmonella Test? Related samples will block deletion.")
-            with st.container(horizontal=True):
-                if st.button("Confirm delete", type="primary", key="salmonella_confirm_delete"):
-                    try:
-                        repo.delete_salmonella_test(pending_delete)
-                        st.session_state.pop("salmonella_delete_pending", None); st.rerun()
-                    except Exception as exc: show_data_error(exc)
-                if st.button("Cancel", key="salmonella_cancel_delete"):
-                    st.session_state.pop("salmonella_delete_pending", None); st.rerun()
+
     filters = st.columns([2, 1, 1])
     keyword = filters[0].text_input("Filter by keyword", placeholder="Permit, flock, inspector or case number", key="salmonella_filter_keyword")
     result_filter = filters[1].selectbox("Result", ["All", *SALMONELLA_RESULTS], key="salmonella_filter_result")

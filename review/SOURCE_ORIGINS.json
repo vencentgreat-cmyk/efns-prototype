@@ -1,6 +1,6 @@
 {
   "runtime": "isolated zero_count_revision overlay plus local fixes",
-  "tests": "independent offline review plus reconstructed synthetic regression tests",
+  "tests": "supplied round-2 tests plus existing and added synthetic regressions",
   "sql": "existing review allowlist, no executed DDL",
   "auth_seeds": "review-disabled only in sharing copy"
 }

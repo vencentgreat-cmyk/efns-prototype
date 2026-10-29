@@ -58,17 +58,6 @@ if view.name == "list":
     if action == "new": start_new_form('facility_form_'); open_view("new")
     if action == "refresh": clear_widget_prefix("facility_filter_"); st.rerun()
     if action == "delete" and selected_id: st.session_state['facility_form___delete_pending']=selected_id
-    if st.session_state.get("facility_delete_pending"):
-        with st.container(border=True):
-            st.warning("Delete the selected Facility? Related Details or Flocks will block deletion.")
-            with st.container(horizontal=True):
-                if st.button("Confirm delete", type="primary", key="facility_confirm_delete"):
-                    try:
-                        repo.delete_facility(st.session_state.facility_delete_pending)
-                        st.session_state.pop("facility_delete_pending", None); st.rerun()
-                    except Exception as exc: show_data_error(exc)
-                if st.button("Cancel", key="facility_cancel_delete"):
-                    st.session_state.pop("facility_delete_pending", None); st.rerun()
     filters = st.columns([2, 1])
     keyword = filters[0].text_input("Filter by keyword", placeholder="Facility or Account name", key="facility_filter_keyword")
     facility_type = filters[1].selectbox("Facility type", ["All", *FACILITY_TYPES], key="facility_filter_type")

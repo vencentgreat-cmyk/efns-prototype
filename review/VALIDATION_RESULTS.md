@@ -1,33 +1,11 @@
-# EFNS review fixes — validation and remaining scope (2026-10-28)
+# Round 2 local validation
 
-## What was actually run
+Baseline `9b046113eb88a598127fe21c711bc84aa6658575`; actual supplied `test_round2.py` ported with a relative ROOT. Before fixes: 23 passed / 2 failed. After fixes the supplied 25 tests pass. The B6 assertion now requires no activity to be written without re-confirmation; technical B7 checks FF9 consistency rather than documenting the old gap.
 
-| Evidence | Result | Scope |
-|---|---:|---|
-| Baseline reconstructed D regressions | 18 failed | Expected-correct behavior against untouched review/runtime overlay; external `repros/test_review_repros.py` was not supplied. |
-| Fixed isolated work: `python -X utf8 -B -m pytest -q --tb=short` | 789 passed, 1 skipped, 0 failed | Mock, AppTest, fake Connector/Snowpark SQL, full included offline suite. See `full_round3.xml`. |
-| Fixed isolated work: `python -X utf8 -B scripts/check_snowflake_readiness.py` | Passed | Static deployment/schema/source readiness; no company query. |
-| Independent sharing directory: package manifest and readiness | 192 hashed entries, no missing/changed/extra; readiness passed | 193 files including the manifest itself; sharing seeds disabled. |
-| Independent sharing directory: complete offline suite | 789 passed, 1 skipped, 0 failed | Executed separately from the scrubbed sharing copy; `review_copy_results.xml` retained locally. |
-| Original Git worktree | Unchanged Git status and branch | Work under `.local/review_fixes_20261028`; no commit/push. |
+Final complete offline suite: **842 passed, 1 skipped, 0 failed, 0 xfail**. Command: `python -X utf8 -B -m pytest -q --tb=short`; local JUnit `round2/full_final.xml`. The existing skip needs a dated company snapshot not included in this offline package. This run includes actual AppTests, synthetic Mock workflows and fake Connector/Snowpark execution contracts. It is not company browser or real-engine isolation evidence.
 
-The single skip depends on a dated company snapshot excluded from the clean offline package. Pandas deprecation warnings are present. No company Snowflake write, real two-session concurrency, deployed browser UAT, SQL08/SQL18, deployment, or historical rerun was performed. Fake executors prove SQL shape and rollback orchestration, not engine isolation.
+Readiness passed with `python -X utf8 -B scripts/check_snowflake_readiness.py`. The original Git worktree is preserved. No company access, DDL/DML, deployment, historical operation, commit or push was performed. The separate sharing copy uses disabled authentication seeds; runtime and test bytes are checked against the frozen working copy.
 
-## Engineering decisions
+The optional-reference Snowflake test exercises CREATE and UPDATE commit branches with a fake executor and synthetic actor; it does not prove live Snowflake behavior. Version tests simulate driver microsecond truncation unless SQL projects FF9, and reject two versions differing within the same microsecond. Timeout tests verify session SET before the owned transaction, restoration after completion, rollback and uncertain COMMIT messaging. Real DEV plan is in `DEPLOYMENT_BOUNDARY.md`.
 
-- New and edited records have separate validation. Unchanged historical NULL, zero, decimals, inactive links and old enums survive note-only edits; changed values are validated. A persistent revision and necessary audit share the business transaction.
-- Request IDs distinguish exact retry from a new operation; different content with the same ID is rejected. Navigation failure after a known save reports the saved ID.
-- Existing source workbooks retain RAW identity. Production staging records a reviewed matching token; a changed account match requires explicit re-review before commit.
-- Current quantity uses reviewed version **and** Bird Count; explicit reload keeps the draft reason but clears the application checkbox. A new confirmation is required. Halifax business day is calculated from a timezone-aware instant.
-- Ordinary writers and deletion participate in the existing `RAW.INTAKE_LOCK` protocol. This serializes cooperating application paths but does not prevent arbitrary outside SQL from bypassing application-only rules.
-- Unsupported report filters are rejected; the UI disables irrelevant filters and clears stale dataset state.
-- Account-level display is a *registered Bird Count* summary over all statuses. It is not a certified occupancy or quota percentage. No quota denominator was fabricated.
-
-## Still requiring evidence or decision
-
-1. Real company Snowflake two-session tests for lock/CAS, exact affected-row behavior, mandatory audit/revision rollback and normalized timestamp precision. This task had no company write authorization.
-2. Company browser UAT for all changed forms, stale review reload, CSV/XLSX and role denials after any future deployment.
-3. EFNS decision on quota units, transaction direction and effective dates; ended-Flock inclusion, appropriate Bird Count correction rights, and Salmonella/sample semantics. The six cross-Account historical Flocks and their dependent transactions remain pending.
-4. The raw saved-live snapshot directory currently denies read access; the readable `zero_count_revision/rollback_app` was created from it earlier and its 76-file hash manifest was verified in this run. Before a future deployment, re-query live sources and stop if drifted.
-
-This is **suitable for independent code review and synthetic UAT**, not a declaration that live business data or production operations are accepted.
+Final source directed regression: 74 passed; sharing-copy directed regression: 55 passed. A concurrent test invocation initially had two Windows SQLite setup errors because the existing harness has a fixed temporary directory; the independent-basetemp sequential rerun passed all 74. Keep runs sequential or supply different `--basetemp` paths. After the complete run, the remaining unreachable Farm Location deletion block was removed; seven affected regressions passed.

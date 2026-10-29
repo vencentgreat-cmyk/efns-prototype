@@ -179,6 +179,8 @@ tests/test_report_nullable_sum.py
 tests/test_review_boundaries.py
 tests/test_review_findings.py
 tests/test_review_integrated.py
+tests/test_round2.py
+tests/test_round2_boundaries.py
 tests/test_snowflake_navigation.py
 tests/test_snowflake_repository.py
 tests/test_snowflake_security.py

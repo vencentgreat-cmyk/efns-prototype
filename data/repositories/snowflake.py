@@ -1,6 +1,7 @@
 """Snowflake repository backed only by the shared SQL executor contract."""
 
 from __future__ import annotations
+from data.producer_identity import text as optional_reference
 
 import json
 import io
@@ -206,6 +207,10 @@ def _source_row_number(item: dict, ordinal: int) -> int:
 
 
 class _LegacyCursorExecutor(SqlExecutor):
+    def intake_transaction(self):
+        # Offline __new__/_cursor adapter only; real application construction
+        # uses ConnectorExecutor/SnowparkExecutor and their bounded protocol.
+        return self.transaction()
     """Compatibility adapter for existing offline cursor-based test doubles."""
 
     runtime_name = "Offline cursor double"
@@ -295,9 +300,8 @@ class SnowflakeRepository(FlockDateRepairRepository, FlockSupplementRepository, 
         return f"{self.database}.{schema or self.schema_core}.{table}"
 
     def _query(self, sql, params=None):
-        for table in (*MODEL,'PRODUCTION_RECORD'):
-            target=re.escape(self._table(table))
-            sql=re.sub(rf'^(SELECT (?:DISTINCT )?)\* FROM ({target})(?=\s|$)',lambda m:m[1]+"* REPLACE (TO_CHAR(UPDATED_AT,'YYYY-MM-DD\"T\"HH24:MI:SS.FF9') AS UPDATED_AT) FROM "+m[2],sql,flags=re.I)
+        from data.business_time import precise_version_sql
+        sql=precise_version_sql(sql)
         return self._executor().query(sql, params)
 
     def _one(self, table, column, value, schema=None):
@@ -1617,7 +1621,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                 if facility.empty or str(facility.iloc[0]["ACCOUNT_ID"]) != str(record.get("ACCOUNT_ID")):
                     raise RepositoryError("Facility no longer belongs to the selected Account.")
                 detail_id = record.get("FACILITY_DETAIL_ID")
-                if detail_id:
+                if optional_reference(detail_id):
                     detail = tx.query(
                         f"SELECT FACILITY_ID FROM {self._table('FACILITY_DETAIL')} WHERE FACILITY_DETAIL_ID = %s",
                         (detail_id,),
@@ -1625,7 +1629,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                     if detail.empty or str(detail.iloc[0]["FACILITY_ID"]) != str(record.get("FACILITY_ID")):
                         raise RepositoryError("Facility Detail no longer belongs to the selected Facility.")
                 quota_id = record.get("QUOTA_ID")
-                if quota_id:
+                if optional_reference(quota_id):
                     quota = tx.query(
                         f"SELECT ACCOUNT_ID FROM {self._table('QUOTA_REGISTRATION')} WHERE QUOTA_ID = %s",
                         (quota_id,),
@@ -1689,6 +1693,8 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
             for entity, key in keys.items():
                 for source in records_by_entity.get(entity, []):
                     record = dict(source)
+                    for reference in ('FACILITY_ID','FACILITY_DETAIL_ID','QUOTA_ID','RELATED_ACCOUNT_ID','RELATED_QUOTA_ID','RELATED_TRANSACTION_ID'):
+                        if reference in record:record[reference]=optional_reference(record[reference])
                     action = record.pop("ACTION", "")
                     entity_id = record.get(key)
                     exists = tx.query(
@@ -1717,21 +1723,21 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                         )
                         if account.empty:
                             raise RepositoryError("Account no longer exists.")
-                        if record.get("FACILITY_ID"):
+                        if optional_reference(record.get("FACILITY_ID")):
                             facility = tx.query(
                                 f"SELECT ACCOUNT_ID FROM {self._table('FACILITY')} WHERE FACILITY_ID = %s",
                                 (record["FACILITY_ID"],),
                             )
                             if facility.empty or str(facility.iloc[0]["ACCOUNT_ID"]) != str(record.get("ACCOUNT_ID")):
                                 raise RepositoryError("Facility no longer belongs to the selected Account.")
-                        if record.get("FACILITY_DETAIL_ID"):
+                        if optional_reference(record.get("FACILITY_DETAIL_ID")):
                             detail = tx.query(
                                 f"SELECT FACILITY_ID FROM {self._table('FACILITY_DETAIL')} WHERE FACILITY_DETAIL_ID = %s",
                                 (record["FACILITY_DETAIL_ID"],),
                             )
                             if detail.empty or str(detail.iloc[0]["FACILITY_ID"]) != str(record.get("FACILITY_ID")):
                                 raise RepositoryError("Facility Detail no longer belongs to the selected Facility.")
-                        if record.get("QUOTA_ID"):
+                        if optional_reference(record.get("QUOTA_ID")):
                             quota = tx.query(
                                 f"SELECT ACCOUNT_ID FROM {self._table('QUOTA_REGISTRATION')} WHERE QUOTA_ID = %s",
                                 (record["QUOTA_ID"],),

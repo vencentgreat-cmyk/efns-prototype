@@ -44,6 +44,7 @@ class FakeCursor:
         self.duplicate = duplicate
     def execute(self, sql, params=()):
         self.calls.append((sql, params))
+        self.description=[]
         self.rowcount = 1 if "RAW.INTAKE_LOCK" in sql else 0 if sql.startswith("UPDATE") else 1
         return self
     def executemany(self, sql, params):
@@ -51,7 +52,11 @@ class FakeCursor:
         if self.fail_executemany:
             raise RuntimeError("write failed")
     def fetchone(self): return ("prior-import",) if self.duplicate else None
-    def fetchall(self): return []
+    def fetchall(self):
+        if self.calls and self.calls[-1][0].startswith('SHOW PARAMETERS'):
+            self.description=[('key',),('value',),('level',)]
+            return [('LOCK_TIMEOUT','43200','ACCOUNT')]
+        return []
     def close(self): pass
 
 
@@ -74,7 +79,7 @@ def test_upsert_binds_values_and_commits():
     connection = FakeConnection()
     repo = repository_with_connection(connection)
     result = repo.upsert_account({"ORGANIZATION_NAME": "O'Reilly"})
-    sql, params = connection.cursor_instance.calls[-1]
+    sql, params = next(c for c in connection.cursor_instance.calls if c[0].startswith('INSERT INTO EFNS_DEV.CORE.ACCOUNT'))
     assert "O'Reilly" not in sql
     assert sql.startswith("INSERT INTO EFNS_DEV.CORE.ACCOUNT")
     assert params[0] == result

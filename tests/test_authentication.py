@@ -204,7 +204,9 @@ def test_repository_proxy_enforces_writes_and_records_audit(auth_context):
     admin_repo = AuthorizedRepository(repository, store, users[Role.ADMIN])
     assert admin_repo.delete_account("a1")
     actions = [event.action for event in store.list_audit(users[Role.ADMIN])]
-    assert {"CREATE", "UPDATE", "IMPORT", "DELETE"}.issubset(actions)
+    assert {"CREATE", "UPDATE", "IMPORT"}.issubset(actions)
+    assert 'DELETE' not in actions  # mandatory repository business audit, no duplicate auth-store event
+    assert len([row for row in repository._migration_review_audit if row.get('ACTION')=='DELETE'])==1
 
 
 def test_import_audit_uses_each_operation_result_identifier(auth_context):

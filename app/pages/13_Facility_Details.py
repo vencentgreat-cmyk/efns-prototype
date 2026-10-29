@@ -50,17 +50,6 @@ if view.name == "list":
     if action == "new": start_new_form('facility_detail_form_'); open_view("new")
     if action == "refresh": st.rerun()
     if action == "delete" and selected_id: st.session_state['facility_detail_form___delete_pending']=selected_id
-    if st.session_state.get("facility_detail_delete_pending"):
-        with st.container(border=True):
-            st.warning("Delete the selected Facility Detail? A referencing Flock will block deletion.")
-            with st.container(horizontal=True):
-                if st.button("Confirm delete", type="primary", icon=":material/delete:", key="facility_detail_confirm_delete"):
-                    try:
-                        repo.delete_facility_detail(st.session_state.facility_detail_delete_pending)
-                        st.session_state.pop("facility_detail_delete_pending", None); st.rerun()
-                    except Exception as exc: show_data_error(exc)
-                if st.button("Cancel", key="facility_detail_cancel_delete"):
-                    st.session_state.pop("facility_detail_delete_pending", None); st.rerun()
     search_row = st.columns([5, 1])
     keyword = search_row[0].text_input("Search", placeholder="Detail, facility or account", key="facility_detail_filter_keyword")
     with search_row[1]:

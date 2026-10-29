@@ -304,7 +304,9 @@ def test_snowflake_followup_failure_rolls_back_core_and_tracking(monkeypatch):
         raw_frame.to_dict("records"), list(raw_frame.columns)
     ) if "FROM EFNS_DEV.RAW.MIGRATION_RAW_ROW" in sql else FakeStatement(
         [FakeRow(**{'number of rows updated':1})], ['number of rows updated']
-    ) if 'RAW.INTAKE_LOCK' in sql else FakeStatement([], []))
+    ) if 'RAW.INTAKE_LOCK' in sql else FakeStatement(
+        [FakeRow(key='LOCK_TIMEOUT',value='43200',level='ACCOUNT')],['key','value','level']
+    ) if sql.startswith('SHOW PARAMETERS') else FakeStatement([], []))
     snowflake_repo = SnowflakeRepository(SnowparkExecutor(session))
     monkeypatch.setattr(snowflake_repo, "preview_historical_corrections", lambda batch_id: preview)
 

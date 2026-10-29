@@ -104,24 +104,6 @@ if view.name == "list":
         st.rerun()
     if action == "delete" and selected_id: st.session_state['account_form___delete_pending']=selected_id
 
-    pending_delete = st.session_state.get("account_delete_pending")
-    if pending_delete:
-        pending = repo.get_account(pending_delete)
-        if pending:
-            with st.container(border=True):
-                st.warning(f"Delete Account “{pending.get('ORGANIZATION_NAME')}”? Referenced Accounts cannot be deleted.")
-                with st.container(horizontal=True):
-                    if st.button("Confirm delete", type="primary", icon=":material/delete:", key="account_confirm_delete"):
-                        try:
-                            repo.delete_account(pending_delete)
-                            st.session_state.pop("account_delete_pending", None)
-                            st.rerun()
-                        except Exception as exc:
-                            show_data_error(exc)
-                    if st.button("Cancel", key="account_cancel_delete"):
-                        st.session_state.pop("account_delete_pending", None)
-                        st.rerun()
-
     filter_columns = st.columns([2, 1])
     keyword = filter_columns[0].text_input("Filter by keyword", placeholder="Name, registration, city, phone or email", key="account_filter_keyword")
     role_options = ["All", *[label for _, label in ROLE_FIELDS]]
@@ -181,20 +163,6 @@ else:
         open_view("edit", view.record_id)
     if action == "delete" and view.record_id: st.session_state['account_form___delete_pending']=view.record_id
 
-    if st.session_state.get("account_record_delete_pending"):
-        with st.container(border=True):
-            st.warning("This action permanently removes the Account when no related records reference it.")
-            with st.container(horizontal=True):
-                if st.button("Confirm delete", type="primary", icon=":material/delete:", key="account_record_confirm"):
-                    try:
-                        repo.delete_account(view.record_id)
-                        st.session_state.pop("account_record_delete_pending", None)
-                        open_view("list")
-                    except Exception as exc:
-                        show_data_error(exc)
-                if st.button("Keep Account", key="account_record_keep"):
-                    st.session_state.pop("account_record_delete_pending", None)
-                    st.rerun()
 
     if not is_form:
         audit_left, audit_right = st.columns(2)

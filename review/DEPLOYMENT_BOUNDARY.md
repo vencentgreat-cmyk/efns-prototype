@@ -1,22 +1,15 @@
-# Candidate and rollback preparation — no deployment performed
+# Round 2 deployment boundary and minimal future DEV plan
 
-This candidate is an expanded application directory at `final_delivery/deployment_candidate` (82 runtime files). `final_delivery/runtime_diff.json` lists all differences against the 76-file readable saved-live rollback (`final_delivery/saved_live_rollback`). No runtime file was removed. The 5 additions include the earlier verified `quota_usage.py`/`flock_quantity.py` plus this round's `form_safety.py`, `business_time.py`, `record_safety.py`; 23 files differ. SQL/DDL, mapping, privileges and business data were not changed in this round.
+This task performs no deployment, company connection, SQL08/SQL18, permanent DDL/DML, historical rerun, Git commit or push. `final_delivery/deployment_candidate` is the complete application candidate with original deployment authentication seeds; `final_delivery/independent_review` is the sharing copy with four disabled seeds. Never deploy the sharing copy.
 
-The candidate's `app/security.py` SHA-256 equals the saved `zero_count_revision` deployment baseline. The separately expanded `final_delivery/independent_review` disables four prototype seed hashes and **must not be deployed**. Protected date repair/R1, source trace, navigation, 40053 transaction supplement and light theme files were checked against the saved runtime manifest. The `review/PROCESSING_MATRIX.md` and `VALIDATION_RESULTS.md` explain behavior and limits.
+Before any future authorized deployment, read current company identity and live hashes; stop if the saved rollback no longer matches. Preserve fresh source and grants. Review `changes_since_zero_count.json`, `runtime_diff.json` and `reviewed_runtime.diff`. This change needs no permanent schema or privilege change. Runtime temporarily sets/restores only session LOCK_TIMEOUT through the established execution connection. Normal existing deployment/post-grants commands remain in the prior deployment procedure and must only be executed under later authorization. Rollback uses the verified saved-live application package; do not undo history or database data.
 
-## Future authorized deployment checklist (not executed)
+## Minimal real DEV validation after separate authorization
 
-1. Read current company identity and live source hashes with the existing company read-only verifier. Compare against the saved 76-file rollback; if live has drifted, rebuild the candidate from that live version before proceeding. Do not assume the October 28 snapshot is still current.
-2. Confirm the existing `EFNS_DEV.RAW.INTAKE_LOCK` has exactly one `continuity` row and the existing app role can access `APP.RECORD_REVISION`/`APP.AUDIT_EVENT`. No new permanent schema or grant is included here. If any prerequisite is absent, stop; do not run an initialization script merely to make deployment pass.
-3. Preserve fresh live source/permission snapshots. From the **deployment candidate directory only**, use the company connection/role:
+1. **Read only:** verify company identity, actual app role, current session LOCK_TIMEOUT/value/level, and FF9 versions of marked test Flock/transaction/Salmonella/Quota/location/detail records. Compare list and single-record tokens exactly, including nonzero sub-microsecond digits. This does not prove write/CAS behavior.
+2. **Isolated engine SQL:** validate SELECT DISTINCT alias.* REPLACE syntax and Connector/Snowpark bind behavior with uniquely named temporary synthetic tables. No temporary table may shadow a real object. Confirm nanos survive reads, same-microsecond stale CAS affects zero rows, and failed audit/statement rolls back synthetic updates.
+3. **Two sessions:** session-scoped temporary tables cannot test a shared cross-session lock. Use a separately authorized uniquely named disposable test table in a test schema (or a specifically approved test control row), never silently use the business lock. Hold the lock in A, attempt bounded write in B, record query IDs and actual wait; verify B rollback and prior settings restoration before releasing A. Check subsequent successful save. No global account/warehouse timeout changes.
+4. **Browser marked data:** current Count conflict→Reload→Save without confirmation must write nothing; re-confirm must apply once. Cancel/New and switching Flock must not carry a confirmation. Daily CREATE without detail then UPDATE must commit consistently. Exact Production retry must show already saved; Start another is explicitly distinct pending business B7.
+5. **Audit:** one DELETE business audit plus one before-image revision, correct actor/reason; mandatory audit failure rolls back deletion. Do not simulate communication loss on real business writes. An uncertain commit requires read-only receipt/target verification, not a repeated submission.
 
-   ```powershell
-   Set-Location 'C:\Users\Egg Farmers\Desktop\efns\efns-prototype\.local\review_fixes_20261028\final_delivery\deployment_candidate'
-   snow streamlit deploy efns_dev --connection efns-company --authenticator SNOWFLAKE --role EFNS_DEV_DEPLOYER --replace --prune
-   ```
-
-4. If the organization's standard post-deploy process requires its existing `sql/08_post_deploy_grants.sql`, run **only after** a successful application deployment from the verified current project SQL file, with the agreed role. This task did not inspect/execute a fresh company permission change; grants must be reviewed before execution.
-5. Re-run read-only live source hash/identity/readiness and test the browser. Use clearly marked test data only under separate authorization. Check create/edit/retry, stale Count reload, staged production re-review, delete protection and report filter rejection.
-6. If deployment or verification fails, stop writes and use the fresh live backup, or the saved rollback only if its hash still matches the pre-deploy live source. Do not deploy the scrubbed review directory. Record the application version and rollback outcome.
-
-Windows Application Control may block `snow.exe`; use the company-approved CLI path or the established Snowsight deployment route, not an unapproved bypass.
+Real engine isolation, permission to change a session parameter in the deployed execution context, connector/network failure behavior and company browser UAT remain unverified locally. Outstanding historical review items remain pending; this task does not query or recalculate their current count or resolve missing-parent/ownership evidence.
