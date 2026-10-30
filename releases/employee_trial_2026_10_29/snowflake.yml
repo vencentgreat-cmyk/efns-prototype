@@ -40,6 +40,8 @@ entities:
         dest: config/eims_migration_mapping_v3_disposal_r1.json
       - src: config/eims_migration_mapping_v3_count_source_r1.json
         dest: config/eims_migration_mapping_v3_count_source_r1.json
+      - src: config/quota_rules.json
+        dest: config/quota_rules.json
       - src: config/source_provenance.json
         dest: config/source_provenance.json
       - src: config/account_relationship_supplement_v1.json
