@@ -173,3 +173,53 @@ probe and browser UAT are **to verify**, not a deployment claim.
 
 See the updated handover and deployment checklist for orientation and proposed
 employee tests. No human question, external operation or push was initiated.
+
+## Follow-up — signed Adjustment entry (30 October 2026)
+
+Implementation commit: `5bf966e8d1a4cb6388262dd04754418486b3bb74` on `delivery-candidate-20261030`.
+This resolves/supersedes the earlier positive-only Adjustment deferral. The user
+confirmed 48 historical negative Adjustments; no source/database analysis was
+repeated in this follow-up.
+
+Adjustment now accepts finite positive or negative **nonzero** Quota Count on
+create and explicit corrections. All other new/changed types remain strictly
+positive. New-entry UI allows a negative value only for Adjustment and shows
+"Use a negative number for a decrease". The shared rule is commented
+"confirmed from historical data 2026-10-30; provisional until staff confirm".
+Type-only corrections cannot turn an existing negative Adjustment into a
+negative Purchase/Sale. Unchanged historical values, Price NULL/0, decimals,
+counterparty rules and correction/audit/version protection are retained.
+
+Files: `app/pages/8_Quota_Transactions.py`, `data/validation.py`,
+`data/record_safety.py`, `tests/test_adjustment_signed_entry.py`,
+`DELIVERY_RUNTIME_DIFF_20261030.json`, `docs/DEPLOYMENT_CHECKLIST_20261030.md`.
+The handover's obsolete positive-only question was also corrected in
+`docs/HANDOVER_DRAFT_20261030.md`; this report is finalized in a separate local
+documentation commit so it can record the immutable implementation hash.
+
+Validation:
+
+```powershell
+& '..\..\.venv\Scripts\python.exe' -m pytest tests/test_adjustment_signed_entry.py -q
+# 25 passed, 2 warnings in 14.59s
+# The full combined command recorded above was run unchanged, with
+# tests/test_adjustment_signed_entry.py appended immediately before -q:
+# 269 passed, 2 warnings in 84.59s; 0 failed/skipped/xfail.
+& '..\..\.venv\Scripts\python.exe' scripts/check_snowflake_readiness.py
+# Snowflake readiness checks passed (offline).
+git diff --check
+# Exit 0; final runtime hashes/scope checks also passed.
+```
+
+Coverage includes negative/positive Adjustment creation and correction, zero,
+NaN/infinity rejection, negative Purchase/Sale/lease/Base refusal, type-change
+bypass protection, actual local page controls and notes-only historical negative
+row fidelity. The two warnings are pandas FutureWarnings in existing Mock frame
+dtype assignment; they are recorded, not suppressed. No unrelated Mock refactor
+was made. No native-engine/company-browser validation is claimed.
+
+Only the three permitted runtime files changed from the pre-follow-up candidate;
+protected files, PENDING calculations, schema, auth and source data are untouched.
+Candidate baseline counts stay 13 modified / 5 new / 0 deleted; the three changed
+hashes and checklist reasons were refreshed. No Snowflake connection, company
+write, deployment or push occurred.
