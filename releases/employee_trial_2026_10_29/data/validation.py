@@ -235,6 +235,20 @@ def parse_optional_quota_price(value):
         raise ValueError('Price must be a finite, non-negative number or blank.') from None
 
 
+def quota_count_error(value, transaction_type):
+    # confirmed from historical data 2026-10-30; provisional until staff confirm
+    adjustment = transaction_type == 'Adjustment'
+    message = ('Adjustment Quota Count must be finite and non-zero.' if adjustment
+               else 'Quota Count must be finite and greater than zero.')
+    try:
+        count = Decimal(str(value))
+        if isinstance(value, bool) or not count.is_finite() or (count == 0 if adjustment else count <= 0):
+            return message
+    except (InvalidOperation, TypeError, ValueError):
+        return message
+    return None
+
+
 def validate_quota_transaction(repo: "BaseRepository", record: dict) -> list[str]:
     errors: list[str] = []
     quota_id = record.get("QUOTA_ID")
@@ -243,12 +257,9 @@ def validate_quota_transaction(repo: "BaseRepository", record: dict) -> list[str
         errors.append("Quota Registration is required.")
     if record.get("TRANSACTION_TYPE") not in QUOTA_TRANSACTION_INPUT_TYPES:
         errors.append("Transaction Type is required.")
-    try:
-        count = float(record.get('QUOTA_COUNT'))
-        if isinstance(record.get('QUOTA_COUNT'), bool) or not math.isfinite(count) or count <= 0:
-            raise ValueError
-    except (TypeError, ValueError, OverflowError):
-        errors.append('Quota Count must be finite and greater than zero.')
+    count_error = quota_count_error(record.get('QUOTA_COUNT'), record.get('TRANSACTION_TYPE'))
+    if count_error:
+        errors.append(count_error)
     related = record.get('RELATED_ACCOUNT_ID')
     missing_related = related is None or pd.isna(related) or (isinstance(related, str) and not related.strip())
     if missing_related and quota_related_account_required(record.get('TRANSACTION_TYPE')):

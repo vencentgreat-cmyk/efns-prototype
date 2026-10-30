@@ -84,10 +84,18 @@ def validate_edit(repo,entity,before,changes):
         changes[field]=normalize_numeric_bind(changes[field],field,1,integer=field in integers)
         if field in {'BIRD_COUNT','BIRDS_DISPOSED'} and changes[field] is not None and changes[field]<0:raise RepositoryError(f'{field} cannot be negative when corrected.')
         if field=='QUANTITY' and (changes[field] is None or changes[field]<=0):raise RepositoryError('Ordinary transaction Quantity must be a positive whole number.')
-        if field=='QUOTA_COUNT' and (changes[field] is None or changes[field]<=0):raise RepositoryError('Quota Count must be positive when changed in daily entry.')
+        if field=='QUOTA_COUNT':
+            from data.validation import quota_count_error
+            error = quota_count_error(changes[field], updated.get('TRANSACTION_TYPE'))
+            if error:raise RepositoryError(error)
         if field=='PRICE' and changes[field] is not None and changes[field]<0:raise RepositoryError('Price cannot be negative when changed in daily entry.')
         if field=='NUMBER_OF_SAMPLES' and (changes[field] is None or changes[field]<=0):raise RepositoryError('Number of Samples must be positive when changed.')
     updated=dict(before,**changes)
+    if entity=='QUOTA_TRANSACTION' and 'TRANSACTION_TYPE' in changes and 'QUOTA_COUNT' not in changes:
+        # A type-only correction must not turn a negative Adjustment into a negative Sale.
+        from data.validation import quota_count_error
+        error = quota_count_error(updated.get('QUOTA_COUNT'), updated.get('TRANSACTION_TYPE'))
+        if error:raise RepositoryError(error)
     parent_entities={'SPENT_FOWL_PLANS_ACCOUNT_ID':'ACCOUNT','ACCOUNT_ID':'ACCOUNT','PARENT_ACCOUNT_ID':'ACCOUNT','GRADING_STATION_ACCOUNT_ID':'ACCOUNT','PULLET_GROWER_ACCOUNT_ID':'ACCOUNT','OWNER_ACCOUNT_ID':'ACCOUNT','RELATED_ACCOUNT_ID':'ACCOUNT','FACILITY_ID':'FACILITY','FACILITY_DETAIL_ID':'FACILITY_DETAIL','FARM_LOCATION_ID':'FARM_LOCATION','FLOCK_ID':'FLOCK','QUOTA_ID':'QUOTA_REGISTRATION','RELATED_QUOTA_ID':'QUOTA_REGISTRATION','RELATED_TRANSACTION_ID':'QUOTA_TRANSACTION'}
     for field in set(changes)&set(parent_entities):
         if text(changes[field]) is not None:

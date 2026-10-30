@@ -176,9 +176,11 @@ not independently queried or recalculated in this delivery task.
   do not remove or merge the current Account or the 71 reported links.
 - Windy Bay: the one-day lease labelled `6/1/2026` awaits a staff answer. Confirm
   the date interpretation and effective/end-date treatment; no automatic fix.
-- The existing positive-only daily Quota Count policy was not broadened here.
-  Confirm signed/zero Adjustment entry behavior and how "new registration" is
-  recognized before enforcing a stricter Base-entry workflow.
+- Adjustment entry/correction accepts finite nonzero positive or negative
+  quantity (confirmed from historical data 2026-10-30; provisional until staff
+  confirm). All other changed/new quantities remain positive. Zero Adjustment
+  is rejected. Defining "new registration" for a stricter Base-entry workflow
+  remains a separate staff decision.
 
 ## 6. What to do if something fails
 

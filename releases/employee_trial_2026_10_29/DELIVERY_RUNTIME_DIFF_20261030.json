@@ -21,9 +21,9 @@
     {
       "path": "app/pages/8_Quota_Transactions.py",
       "status": "MODIFIED",
-      "reason": "Price NULL/0, decimal activity display, conditional counterparty, current entry types and legacy edit fidelity.",
+      "reason": "Price NULL/0 and decimal fidelity; type-specific quantity input (finite nonzero signed Adjustment only), conditional counterparty and legacy edit preservation.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
-      "candidate_lf_sha256": "aad19fc99b2e0cb411f9dfb896a16db78fe848114693daaad7fb63665922bf78"
+      "candidate_lf_sha256": "72315ff0a4da0812c258c0761fba103e21a9f3967cbb4bb577bfb34ada5978f8"
     },
     {
       "path": "app/services/quota_usage.py",
@@ -105,9 +105,9 @@
     {
       "path": "data/record_safety.py",
       "status": "MODIFIED",
-      "reason": "Quota-label compatibility in changed-field validation; transaction, audit and CAS mechanisms retained.",
+      "reason": "Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained.",
       "baseline_lf_sha256": "814cc38fb0fba545d419a49e4132d3a5e10fe7d4f5ac6707725df04831e80579",
-      "candidate_lf_sha256": "d4dfb0435dd478936e99e0fd028351805acf21db6bcfc7ea03aaecedd00b4f76"
+      "candidate_lf_sha256": "6abda45d67e9bb83394652584c37a150f41427efe8c0abf00484cc66220793e4"
     },
     {
       "path": "data/repositories/mock.py",
@@ -126,9 +126,9 @@
     {
       "path": "data/validation.py",
       "status": "MODIFIED",
-      "reason": "Provisional counterparty rule, optional Price parsing and known quota-label compatibility.",
+      "reason": "Shared finite/nonzero signed Adjustment rule; other types remain positive; optional Price, counterparty and quota-label compatibility retained.",
       "baseline_lf_sha256": "97a381b7ef1ed7c844717e5561100894ef195a2b71f0fc96a49112f5b4f1c632",
-      "candidate_lf_sha256": "eaef5024cc2bc7b7dd813ca4172fc6f19c2a713d05a7db39ead3f5f9a5a52f82"
+      "candidate_lf_sha256": "bcf49b00d242dc6522f8c02bb2e18192050dac00b5da1b6810e88083e8be3512"
     }
   ],
   "deployment_metadata_changes": {

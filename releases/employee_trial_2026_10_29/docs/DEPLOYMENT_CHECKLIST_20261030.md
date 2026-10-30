@@ -20,7 +20,7 @@ Saved baseline: 89 runtime files. Candidate artifacts: 94. Changes: 13 modified,
 |---|---|---|
 | `app/pages/4_Reports.py` | MODIFIED | Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection. |
 | `app/pages/5_Flocks.py` | MODIFIED | Latest Count observations/conflict display from prior local draft; original navigation preserved. |
-| `app/pages/8_Quota_Transactions.py` | MODIFIED | Price NULL/0, decimal activity display, conditional counterparty, current entry types and legacy edit fidelity. |
+| `app/pages/8_Quota_Transactions.py` | MODIFIED | Price NULL/0 and decimal fidelity; type-specific quantity input (finite nonzero signed Adjustment only), conditional counterparty and legacy edit preservation. |
 | `app/services/quota_usage.py` | MODIFIED | PENDING components/English limitations and alias-compatible registered Bird Count summaries; no established percentage. |
 | `app/services/report_builder.py` | MODIFIED | Credit Type display label in the older joined-field builder. |
 | `app/services/report_center.py` | MODIFIED | Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering. |
@@ -32,10 +32,10 @@ Saved baseline: 89 runtime files. Candidate artifacts: 94. Changes: 13 modified,
 | `data/position_evidence.py` | NEW | Prior pure null/date/GUID/state helpers used by the PENDING draft. |
 | `data/quota_position.py` | NEW | PENDING owner components with latest Base snapshots/absorbed activity and zero-effect closure diagnostics. |
 | `data/quota_types.py` | NEW | Read/comparison compatibility for canonical and legacy labels, without write-time relabeling. |
-| `data/record_safety.py` | MODIFIED | Quota-label compatibility in changed-field validation; transaction, audit and CAS mechanisms retained. |
+| `data/record_safety.py` | MODIFIED | Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained. |
 | `data/repositories/mock.py` | MODIFIED | Alias-compatible quota read filters for offline behavior. |
 | `data/repositories/snowflake.py` | MODIFIED | Bound alias-inclusive read predicates for quota registrations, transactions, summaries and allocations; write/transaction paths unchanged. |
-| `data/validation.py` | MODIFIED | Provisional counterparty rule, optional Price parsing and known quota-label compatibility. |
+| `data/validation.py` | MODIFIED | Shared finite/nonzero signed Adjustment rule; other types remain positive; optional Price, counterparty and quota-label compatibility retained. |
 
 Other packaging change: `snowflake.yml` now explicitly includes
 `config/quota_rules.json`; without it `load_rules()` would fail in a CLI-created
@@ -82,8 +82,9 @@ Do not edit real historical records, clear references or force cleanup.
 5. Create/edit a marked record with explicit Price 0. Change only Comments and
    verify 0 stays 0. On the blank-price record, a notes-only edit stays blank.
 6. Select Purchase/Sale/Lease (In)/(Out) and verify required Related Account.
-   A missing reference must block save. Adjustment/Base show no required star;
-   do not infer that negative/zero Adjustment entry is approved.
+   A missing reference must block save. Adjustment/Base show no required star.
+   Adjustment accepts finite negative/positive nonzero quantity; try a marked
+   -5 decrease, then 0 (blocked). Other types remain strictly positive.
 7. If an explicitly prepared marked legacy Lease In/Out fixture exists, edit
    only notes and verify old type/credit label/NULL/decimal remain. Otherwise
    mark this case to verify; do not use a real historical row to create a test.
