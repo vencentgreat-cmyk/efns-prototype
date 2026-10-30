@@ -129,9 +129,15 @@ if view.name == "list":
             columns = ["QUOTA_TRANSACTION_ID", "TRANSACTION_TYPE", "QUOTA_NAME", "OWNER_NAME", "RELATED_NAME"]
             display = display[display[columns].fillna("").astype(str).apply(lambda column: column.str.contains(keyword, case=False, regex=False)).any(axis=1)]
     st.metric("Filtered transactions", f"{len(display):,}")
-    st.caption('Recorded owner-row quantities by type, not an available quota balance. Related Account is a counterparty, not an entitlement owner. RAW inactive/missing-source coverage is not established here. Allocation totals are excluded.')
+    st.caption('Totals by type for the filtered owner records. This is not an available quota balance.')
     try:
-        st.dataframe(component_table(display, account_options.get(account_filter)), hide_index=True, width='stretch')
+        components = component_table(display, account_options.get(account_filter)).copy()
+        owner_labels = {stored_text(k).casefold(): stored_text(v) for k, v in account_names.items()}
+        owner_ids = {stored_text(value).casefold(): stored_text(value) for value in display.get('OWNER_ACCOUNT_ID', []) if stored_text(value)}
+        if 'Owner Account ID' in components:
+            components['Owner Account'] = components.pop('Owner Account ID').map(
+                lambda value: owner_labels.get(stored_text(value).casefold()) or owner_ids.get(stored_text(value).casefold(), value))
+        st.dataframe(components, hide_index=True, width='stretch')
     except Exception:
         st.caption('Calculation draft unavailable for this record')
     if display.empty:

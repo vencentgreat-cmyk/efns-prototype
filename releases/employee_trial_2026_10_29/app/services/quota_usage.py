@@ -109,7 +109,7 @@ def render_account_usage(repo, account_id, *, quota_type=None):
     if context.get('draft_unavailable'):
         st.caption('Calculation draft unavailable for this record')
     st.subheader('Historical / registered Bird Count — not current inventory')
-    st.caption('Account-wide, including other Flocks. Stored registration Bird Count is aggregated across all recorded statuses, including ended/Depopulated Flocks; it is not certified real-time inventory. Status/date do not clear counts. Lifecycle inclusion and quantity-correction policy remain to be confirmed. No usable real quota baseline or unit equivalence is inferred.')
+    st.caption('Account-wide recorded Bird Count includes other Flocks; it is not current inventory.')
     selected=[r for r in context['summaries'] if quota_type is None or r['quota_type']==quota_type_key(quota_type)]
     if not selected: st.info('No Flock or Quota Registration found for this Account/type.')
     for row in selected:
@@ -124,17 +124,21 @@ def render_account_usage(repo, account_id, *, quota_type=None):
             if components:
                 st.dataframe(pd.DataFrame([{'Transaction Type': k, 'Recorded component quantity (not a balance)': v}
                                            for k, v in components.items()]), hide_index=True, width='stretch')
+            st.caption(f"{row['flock_count']} unique Flocks: {row['known_count']} known / {row['missing_count']} missing Bird Count.")
+    st.caption('Calculation basis pending confirmation.')
+    with st.expander('Calculation basis and limitations'):
+        st.write('Stored registration Bird Count includes all recorded statuses, including ended/Depopulated Flocks. Status and dates do not clear quantities. Complete stored values do not prove current inventory; missing values make totals incomplete. RAW completeness/state, unit equivalence, count-source priority and lifecycle inclusion require verified evidence. Count is an observation, not an accumulated stock total. Related Account is a counterparty, not an entitlement owner; Allocation totals are excluded.')
+        for row in selected:
+            st.write(f"{row['quota_type']}: {row['registration_count']} registration record(s); status breakdown: {row['status_counts']}")
             for reason in row['position']['reasons']:
                 st.caption(reason)
-            st.caption(f"{row['flock_count']} unique Flocks; {row['known_count']} known / {row['missing_count']} missing or invalid Bird Count. Incomplete totals are not complete occupancy; even complete stored values do not prove current inventory. {row['registration_count']} registration record(s). Status breakdown: {row['status_counts']}")
-    st.caption('Calculation basis pending confirmation. Registered Bird Count is not current inventory. RAW completeness/state, capacity, units, count-source priority and lifecycle rules require verified evidence.')
-    with st.expander('Calculation basis and limitations'):
+        st.caption('Reload/Refresh reads current records again; no cached balance, historical transaction replay or estimate-based flock ending.')
         st.info('These are two independent missing business definitions: current usable quota and current occupancy. Supplying a single capacity number is not sufficient to validate utilization. No quantity/unit field exists on the current Quota Registration. Registration dates/status are not capacity. Quota transaction direction, lease rules and units are not confirmed, so transactions are not added into a balance. Zero baselines would not divide; genuine over-capacity percentages would remain above 100%.')
     for reason in context['reasons']: st.warning(reason)
     details=context['facility_details']
     if quota_type is not None and not details.empty: details=details[details['Quota type']==quota_type_key(quota_type)]
     st.dataframe(details,hide_index=True,width='stretch')
-    st.caption(f"{context['transaction_count']} Account-owner quota transaction record(s), activity only. Reload/Refresh reads current records again. No cached balance, historical transaction replay or estimate-based flock ending.")
+    st.caption(f"{context['transaction_count']} owner transaction records shown as activity only.")
     return context
 
 

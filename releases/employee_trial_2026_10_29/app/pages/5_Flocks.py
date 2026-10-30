@@ -117,7 +117,7 @@ else:
                         right.markdown(f"**Latest Count observation**  \n{observed['latest_count_date']} · {observed['latest_count_quantity'] if observed['latest_count_quantity'] is not None else 'Unknown'}")
                     else:
                         right.caption('Latest Count: not available.')
-                    right.caption('Observation only; RAW inactive coverage and current inventory are not verified.')
+                    right.caption('Count is an observation, not a current stock total.')
                     if observed['latest_counts']:
                         count_rows = pd.DataFrame(observed['latest_counts'])
                         st.dataframe(count_rows[[c for c in ('FLOCK_TRANSACTION_ID', 'TRANSACTION_DATE', 'QUANTITY', 'COUNT_SOURCE_LABEL') if c in count_rows.columns]], hide_index=True, width='stretch')
