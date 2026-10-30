@@ -123,6 +123,10 @@ def quota_position(registrations, transactions, account_id, quota_type, as_of, r
         identity = guid(row.get('QUOTA_TRANSACTION_ID'))
         base = latest.get(registration)
         qty = number(row.get('QUOTA_COUNT'))
+        if kind not in signs or signs.get(kind) not in {-1, 0, 1}:
+            unknown += 1
+            buckets.setdefault(kind or 'Unknown', []).append(qty)
+            continue  # A later snapshot cannot certify an unknown business type.
         if kind == 'Terminate Quota':
             if rules.get('terminate_policy') != 'ZERO_EFFECT_CLOSE_REGISTRATION' or qty != 0:
                 reasons.append('Terminate Quota must be a zero-effect closure with quantity zero')

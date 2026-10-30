@@ -93,7 +93,7 @@
       "status": "NEW",
       "reason": "PENDING owner components with latest Base snapshots/absorbed activity and zero-effect closure diagnostics.",
       "baseline_lf_sha256": null,
-      "candidate_lf_sha256": "877955f82b16fc63328dd96a35215624f63166436fe1cf21576bc4b4b9cfc102"
+      "candidate_lf_sha256": "22dff735efc0812c8df6664088a5f2fb99f19d7abbb6e5826478e680c0f017d9"
     },
     {
       "path": "data/quota_types.py",
