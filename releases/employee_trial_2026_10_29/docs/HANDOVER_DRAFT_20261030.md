@@ -1,7 +1,8 @@
 # EFNS handover draft
 
 30 October 2026. Local candidate only. No company connection, deployment or data
-write was performed overnight. Existing documents were not reread. Company
+write was performed in this delivery task. This handover was read for editing;
+other existing documents were not reread. Company
 data totals, employee permissions and this candidate's browser acceptance are
 **to verify**; offline tests are not evidence of those outcomes.
 
@@ -99,7 +100,11 @@ Use the manually executed, read-only
 [reconciliation SQL](../sql/review/quota_flock_reconciliation_20261029.sql): identity
 first, then T1e missing-target details/summary and uniqueness checks. Remaining
 sections compare observations, deliveries, components and Inactive source rows.
-SQL engine syntax/results are **to verify**; this overnight task did not run it.
+SQL engine syntax/results are **to verify**; this task did not run it. Its
+unchanged additive Base candidate is superseded by the confirmed latest-Base
+snapshot rule. Use the file for source/link reconciliation, not a valid account
+position. A separately authorized follow-up must update that candidate SQL; this
+task expressly prohibits editing it.
 
 ## 5. Deferred business and runtime work
 
@@ -107,13 +112,19 @@ SQL engine syntax/results are **to verify**; this overnight task did not run it.
   Permit Active, disposal, Count source priority and effective-time rules need
   review. Count is an observation, never an addition. No end event or zeroing is
   inferred from a date/status.
-- Quota units, reliable opening position, Base/snapshot treatment, signed
-  adjustments, transfers, lease expiry and termination need confirmation.
+- Base is confirmed to be a per-registration restating snapshot; Terminate
+  Quota is a zero-effect closure, and historical Global Adjustment is a positive
+  province-wide increase applied to producers. Quota units, complete opening
+  evidence, lease expiry/inclusion and same-day snapshot ordering still need
+  confirmation. These confirmed facts do not certify a complete position.
   `data/quota_position.py`, `data/flock_stock.py` and `config/quota_rules.json`
   contain the **PENDING** draft; do not switch it to CONFIRMED without evidence.
   Missing/inactive source coverage and unverified current stock independently
   block percentages. Use the [confirmation sheet](quota_rules_confirmation_20261029.md).
-- New-entry type choices remain unchanged and await staff confirmation.
+- New-entry choices are Adjustment, Purchase, Sale, Lease (In), Lease (Out),
+  Base: confirmed from usage data 2026-10-30; provisional until staff confirm.
+  Base is intended for new registrations; defining/enforcing that workflow
+  boundary still needs a staff rule. Legacy lease labels remain compatible.
   Historical labels in report filters do not authorize creating those types.
   Related Account is provisionally required for Purchase/Sale and both lease
   label spellings, not every historical type.
@@ -121,6 +132,53 @@ SQL engine syntax/results are **to verify**; this overnight task did not run it.
   run as a separately authorized release check**. This run did not inspect or
   repeat prior isolated probe evidence and does not negate earlier results.
   Do not call local/fake-executor tests company-engine validation.
+
+## Confirmed business facts (2026-10-30)
+
+Source: user-provided old EIMS UI and read-only findings. These statements were
+not independently queried or recalculated in this delivery task.
+
+1. Since 2018, staff use Adjustment, Purchase, Sale and Lease (In)/(Out); Base is
+   for new registrations. Global Adjustment and Terminate Quota are historical
+   only in that period. National/Provincial Allocations remain province totals,
+   RAW-only and excluded from Account entitlement.
+2. Real quota types are Egg Production, Non Commercial Pullet Quota, Commercial
+   Pullet Grower. Older constant spellings remain readable/editable. Filtering
+   and grouping recognize their equivalence without rewriting stored labels.
+3. Base is a snapshot, not an additive award: a later Base restates the total.
+   Use only the latest dated Base per registration. Earlier quantities/activity
+   already represented by that snapshot must not be counted again. Same-day
+   ordering and overlapping leases remain guarded rather than guessed.
+4. Terminate Quota with quantity 0 means the registration closed after its quota
+   was sold/transferred. It has zero numeric effect; it does not manufacture a
+   missing balancing sale or update database status from a draft calculation.
+5. Global Adjustment is a positive province-wide increase applied to producers,
+   used in 2004–2012. Later equivalent increases are entered as Adjustment.
+6. Old Net Bird Count is Delivery minus Removal minus Sale. The user reports
+   roughly 90% agreement for current flocks, with rollup lag (new flocks can show
+   0). This is an old-system reference, not proof that all historical flocks are
+   live, complete or suitable for current occupancy.
+7. TransactionInitialFlag No marks bulk migration into Dataverse on 2018-05-16
+   with EIMS IDs; Yes marks later staff-created rows. It is not a direction.
+   Earlier reverse-cohort hypotheses are superseded by this finding.
+8. The 21 T & P Meisners Poultry Farm Ltd. transactions had Registration links
+   in the old UI, but export lost the links. Never guess or auto-fill them.
+9. Carbon Dioxide exists as an active Account and 71 Flocks reference it as
+   disposal plant/method. This task does not reclassify that Account or links.
+10. Disposal Date may be a future planned disposal. It is not itself an error
+    and must not automatically end or clear a Flock.
+
+## Known data issues for later
+
+- Meisners: recover the actual missing Registration GUIDs with source evidence;
+  a displayed registration label or name is not an approved relationship.
+- Carbon Dioxide: confirm reference-data versus Account modeling separately;
+  do not remove or merge the current Account or the 71 reported links.
+- Windy Bay: the one-day lease labelled `6/1/2026` awaits a staff answer. Confirm
+  the date interpretation and effective/end-date treatment; no automatic fix.
+- The existing positive-only daily Quota Count policy was not broadened here.
+  Confirm signed/zero Adjustment entry behavior and how "new registration" is
+  recognized before enforcing a stricter Base-entry workflow.
 
 ## 6. What to do if something fails
 
