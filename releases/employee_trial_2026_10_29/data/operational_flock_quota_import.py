@@ -488,6 +488,17 @@ def _validate_row(
                 values[field] = related[target_id]
                 merged[field] = related[target_id]
 
+        from types import SimpleNamespace
+        from data.validation import review_daily_quota_transaction
+        validation_repo = SimpleNamespace(
+            get_quota_registration=lambda _id: quota,
+            get_account=lambda identity: _match(accounts, ('ACCOUNT_ID',), identity)[0])
+        reviewed, field_errors = review_daily_quota_transaction(validation_repo, merged,
+                                                               existing if action == 'UPDATE' else None)
+        errors.extend(field_errors)
+        if 'PRICE' in values or action == 'CREATE':
+            merged['PRICE'] = reviewed.get('PRICE')
+
     for required in spec["required"] if action=='CREATE' else set(spec['required'])&set(values):
         if _missing(merged.get(required)):
             errors.append(f"{required.replace('_', ' ').title()} is required.")
@@ -498,7 +509,7 @@ def _validate_row(
             errors.append(f"{field.replace('_', ' ').title()} must be at least {rule['min']}.")
     start = merged.get("EFFECTIVE_DATE")
     end = merged.get("END_DATE")
-    if isinstance(start, dt.date) and isinstance(end, dt.date) and end < start:
+    if entity != "QUOTA_TRANSACTION" and isinstance(start, dt.date) and isinstance(end, dt.date) and end < start:
         errors.append("End Date cannot be earlier than Effective Date.")
 
     duplicate_key = (entity, str(entity_id).casefold())

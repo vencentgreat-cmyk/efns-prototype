@@ -922,6 +922,12 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
                             raise ValueError("Flock no longer exists.")
                         self._upsert_frame(attribute, key, record)
                     else:
+                        from data.validation import review_daily_quota_transaction
+                        prior = current_frame[current_frame[key].astype(str) == str(entity_id)]
+                        if len(prior)>1:raise RepositoryError('Target identity is duplicated; nothing committed.')
+                        old = prior.iloc[0].to_dict() if action == 'UPDATE' else None
+                        record, errors = review_daily_quota_transaction(self,record,old)
+                        if errors:raise RepositoryError(' '.join(errors))
                         quota = self.get_quota_registration(record.get("QUOTA_ID"))
                         if quota is None:
                             raise ValueError("Quota Registration no longer exists.")

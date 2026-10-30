@@ -249,31 +249,57 @@ def quota_count_error(value, transaction_type):
     return None
 
 
-def validate_quota_transaction(repo: "BaseRepository", record: dict) -> list[str]:
+def validate_quota_transaction(repo: "BaseRepository", record: dict, *, changed_fields=None) -> list[str]:
+    """Full new-entry checks, or only newly changed historical attributes."""
+    def review(*fields):
+        return changed_fields is None or bool(set(fields) & set(changed_fields))
     errors: list[str] = []
     quota_id = record.get("QUOTA_ID")
-    quota = repo.get_quota_registration(quota_id) if quota_id else None
-    if quota is None:
+    if review('QUOTA_ID') and (not quota_id or repo.get_quota_registration(quota_id) is None):
         errors.append("Quota Registration is required.")
-    if record.get("TRANSACTION_TYPE") not in QUOTA_TRANSACTION_INPUT_TYPES:
+    if review('TRANSACTION_TYPE') and record.get("TRANSACTION_TYPE") not in QUOTA_TRANSACTION_INPUT_TYPES:
         errors.append("Transaction Type is required.")
-    count_error = quota_count_error(record.get('QUOTA_COUNT'), record.get('TRANSACTION_TYPE'))
-    if count_error:
-        errors.append(count_error)
-    related = record.get('RELATED_ACCOUNT_ID')
-    missing_related = related is None or pd.isna(related) or (isinstance(related, str) and not related.strip())
-    if missing_related and quota_related_account_required(record.get('TRANSACTION_TYPE')):
-        errors.append("Related Account is required for this transaction type.")
-    elif not missing_related and repo.get_account(related) is None:
-        errors.append("Related Account does not exist.")
-    try:
-        parse_optional_quota_price(record.get('PRICE'))
-    except ValueError as exc:
-        errors.append(str(exc))
-    start, end = _date(record.get("EFFECTIVE_DATE")), _date(record.get("END_DATE"))
-    if start and end and end < start:
-        errors.append("End Date cannot be earlier than Effective Date.")
+    if review('QUOTA_COUNT','TRANSACTION_TYPE'):
+        count_error = quota_count_error(record.get('QUOTA_COUNT'), record.get('TRANSACTION_TYPE'))
+        if count_error:
+            errors.append(count_error)
+    if review('RELATED_ACCOUNT_ID','TRANSACTION_TYPE'):
+        related = record.get('RELATED_ACCOUNT_ID')
+        missing_related = related is None or pd.isna(related) or (isinstance(related, str) and not related.strip())
+        if missing_related and quota_related_account_required(record.get('TRANSACTION_TYPE')):
+            errors.append("Related Account is required for this transaction type.")
+        elif not missing_related and repo.get_account(related) is None:
+            errors.append("Related Account does not exist.")
+    if review('PRICE'):
+        try:
+            parse_optional_quota_price(record.get('PRICE'))
+        except ValueError as exc:
+            errors.append(str(exc))
+    if review('EFFECTIVE_DATE','END_DATE'):
+        try:
+            start, end = _date(record.get("EFFECTIVE_DATE")), _date(record.get("END_DATE"))
+            if start is None:
+                errors.append('Effective Date is required.')
+            if start and end and end < start:
+                errors.append("End Date cannot be earlier than Effective Date.")
+        except (ValueError,TypeError,OverflowError):
+            errors.append('Effective Date and End Date must be valid dates.')
     return errors
+
+
+def review_daily_quota_transaction(repo, record, existing=None):
+    """Reuse manual rules; never revalidate untouched historical type/quantity."""
+    from data.business_time import same_value
+    reviewed = dict(record)
+    fields = ('QUOTA_ID','TRANSACTION_TYPE','QUOTA_COUNT','RELATED_ACCOUNT_ID','PRICE','EFFECTIVE_DATE','END_DATE')
+    changed = None if existing is None else {field for field in fields if not same_value(reviewed.get(field),existing.get(field))}
+    errors = validate_quota_transaction(repo,reviewed,changed_fields=changed)
+    if changed is None or 'PRICE' in changed:
+        try:
+            reviewed['PRICE'] = parse_optional_quota_price(reviewed.get('PRICE'))
+        except ValueError:
+            pass  # The shared validator already returned the concrete error.
+    return reviewed, errors
 
 
 def validate_salmonella_test(repo: "BaseRepository", record: dict) -> list[str]:

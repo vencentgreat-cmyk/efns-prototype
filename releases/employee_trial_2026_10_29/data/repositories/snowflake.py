@@ -1781,8 +1781,16 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                             f"SELECT ACCOUNT_ID FROM {self._table('QUOTA_REGISTRATION')} WHERE QUOTA_ID = %s",
                             (record.get("QUOTA_ID"),),
                         )
-                        if quota.empty:
-                            raise RepositoryError("Quota Registration no longer exists.")
+                        if len(quota)!=1:
+                            raise RepositoryError("Quota Registration no longer exists or is ambiguous.")
+                        from types import SimpleNamespace
+                        from data.validation import review_daily_quota_transaction
+                        validation_repo = SimpleNamespace(
+                            get_quota_registration=lambda _id: quota.iloc[0].to_dict(),
+                            get_account=lambda identity: {'ACCOUNT_ID':identity})
+                        old = exists.iloc[0].to_dict() if action == 'UPDATE' else None
+                        record, errors = review_daily_quota_transaction(validation_repo,record,old)
+                        if errors:raise RepositoryError(' '.join(errors))
                         record["OWNER_ACCOUNT_ID"] = quota.iloc[0]["ACCOUNT_ID"]
                         for column, parent_table, parent_key, message in (
                             ("RELATED_ACCOUNT_ID", "ACCOUNT", "ACCOUNT_ID", "Related Account"),
@@ -1794,7 +1802,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
                                     f"SELECT {parent_key} FROM {self._table(parent_table)} WHERE {parent_key} = %s",
                                     (record[column],),
                                 )
-                                if parent.empty:
+                                if len(parent)!=1:
                                     raise RepositoryError(f"{message} no longer exists.")
                     before_flock = None
                     if entity == 'FLOCK' and action == 'UPDATE':
