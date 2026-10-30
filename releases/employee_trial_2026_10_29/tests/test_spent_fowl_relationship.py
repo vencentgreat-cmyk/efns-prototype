@@ -122,7 +122,7 @@ def test_quota_presentation_distinguishes_two_unknown_definitions(chain,tmp_path
  labels={m.label:m.value for m in app.metric}
  assert labels['Current usable quota']=='Not established'
  assert labels['Current occupancy']=='Not established'
- assert labels['Usage percentage']=='Cannot calculate'
+ assert labels['Usage percentage']=='Not established'
 
 
 def test_explicit_ui_clear_preserves_legacy_text(chain,tmp_path,monkeypatch):

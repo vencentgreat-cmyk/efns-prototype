@@ -29,7 +29,7 @@ def test_current_zero_sets_known_quantity_and_retry_is_exactly_once(chain,unknow
     first=r.record_current_flock_quantity(payload(flock),'zero-request',version,'Observed zero; synthetic evidence',confirmed=True,actor=ACTOR, expected_bird_count=(r.get_flock((payload(flock)).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))
     assert r.get_flock(flock)['BIRD_COUNT']==0
     summary=account_usage_context(r,a)['summaries'][0]
-    assert summary['known_bird_count']==0 and summary['missing_count']==0 and summary['current_occupancy']==0
+    assert summary['known_bird_count']==0 and summary['missing_count']==0 and summary['current_occupancy'] is None
     assert summary['usage_percent'] is None  # Company still has no real baseline.
     second=r.record_current_flock_quantity(payload(flock),'zero-request',version,'Observed zero; synthetic evidence',confirmed=True,actor=ACTOR, expected_bird_count=(r.get_flock((payload(flock)).get('FLOCK_ID')) or {}).get('BIRD_COUNT'))
     assert second==first
@@ -110,5 +110,8 @@ def test_zero_count_ui_save_refresh_and_account_summary(chain,tmp_path,monkeypat
     app.switch_page('app/pages/5_Flocks.py').run()
     app.button(key='flock_record_refresh').click().run()
     assert not app.exception and not app.error
-    assert any(m.label=='Known Bird Count' and Decimal(m.value)==0 for m in app.metric)
-    assert any(m.label=='Account usage' and m.value=='Cannot calculate' for m in app.metric)
+    assert any(m.label=='Recorded Bird Count total' and Decimal(m.value)==0 for m in app.metric)
+    assert any(m.label=='Usage percentage' and m.value=='Not established' for m in app.metric)
+
+    assert r.get_flock(flock)['BIRD_COUNT']==0
+    assert len(r.get_record_revisions())==len(r._migration_review_audit)==1

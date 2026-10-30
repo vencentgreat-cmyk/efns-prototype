@@ -143,7 +143,8 @@ def test_usage_fresh_shared_context_does_not_invent_a_formula(chain):
     after=quota_usage_context(r,r.get_flock(flock))
     assert after['linked_flocks']==2 and after['transaction_count']==2
     assert all(after[k] is None for k in ('applicable_quota','remaining_capacity','usage_percent'))
-    assert after['current_occupancy']==10
+    assert after['current_occupancy'] is None
+    assert sum(v['known_bird_count'] for v in after['summaries'])==10
     assert 'Account-wide' in after['scope']
 
 
