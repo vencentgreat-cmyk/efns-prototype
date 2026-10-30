@@ -7,6 +7,7 @@ from data.producer_identity import text as stored_text
 from data.business_time import halifax_today
 
 import datetime as dt
+from decimal import Decimal, InvalidOperation
 
 import pandas as pd
 import streamlit as st
@@ -17,7 +18,7 @@ from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro,
 from data.constants import QUOTA_LEASE_TYPES, QUOTA_TRANSACTION_TYPES, QUOTA_TYPES, UNASSIGNED_LABEL
 from data.repositories import get_repository
 from data.repositories.base import RepositoryError
-from data.validation import validate_quota_transaction
+from data.validation import validate_quota_transaction, quota_related_account_required, parse_optional_quota_price
 from data.quota_position import component_table
 
 
@@ -54,6 +55,28 @@ def label_for_id(mapping, value, default=None):
 
 def transaction_title(record):
     return f"{record.get('TRANSACTION_TYPE') or 'Transaction'} · {str(record.get('QUOTA_TRANSACTION_ID') or '')[:8]}"
+
+
+def display_quantity(value):
+    """Display the stored fraction without imposing integer rounding."""
+    try:
+        quantity = Decimal(str(value))
+        if not quantity.is_finite():
+            return '—'
+        result = format(quantity, ',f')
+        return result.rstrip('0').rstrip('.') if '.' in result else result
+    except (InvalidOperation, ValueError, TypeError):
+        return '—'
+
+
+def display_price(value):
+    if stored_text(value) is None:
+        return '—'
+    try:
+        amount = Decimal(str(value))
+        return f'${amount:,.2f}' if amount.is_finite() else '—'
+    except (InvalidOperation, ValueError, TypeError):
+        return str(value)
 
 
 def related_transaction_options(current_id=None):
@@ -113,8 +136,10 @@ if view.name == "list":
     else:
         display = display.reset_index(drop=True)
         display["TRANSACTION"] = display.apply(lambda row: transaction_title(row), axis=1)
+        # Formatting is view-only; repository quantities and report exports stay numeric.
+        display['QUOTA_COUNT'] = display['QUOTA_COUNT'].map(display_quantity)
         st.session_state.quota_tx_list_row_ids = display["QUOTA_TRANSACTION_ID"].tolist()
-        st.dataframe(display[["TRANSACTION", "QUOTA_NAME", "OWNER_NAME", "RELATED_NAME", "TRANSACTION_TYPE", "EFFECTIVE_DATE", "QUOTA_COUNT", "PRICE", "CREATED_AT"]], width="stretch", height=520, hide_index=True, on_select="rerun", selection_mode="single-row", key="quota_tx_list_grid", column_config={"TRANSACTION": "Quota Transaction", "QUOTA_NAME": "Quota Registration", "OWNER_NAME": "Owner Account", "RELATED_NAME": "Related Account", "EFFECTIVE_DATE": st.column_config.DateColumn("Effective Date", format="YYYY-MM-DD"), "QUOTA_COUNT": st.column_config.NumberColumn("Quota Count", format="%.0f"), "PRICE": st.column_config.NumberColumn("Price", format="$%.2f"), "CREATED_AT": timestamp_column("Created On")})
+        st.dataframe(display[["TRANSACTION", "QUOTA_NAME", "OWNER_NAME", "RELATED_NAME", "TRANSACTION_TYPE", "EFFECTIVE_DATE", "QUOTA_COUNT", "PRICE", "CREATED_AT"]], width="stretch", height=520, hide_index=True, on_select="rerun", selection_mode="single-row", key="quota_tx_list_grid", column_config={"TRANSACTION": "Quota Transaction", "QUOTA_NAME": "Quota Registration", "OWNER_NAME": "Owner Account", "RELATED_NAME": "Related Account", "EFFECTIVE_DATE": st.column_config.DateColumn("Effective Date", format="YYYY-MM-DD"), "QUOTA_COUNT": st.column_config.TextColumn("Quota Count"), "PRICE": st.column_config.NumberColumn("Price", format="$%.2f"), "CREATED_AT": timestamp_column("Created On")})
 else:
     current = repo.get_quota_transaction(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -143,8 +168,8 @@ else:
                 left.markdown(f"**Transaction Type**  \n{current.get('TRANSACTION_TYPE') or '—'}")
                 left.markdown(f"**Effective Date**  \n{as_date(current.get('EFFECTIVE_DATE'), '—')}")
                 left.markdown(f"**End Date**  \n{as_date(current.get('END_DATE'), '—')}")
-                middle.markdown(f"**Quota Count**  \n{float(current.get('QUOTA_COUNT') or 0):,.0f}")
-                middle.markdown(f"**Price**  \n${float(current.get('PRICE') or 0):,.2f}")
+                middle.markdown(f"**Quota Count**  \n{display_quantity(current.get('QUOTA_COUNT'))}")
+                middle.markdown(f"**Price**  \n{display_price(current.get('PRICE'))}")
                 middle.markdown(f"**Credit Type**  \n{current.get('QUOTA_LEASE_TYPE') or '—'}")
                 right.markdown(f"**Comments**  \n{current.get('COMMENTS') or 'No comments.'}")
                 st.info("This page shows transaction activity only. No available quota balance has been inferred.")
@@ -190,12 +215,14 @@ else:
             effective_date = left.date_input("Effective Date *", value=as_date(current.get("EFFECTIVE_DATE"), None if view.record_id else halifax_today()), key="quota_tx_form_effective")
             end_date = left.date_input("End Date", value=as_date(current.get("END_DATE")), key="quota_tx_form_end")
             quota_count = left.text_input("Quota Count *",value=stored_text(current.get("QUOTA_COUNT")),key='quota_tx_form_count') if view.record_id else left.number_input("Quota Count *", min_value=0.0, value=float(current.get("QUOTA_COUNT") or 0), step=1.0, key="quota_tx_form_count")
-            related_account_label = right.selectbox("Related Account *", list(optional_accounts), index=option_index(list(optional_accounts), label_for_id(optional_accounts, current.get("RELATED_ACCOUNT_ID"), UNASSIGNED_LABEL)), key="quota_tx_form_related_account")
+            related_label = 'Related Account *' if quota_related_account_required(transaction_type) else 'Related Account'
+            related_account_label = right.selectbox(related_label, list(optional_accounts), index=option_index(list(optional_accounts), label_for_id(optional_accounts, current.get("RELATED_ACCOUNT_ID"), UNASSIGNED_LABEL)), key="quota_tx_form_related_account", help='Required for Purchase, Sale and Lease In/Out (including historical labels); provisional - confirm with business.')
             related_quota_label = right.selectbox("Related Quota", list(optional_quotas), index=option_index(list(optional_quotas), label_for_id(optional_quotas, current.get("RELATED_QUOTA_ID"), UNASSIGNED_LABEL)), key="quota_tx_form_related_quota")
             related_transaction_label = right.selectbox("Related Transaction", list(transaction_options), index=option_index(list(transaction_options), label_for_id(transaction_options, current.get("RELATED_TRANSACTION_ID"), UNASSIGNED_LABEL)), key="quota_tx_form_related_transaction")
-            price = right.text_input("Price",value=stored_text(current.get("PRICE")),key='quota_tx_form_price') if view.record_id else right.number_input("Price", min_value=0.0, value=float(current.get("PRICE") or 0), step=1.0, key="quota_tx_form_price")
-            lease_options = ["Not applicable", *QUOTA_LEASE_TYPES]
-            lease_type = right.selectbox("Credit Type", lease_options, index=option_index(lease_options, current.get("QUOTA_LEASE_TYPE") or "Not applicable"), key="quota_tx_form_lease")
+            price = right.text_input('Price', value=stored_text(current.get('PRICE')) or '', key='quota_tx_form_price', help='Leave blank for unknown. Enter 0 only when the price is known to be zero.')
+            stored_credit = stored_text(current.get('QUOTA_LEASE_TYPE')) or 'Not applicable'
+            lease_options = stored_options(['Not applicable', *QUOTA_LEASE_TYPES], stored_credit, bool(view.record_id))
+            lease_type = right.selectbox("Credit Type", lease_options, index=option_index(lease_options, stored_credit), key="quota_tx_form_lease")
             comments = right.text_area("Comments", value=str(current.get("COMMENTS") or ""), key="quota_tx_form_comments")
         capture_form('quota_tx_form_',current,{'QUOTA_ID': ['quota_tx_form_quota'], 'OWNER_ACCOUNT_ID': ['quota_tx_form_quota'], 'TRANSACTION_TYPE': ['quota_tx_form_type'], 'EFFECTIVE_DATE': ['quota_tx_form_effective'], 'END_DATE': ['quota_tx_form_end'], 'QUOTA_COUNT': ['quota_tx_form_count'], 'RELATED_ACCOUNT_ID': ['quota_tx_form_related_account'], 'RELATED_QUOTA_ID': ['quota_tx_form_related_quota'], 'RELATED_TRANSACTION_ID': ['quota_tx_form_related_transaction'], 'PRICE': ['quota_tx_form_price'], 'QUOTA_LEASE_TYPE': ['quota_tx_form_lease'], 'COMMENTS': ['quota_tx_form_comments']})
         if view.record_id: st.text_input("Reason for correction *",key='quota_tx_form_revision_reason')
@@ -204,6 +231,15 @@ else:
             if not view.record_id: record.pop("QUOTA_TRANSACTION_ID")
             else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
             errors = validate_quota_transaction(repo, record) if not view.record_id else []
+            if view.record_id and (field_changed('quota_tx_form_', 'RELATED_ACCOUNT_ID') or field_changed('quota_tx_form_', 'TRANSACTION_TYPE')):
+                if quota_related_account_required(transaction_type) and record['RELATED_ACCOUNT_ID'] is None:
+                    errors.append('Related Account is required for this transaction type.')
+            if not view.record_id or field_changed('quota_tx_form_', 'PRICE'):
+                try:
+                    record['PRICE'] = parse_optional_quota_price(price)
+                except ValueError as exc:
+                    if str(exc) not in errors:
+                        errors.append(str(exc))
             if errors:
                 for error in errors: st.error(error)
             else:

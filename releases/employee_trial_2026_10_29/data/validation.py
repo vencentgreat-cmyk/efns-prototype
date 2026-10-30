@@ -213,6 +213,26 @@ def validate_flock_transaction(repo: "BaseRepository", record: dict, *, current_
     return errors
 
 
+def quota_related_account_required(transaction_type) -> bool:
+    # provisional - confirm with business
+    return transaction_type in {'Purchase', 'Sale', 'Lease (In)', 'Lease (Out)', 'Lease In', 'Lease Out'}
+
+
+def parse_optional_quota_price(value):
+    """Blank is unknown, not zero. Preserve zero and reject invalid new input."""
+    if value is None or (not isinstance(value, str) and pd.isna(value)):
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    try:
+        result = Decimal(str(value).strip())
+        if isinstance(value, bool) or not result.is_finite() or result < 0:
+            raise InvalidOperation
+        return result
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError('Price must be a finite, non-negative number or blank.') from None
+
+
 def validate_quota_transaction(repo: "BaseRepository", record: dict) -> list[str]:
     errors: list[str] = []
     quota_id = record.get("QUOTA_ID")
@@ -227,10 +247,16 @@ def validate_quota_transaction(repo: "BaseRepository", record: dict) -> list[str
             raise ValueError
     except (TypeError, ValueError, OverflowError):
         errors.append('Quota Count must be finite and greater than zero.')
-    if not record.get("RELATED_ACCOUNT_ID"):
-        errors.append("Related Account is required for quota transactions.")
-    elif repo.get_account(record["RELATED_ACCOUNT_ID"]) is None:
+    related = record.get('RELATED_ACCOUNT_ID')
+    missing_related = related is None or pd.isna(related) or (isinstance(related, str) and not related.strip())
+    if missing_related and quota_related_account_required(record.get('TRANSACTION_TYPE')):
+        errors.append("Related Account is required for this transaction type.")
+    elif not missing_related and repo.get_account(related) is None:
         errors.append("Related Account does not exist.")
+    try:
+        parse_optional_quota_price(record.get('PRICE'))
+    except ValueError as exc:
+        errors.append(str(exc))
     start, end = _date(record.get("EFFECTIVE_DATE")), _date(record.get("END_DATE"))
     if start and end and end < start:
         errors.append("End Date cannot be earlier than Effective Date.")
