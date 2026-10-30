@@ -10,8 +10,8 @@ FLOCK_STATUSES = ("Planned", "Active", "Depopulated")
 EGG_COLOURS = ("White", "Brown", "Mostly White", "Mostly Brown")
 FLOCK_QUOTA_TYPES = (
     "Egg Production",
-    "Non-Commercial Pullet",
-    "Commercial Pullet",
+    "Non Commercial Pullet Quota",
+    "Commercial Pullet Grower",
 )
 QUOTA_TYPES = FLOCK_QUOTA_TYPES
 QUOTA_STATUSES = ("Active", "Inactive", "Expired")

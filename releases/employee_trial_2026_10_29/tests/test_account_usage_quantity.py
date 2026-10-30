@@ -45,7 +45,7 @@ def test_account_facility_type_grain_unknowns_and_no_facility(chain):
     assert egg['flock_count']==3 and egg['known_bird_count']==15 and egg['missing_count']==1
     assert egg['current_occupancy'] is None and egg['usage_percent'] is None
     assert 'No Facility' in actual['facility_details']['Facility ID'].tolist()
-    assert next(v for v in actual['summaries'] if v['quota_type']=='Commercial Pullet')['known_bird_count']==100
+    assert next(v for v in actual['summaries'] if v['quota_type']=='Commercial Pullet Grower')['known_bird_count']==100
 
 
 def test_count_partial_and_complete_removal_refresh_without_replay(chain):

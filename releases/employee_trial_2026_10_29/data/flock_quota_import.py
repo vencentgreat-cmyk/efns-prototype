@@ -16,6 +16,7 @@ import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
+from data.quota_types import supported_quota_type
 from data.constants import (
     EGG_COLOURS,
     FLOCK_QUOTA_TYPES,
@@ -449,7 +450,7 @@ def validate_flock_quota_batch(parsed: ParsedBatch, repo) -> ValidationReport:
         effective = _date_value(source.values.get("EFFECTIVE_DATE"), "Effective Date", errors)
         end_date = _date_value(source.values.get("END_DATE"), "End Date", errors)
         comments = _text(source.values.get("COMMENTS"))
-        if quota_type is not None and quota_type not in QUOTA_TYPES:
+        if quota_type is not None and not supported_quota_type(quota_type):
             errors.append("Quota Type must use a supported choice.")
         if end_date and effective and end_date < effective:
             errors.append("End Date cannot be earlier than Effective Date.")
@@ -628,7 +629,7 @@ def validate_flock_quota_batch(parsed: ParsedBatch, repo) -> ValidationReport:
         )
         if status_value is not None and status_value not in FLOCK_STATUSES:
             errors.append("Flock Status must use a supported choice.")
-        if quota_type is not None and quota_type not in FLOCK_QUOTA_TYPES:
+        if quota_type is not None and not supported_quota_type(quota_type):
             errors.append("Flock Quota Type must use a supported choice.")
         if egg_colour is not None and egg_colour not in EGG_COLOURS:
             errors.append("Egg Colour must use a supported choice.")

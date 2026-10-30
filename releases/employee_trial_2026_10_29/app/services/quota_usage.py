@@ -4,6 +4,7 @@ import pandas as pd
 from data.producer_identity import text
 from data.quota_position import quota_position, load_rules
 from data.business_time import halifax_today
+from data.quota_types import quota_type_key
 
 
 def usage_numbers(known_total, missing, baseline=None, *, compatible_units=False):
@@ -51,10 +52,10 @@ def account_usage_context(repo, account_id, *, rules=None, source_evidence=None,
             if not number.is_finite() or number < 0: raise InvalidOperation
         except (InvalidOperation,ValueError,TypeError): number=None
         fid=text(f.get('FACILITY_ID'))
-        rows.append(dict(flock_id=f['FLOCK_ID'],quota_type=text(f.get('FLOCK_QUOTA_TYPE')) or 'Unknown type',
+        rows.append(dict(flock_id=f['FLOCK_ID'],quota_type=quota_type_key(text(f.get('FLOCK_QUOTA_TYPE'))) or 'Unknown type',
             facility_id=fid or 'No Facility',facility=labels.get(fid,fid) if fid else 'No Facility',
             value=number,status=text(f.get('STATUS')) or 'Unknown'))
-    types=set(text(q.get('QUOTA_TYPE')) or 'Unknown type' for q in quotas.to_dict('records')) | {r['quota_type'] for r in rows}
+    types=set(quota_type_key(text(q.get('QUOTA_TYPE'))) or 'Unknown type' for q in quotas.to_dict('records')) | {r['quota_type'] for r in rows}
     summaries=[];details=[]
     for kind in sorted(types):
         selected=[r for r in rows if r['quota_type']==kind]
@@ -74,7 +75,7 @@ def account_usage_context(repo, account_id, *, rules=None, source_evidence=None,
                                 position['net_position'] if can_use else None,
                                 compatible_units=can_use)
         summaries.append(dict(quota_type=kind,flock_count=len(selected),known_count=len(known),missing_count=missing,
-            known_bird_count=total,registration_count=sum(text(q.get('QUOTA_TYPE'))==kind for q in quotas.to_dict('records')),
+            known_bird_count=total,registration_count=sum(quota_type_key(text(q.get('QUOTA_TYPE')))==kind for q in quotas.to_dict('records')),
             status_counts=pd.Series([r['status'] for r in selected],dtype=object).value_counts().to_dict(),
             position=position, **numbers))
         for fid in sorted({r['facility_id'] for r in selected}):
@@ -87,7 +88,7 @@ def account_usage_context(repo, account_id, *, rules=None, source_evidence=None,
 
 def quota_usage_context(repo, flock):
     context=account_usage_context(repo,flock.get('ACCOUNT_ID'))
-    kind=text(flock.get('FLOCK_QUOTA_TYPE')) or 'Unknown type'
+    kind=quota_type_key(text(flock.get('FLOCK_QUOTA_TYPE'))) or 'Unknown type'
     current=next((r for r in context['summaries'] if r['quota_type']==kind),usage_numbers(None,1))
     return dict(context,**{k:current.get(k) for k in ('applicable_quota','current_occupancy','remaining_capacity','usage_percent')},
         selected_type=kind,linked_flocks=current.get('flock_count',0),recorded_bird_count=flock.get('BIRD_COUNT'))
@@ -98,7 +99,7 @@ def render_account_usage(repo, account_id, *, quota_type=None):
     context=account_usage_context(repo,account_id)
     st.subheader('Historical / registered Bird Count — not current inventory')
     st.caption('Account-wide, including other Flocks. Stored registration Bird Count is aggregated across all recorded statuses, including ended/Depopulated Flocks; it is not certified real-time inventory. Status/date do not clear counts. Lifecycle inclusion and quantity-correction policy remain to be confirmed. No usable real quota baseline or unit equivalence is inferred.')
-    selected=[r for r in context['summaries'] if quota_type is None or r['quota_type']==quota_type]
+    selected=[r for r in context['summaries'] if quota_type is None or r['quota_type']==quota_type_key(quota_type)]
     if not selected: st.info('No Flock or Quota Registration found for this Account/type.')
     for row in selected:
         with st.container(border=True):
@@ -120,11 +121,11 @@ def render_account_usage(repo, account_id, *, quota_type=None):
         st.info('These are two independent missing business definitions: current usable quota and current occupancy. Supplying a single capacity number is not sufficient to validate utilization. No quantity/unit field exists on the current Quota Registration. Registration dates/status are not capacity. Quota transaction direction, lease rules and units are not confirmed, so transactions are not added into a balance. Zero baselines would not divide; genuine over-capacity percentages would remain above 100%.')
     for reason in context['reasons']: st.warning(reason)
     details=context['facility_details']
-    if quota_type is not None and not details.empty: details=details[details['Quota type']==quota_type]
+    if quota_type is not None and not details.empty: details=details[details['Quota type']==quota_type_key(quota_type)]
     st.dataframe(details,hide_index=True,width='stretch')
     st.caption(f"{context['transaction_count']} Account-owner quota transaction record(s), activity only. Reload/Refresh reads current records again. No cached balance, historical transaction replay or estimate-based flock ending.")
     return context
 
 
 def render_quota_usage(repo, flock):
-    return render_account_usage(repo,flock.get('ACCOUNT_ID'),quota_type=text(flock.get('FLOCK_QUOTA_TYPE')) or 'Unknown type')
+    return render_account_usage(repo,flock.get('ACCOUNT_ID'),quota_type=quota_type_key(text(flock.get('FLOCK_QUOTA_TYPE'))) or 'Unknown type')

@@ -197,7 +197,7 @@ elif section == "Customize Report":
     extra = st.columns(4)
     farm_location_label = extra[0].selectbox("Farm Location", list(farm_location_options), disabled=dataset != "Farm Locations", key="custom_filter_farm_location")
     filters["farm_location_id"] = farm_location_options[farm_location_label] if dataset == "Farm Locations" else None
-    quota_value = extra[1].selectbox("Quota Type", ["All", *QUOTA_TYPES], key="custom_filter_quota",disabled=dataset not in {"Quota Registrations","Quota Transactions"})
+    quota_value = extra[1].selectbox("Quota Type", ["All", *QUOTA_TYPES], key="custom_filter_quota",disabled=dataset not in {"Flocks","Quota Registrations","Quota Transactions"})
     filters["quota_type"] = None if quota_value == "All" else quota_value
     transaction_values = transaction_type_options(repo, dataset)
     if st.session_state.get('custom_filter_transaction') not in ('All', *transaction_values):

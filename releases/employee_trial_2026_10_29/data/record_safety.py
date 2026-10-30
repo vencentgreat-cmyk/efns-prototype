@@ -72,7 +72,10 @@ def validate_edit(repo,entity,before,changes):
              'QUOTA_TRANSACTION':{'TRANSACTION_TYPE':QUOTA_TRANSACTION_TYPES},
              'SALMONELLA_TEST':{'TEST_RESULT':SALMONELLA_RESULTS}}.get(entity,{})
     for field,allowed in choices.items():
-        if field in changes and changes[field] not in allowed:raise RepositoryError(f'{field} must use a supported choice when changed.')
+        if field in changes:
+            from data.quota_types import supported_quota_type
+            valid = supported_quota_type(changes[field]) if field in {'QUOTA_TYPE','FLOCK_QUOTA_TYPE'} else changes[field] in allowed
+            if not valid:raise RepositoryError(f'{field} must use a supported choice when changed.')
     for field in set(DATE_FIELDS.get(entity,()))&set(changes):
         from data.repositories.snowflake import normalize_date_bind
         changes[field]=normalize_date_bind(changes[field],field)

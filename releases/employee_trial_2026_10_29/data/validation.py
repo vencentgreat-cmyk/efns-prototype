@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 
 import pandas as pd
+from data.quota_types import supported_quota_type
 
 from data.constants import (
     FARM_LOCATION_STATUSES,
@@ -182,7 +183,7 @@ def validate_quota_registration(repo: "BaseRepository", record: dict) -> list[st
         errors.append("Account does not exist.")
     if not str(record.get("REGISTRATION_NUMBER") or "").strip():
         errors.append("Registration Number is required.")
-    if record.get("QUOTA_TYPE") not in QUOTA_TYPES:
+    if not supported_quota_type(record.get("QUOTA_TYPE")):
         errors.append("Quota Type must use a supported provisional choice.")
     start, end = _date(record.get("EFFECTIVE_DATE")), _date(record.get("END_DATE"))
     if start and end and end < start:

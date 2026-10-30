@@ -1,6 +1,8 @@
 """Snowflake repository backed only by the shared SQL executor contract."""
 
 from __future__ import annotations
+
+from data.quota_types import quota_type_filter
 from data.producer_identity import text as optional_reference
 from data.business_time import advance_version_sql
 
@@ -620,11 +622,13 @@ class SnowflakeRepository(ControlledSupplementRepository, FlockDateRepairReposit
         return self._delete("FLOCK_TRANSACTION", "FLOCK_TRANSACTION_ID", value)
 
     def get_quota_registrations(self, account_id=None, status=None, quota_type=None, active_only=False, statuses=None):
-        filters = [("ACCOUNT_ID", account_id), ("STATUS", status), ("QUOTA_TYPE", quota_type), ("STATUS", statuses)]
+        filters = [("ACCOUNT_ID", account_id), ("STATUS", status), ("QUOTA_TYPE", quota_type_filter(quota_type)), ("STATUS", statuses)]
         if not active_only: return self._filtered("QUOTA_REGISTRATION", filters)
         conditions, params = ["STATUS = %s", "(EFFECTIVE_DATE IS NULL OR EFFECTIVE_DATE <= CURRENT_DATE())", "(END_DATE IS NULL OR END_DATE >= CURRENT_DATE())"], ["Active"]
         for column, value in filters:
-            if value is not None: conditions.append(f"{column} = %s"); params.append(value)
+            if isinstance(value, (tuple, list)):
+                conditions.append(f"{column} IN ({', '.join(['%s'] * len(value))})"); params.extend(value)
+            elif value is not None: conditions.append(f"{column} = %s"); params.append(value)
         return self._query(f"SELECT * FROM {self._table('QUOTA_REGISTRATION')} WHERE " + " AND ".join(conditions), tuple(params))
     def get_quota_registration(self, value): return self._one("QUOTA_REGISTRATION", "QUOTA_ID", value)
     def upsert_quota_registration(self, record):
@@ -638,8 +642,14 @@ class SnowflakeRepository(ControlledSupplementRepository, FlockDateRepairReposit
         join = f" JOIN {self._table('QUOTA_REGISTRATION')} qr ON qr.QUOTA_ID = qt.QUOTA_ID" if quota_type else ""
         conditions, params = [], []
         if account_id: conditions.append("(qt.OWNER_ACCOUNT_ID = %s OR qt.RELATED_ACCOUNT_ID = %s)"); params += [account_id, account_id]
-        for column, operator, value in (("qt.QUOTA_ID", "=", quota_id), ("qr.QUOTA_TYPE", "=", quota_type), ("qt.TRANSACTION_TYPE", "=", transaction_type), ("qt.EFFECTIVE_DATE", ">=", date_from), ("qt.EFFECTIVE_DATE", "<=", date_to)):
+        for column, operator, value in (("qt.QUOTA_ID", "=", quota_id), ("qt.TRANSACTION_TYPE", "=", transaction_type), ("qt.EFFECTIVE_DATE", ">=", date_from), ("qt.EFFECTIVE_DATE", "<=", date_to)):
             if value is not None: conditions.append(f"{column} {operator} %s"); params.append(value)
+        if quota_type:
+            aliases = quota_type_filter(quota_type)
+            if isinstance(aliases, tuple):
+                conditions.append(f"qr.QUOTA_TYPE IN ({', '.join(['%s'] * len(aliases))})"); params.extend(aliases)
+            else:
+                conditions.append('qr.QUOTA_TYPE = %s'); params.append(aliases)
         sql = f"SELECT qt.* FROM {self._table('QUOTA_TRANSACTION')} qt{join}"
         if conditions: sql += " WHERE " + " AND ".join(conditions)
         return self._query(sql, tuple(params) if params else None)
@@ -653,8 +663,11 @@ class SnowflakeRepository(ControlledSupplementRepository, FlockDateRepairReposit
         return self._upsert("QUOTA_TRANSACTION", stored)
     def get_quota_transaction(self, value): return self._one("QUOTA_TRANSACTION", "QUOTA_TRANSACTION_ID", value)
     def get_quota_summary(self, as_of_date, quota_type, account_id=None, status="Active"):
-        conditions = ["qr.QUOTA_TYPE = %s", "(qr.EFFECTIVE_DATE IS NULL OR qr.EFFECTIVE_DATE <= %s)", "(qr.END_DATE IS NULL OR qr.END_DATE >= %s)"]
-        params = [quota_type, as_of_date, as_of_date]
+        aliases = quota_type_filter(quota_type)
+        values = aliases if isinstance(aliases, tuple) else (aliases,)
+        predicate = f"qr.QUOTA_TYPE IN ({', '.join(['%s'] * len(values))})" if len(values)>1 else 'qr.QUOTA_TYPE = %s'
+        conditions = [predicate, "(qr.EFFECTIVE_DATE IS NULL OR qr.EFFECTIVE_DATE <= %s)", "(qr.END_DATE IS NULL OR qr.END_DATE >= %s)"]
+        params = [*values, as_of_date, as_of_date]
         if account_id: conditions.append("qr.ACCOUNT_ID = %s"); params.append(account_id)
         if status: conditions.append("qr.STATUS = %s"); params.append(status)
         sql = f"""
@@ -682,7 +695,7 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
     def get_quota_allocations(self, quota_type=None, province=None, statuses=None):
         return self._filtered(
             "QUOTA_ALLOCATION",
-            (("QUOTA_TYPE", quota_type), ("PROVINCE", province), ("STATUS", statuses)),
+            (("QUOTA_TYPE", quota_type_filter(quota_type)), ("PROVINCE", province), ("STATUS", statuses)),
         )
 
     def get_salmonella_tests(self, account_id=None, facility_id=None, flock_id=None, permit_number=None, test_result=None, inspector=None, case_number=None, invoice_number=None, date_from=None, date_to=None):

@@ -10,6 +10,7 @@ import pandas as pd
 from app.security import Permission, User, has_permission, require_permission
 from app.services.export import spreadsheet_safe
 from data.constants import QUOTA_TYPES
+from data.quota_types import quota_type_key, supported_quota_type
 from app.services.report_relationships import report_relationships
 from data.producer_identity import production_identities, text as stored_text
 from data.source_scope import scope_production
@@ -65,7 +66,7 @@ CUSTOM_DATASETS = {
     "Facility Details": ("get_facility_details", "FACILITY_DETAIL_ID", (
         FieldDefinition("Facility Detail ID", "FACILITY_DETAIL_ID"), FieldDefinition("Facility ID", "FACILITY_ID"), FieldDefinition("Detail Name", "DETAIL_NAME"), FieldDefinition("Detail Type", "DETAIL_TYPE"), FieldDefinition("Status", "STATUS"))),
     "Flocks": ("get_flocks", "FLOCK_ID", (
-        FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Flock Number", "FLOCK_NUMBER"), FieldDefinition("Account ID", "ACCOUNT_ID"), FieldDefinition("Facility ID", "FACILITY_ID"), FieldDefinition("Quota ID", "QUOTA_ID"), FieldDefinition("Status", "STATUS"), FieldDefinition("Hatch Date", "HATCH_DATE", "date"), FieldDefinition("Placement Date", "PLACEMENT_DATE", "date"), FieldDefinition("Estimated Disposal Date", "EST_DISPOSAL", "date"), FieldDefinition("Actual Disposal Date", "DISPOSAL_DATE", "date"), FieldDefinition("Bird Count", "BIRD_COUNT", "number", ("sum", "min", "max", "mean")))),
+        FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Flock Number", "FLOCK_NUMBER"), FieldDefinition("Account ID", "ACCOUNT_ID"), FieldDefinition("Facility ID", "FACILITY_ID"), FieldDefinition("Quota ID", "QUOTA_ID"), FieldDefinition("Quota Type", "FLOCK_QUOTA_TYPE"), FieldDefinition("Status", "STATUS"), FieldDefinition("Hatch Date", "HATCH_DATE", "date"), FieldDefinition("Placement Date", "PLACEMENT_DATE", "date"), FieldDefinition("Estimated Disposal Date", "EST_DISPOSAL", "date"), FieldDefinition("Actual Disposal Date", "DISPOSAL_DATE", "date"), FieldDefinition("Bird Count", "BIRD_COUNT", "number", ("sum", "min", "max", "mean")))),
     "Flock Transactions": ("get_flock_transactions", "FLOCK_TRANSACTION_ID", (
         FieldDefinition("Transaction ID", "FLOCK_TRANSACTION_ID"), FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Transaction Type", "TRANSACTION_TYPE"), FieldDefinition("Transaction Date", "TRANSACTION_DATE", "date"), FieldDefinition("Quantity", "QUANTITY", "number", ("sum", "min", "max", "mean")), FieldDefinition("Count Source", "COUNT_SOURCE_LABEL"))),
     "Quota Registrations": ("get_quota_registrations", "QUOTA_ID", (
@@ -127,7 +128,7 @@ def build_quota_summary(
     require_permission(user, Permission.VIEW_REPORTS)
     if not isinstance(as_of_date, (dt.date, dt.datetime, pd.Timestamp)):
         raise ValueError("As of Date is required.")
-    if quota_type not in QUOTA_TYPES:
+    if not supported_quota_type(quota_type):
         raise ValueError("Quota Type must be selected from the supported values.")
     frame = repo.get_quota_summary(as_of_date, quota_type, account_id=account_id, status=status)
     if frame.empty:
@@ -171,7 +172,7 @@ def _query_dataset(repo, name: str, filters: dict) -> pd.DataFrame:
     derived=set()
     if name in {'Flocks','Flock Transactions','Production Records'}:
         derived.update(('facility_id','flock_id','facility_account_id','flock_account_id'))
-    if name=='Flocks':derived.update(('date_from','date_to','date_field'))
+    if name=='Flocks':derived.update(('date_from','date_to','date_field','quota_type'))
     if name=='Production Records':derived.add('source_scope')
     unsupported=[key for key,value in filters.items() if value not in (None,'',(),[],False) and key not in set(supported)|derived]
     if unsupported:raise ValueError('Unsupported filter(s) for this dataset: '+', '.join(unsupported))
@@ -221,6 +222,8 @@ def build_custom_report(
                 value=pd.Timestamp(filters[bound]).date()
                 frame=frame.loc[dates.ge(value) if op=='ge' else dates.le(value)]
                 dates=dates.loc[frame.index]
+    if dataset == 'Flocks' and (filters or {}).get('quota_type'):
+        frame = frame[frame['FLOCK_QUOTA_TYPE'].map(quota_type_key) == quota_type_key(filters['quota_type'])]
     if id_field in frame.columns:
         if dataset in _RELATIONSHIP_DATASETS and frame[id_field].duplicated().any():
             raise ValueError("Duplicate report record identifiers; resolve the data issue before aggregating.")
@@ -275,6 +278,9 @@ def build_custom_report(
             frame = frame.assign(_RECORD_COUNT=1,_TOTAL_KNOWN=frame.TOTAL.notna().astype(int),_TOTAL_MISSING=frame.TOTAL.isna().astype(int))
             operations.update(_RECORD_COUNT='sum',_TOTAL_KNOWN='sum',_TOTAL_MISSING='sum')
             fields.update({key:FieldDefinition(label,key) for key,label in [('_RECORD_COUNT','Record count'),('_TOTAL_KNOWN','Source Total known count'),('_TOTAL_MISSING','Source Total missing count')]})
+        for quota_column in ('QUOTA_TYPE', 'FLOCK_QUOTA_TYPE'):
+            if quota_column in group_by and quota_column in frame:
+                frame[quota_column] = frame[quota_column].map(quota_type_key)
         internal_group = group_by.copy()
         if dataset == "Production Records" and {"PRODUCER_ACCOUNT_ID", "PRODUCER_ACCOUNT_NAME"}.intersection(group_by) and frame.PRODUCER_ACCOUNT_ID.isna().any():
             if "PRODUCER_IDENTITY_KEY" not in internal_group: internal_group.append("PRODUCER_IDENTITY_KEY")

@@ -4,6 +4,8 @@
 """In-memory repository using pandas DataFrames for local development."""
 
 from __future__ import annotations
+
+from data.quota_types import quota_type_key
 from data.producer_identity import text as optional_reference
 
 import datetime as dt
@@ -461,7 +463,7 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
         if statuses is not None:
             frame = frame[frame["STATUS"].isin(statuses)]
         if quota_type:
-            frame = frame[frame["QUOTA_TYPE"] == quota_type]
+            frame = frame[frame["QUOTA_TYPE"].map(quota_type_key) == quota_type_key(quota_type)]
         if active_only:
             today = pd.Timestamp(dt.date.today())
             frame = frame[frame["STATUS"] == "Active"]
@@ -592,7 +594,7 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
     def get_quota_allocations(self, quota_type=None, province=None, statuses=None) -> pd.DataFrame:
         frame = self._quota_allocations.copy()
         if quota_type:
-            frame = frame[frame["QUOTA_TYPE"] == quota_type]
+            frame = frame[frame["QUOTA_TYPE"].map(quota_type_key) == quota_type_key(quota_type)]
         if province:
             frame = frame[frame["PROVINCE"] == province]
         if statuses is not None:
