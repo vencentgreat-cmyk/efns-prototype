@@ -1,7 +1,7 @@
 # Deployment checklist — 30 October 2026
 
 **Preparation only; do not deploy from this checklist without separate approval.**
-Work tree: `releases/employee_trial_2026_10_29`, branch `delivery-candidate-20261030`.
+Work tree: `releases/employee_trial_2026_10_29`, branch `delivery-candidate-r2-20261030`.
 Target declared by the existing package: `EFNS_DEV.APP.EFNS_INTERNAL_APP`, root
 `streamlit_app.py`, `SYSTEM$WAREHOUSE_RUNTIME`, warehouse `EFNS_DEV_WH`.
 Current live identity, drift, owner and grants are **to verify**; no company
@@ -14,14 +14,14 @@ Hashes compare LF-normalized bytes as documented by that manifest. Private live
 snapshots, credentials, real business exports and execution manifests are not
 included. `DELIVERY_RUNTIME_DIFF_20261030.json` records before/after hashes.
 
-Saved baseline: 89 runtime files. Candidate artifacts: 94. Changes: 13 modified, 5 new, 0 deleted.
+Saved baseline: 89 runtime files. Candidate artifacts: 94. Changes: 14 modified, 5 new, 0 deleted.
 
 | Runtime file | Status | Why |
 |---|---|---|
 | `app/pages/4_Reports.py` | MODIFIED | Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection. |
-| `app/pages/5_Flocks.py` | MODIFIED | Latest Count observations/conflict display from prior local draft; original navigation preserved. |
-| `app/pages/8_Quota_Transactions.py` | MODIFIED | Price NULL/0 and decimal fidelity; type-specific quantity input (finite nonzero signed Adjustment only), conditional counterparty and legacy edit preservation. |
-| `app/services/quota_usage.py` | MODIFIED | PENDING components/English limitations and alias-compatible registered Bird Count summaries; no established percentage. |
+| `app/pages/5_Flocks.py` | MODIFIED | Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. |
+| `app/pages/8_Quota_Transactions.py` | MODIFIED | Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption. |
+| `app/services/quota_usage.py` | MODIFIED | PENDING Account-wide recorded Bird Count and guarded draft calculation; current stock/percentage remain unestablished; detailed limitations moved into expander. |
 | `app/services/report_builder.py` | MODIFIED | Credit Type display label in the older joined-field builder. |
 | `app/services/report_center.py` | MODIFIED | Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering. |
 | `config/quota_rules.json` | NEW | PENDING rules and user-supplied F3-F5 meanings, not calculation approval. |
@@ -29,13 +29,14 @@ Saved baseline: 89 runtime files. Candidate artifacts: 94. Changes: 13 modified,
 | `data/flock_quota_import.py` | MODIFIED | Two daily-validation membership checks accept the known quota aliases; parser/normalization/identity untouched. |
 | `data/flock_stock.py` | NEW | Prior PENDING observation-only stock draft; unchanged by this delivery task. |
 | `data/migration.py` | MODIFIED | PRE-EXISTING local RAW-only Allocation guard, frozen at delivery branch start; not modified by this task. |
+| `data/operational_flock_quota_import.py` | MODIFIED | Daily quota preview uses shared changed-field validation; existing parsing, identity, normalization and blank UPDATE contracts preserved. |
 | `data/position_evidence.py` | NEW | Prior pure null/date/GUID/state helpers used by the PENDING draft. |
-| `data/quota_position.py` | NEW | PENDING owner components with latest Base snapshots/absorbed activity and zero-effect closure diagnostics. |
+| `data/quota_position.py` | NEW | PENDING owner component/latest-Base draft plus logged built-in PENDING fallback for missing/invalid rules. |
 | `data/quota_types.py` | NEW | Read/comparison compatibility for canonical and legacy labels, without write-time relabeling. |
 | `data/record_safety.py` | MODIFIED | Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained. |
-| `data/repositories/mock.py` | MODIFIED | Alias-compatible quota read filters for offline behavior. |
-| `data/repositories/snowflake.py` | MODIFIED | Bound alias-inclusive read predicates for quota registrations, transactions, summaries and allocations; write/transaction paths unchanged. |
-| `data/validation.py` | MODIFIED | Shared finite/nonzero signed Adjustment rule; other types remain positive; optional Price, counterparty and quota-label compatibility retained. |
+| `data/repositories/mock.py` | MODIFIED | Existing alias-compatible reads plus shared daily quota validation at commit, before writer, preserving rollback behavior. |
+| `data/repositories/snowflake.py` | MODIFIED | Existing alias-compatible reads plus shared daily quota validation and unique parent checks inside existing commit transaction; no executor/transaction implementation change. |
+| `data/validation.py` | MODIFIED | Shared finite signed nonzero Adjustment, optional Price/counterparty/date rules and changed-field daily quota review helper; historical unchanged values retained. |
 
 Other packaging change: `snowflake.yml` now explicitly includes
 `config/quota_rules.json`; without it `load_rules()` would fail in a CLI-created
@@ -47,14 +48,14 @@ connection/lock protection, date repair, 40053 and controlled supplements,
 Spent relationships, source tracing and navigation must be preserved. Do not
 copy the older root development application or a disabled-auth sharing tree.
 No schema/grant scripts or historical operations are needed for these UI/draft
-changes. Existing `sql/review` candidate arithmetic is frozen by instruction;
+changes. Existing `sql/review` candidate arithmetic is unchanged apart from its superseded header;
 its additive Base formula is superseded and must not certify a position.
 
 ## Release gates (future authorized operation only)
 
 - Verify company identity, current live source drift and configuration; snapshot
   the then-current complete runtime and grants for rollback. Stop on drift.
-- Confirm this exact local candidate and run the stated offline tests/readiness.
+- Confirm this exact local candidate and run the FULL offline suite (`python -m pytest -q`) and readiness.
   Keep rules PENDING and require all runtime artifacts in the upload manifest.
 - Do not run SQL08/SQL18/initialization, date corrections, supplements or original
   migration for this release. A changed source manifest is not permission for

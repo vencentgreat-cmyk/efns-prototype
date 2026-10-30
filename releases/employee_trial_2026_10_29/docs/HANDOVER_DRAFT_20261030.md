@@ -68,7 +68,7 @@ scripts. No SQL is authorized by this handover.
 From this release directory in the existing Windows project environment:
 
 ```powershell
-& '..\..\.venv\Scripts\python.exe' -m pytest tests/test_controlled_execution.py tests/test_source_field_fixes.py tests/test_account_usage_quantity.py tests/test_staff_workflow_ui.py tests/test_report_nullable_sum.py tests/test_flock_report_record_count.py tests/test_quota_flock_position.py tests/test_quota_position_ui.py tests/test_quota_reconciliation_sql.py tests/test_daily_quota_entry.py tests/test_historical_transaction_reports.py tests/test_daily_entry_boundaries.py tests/test_report_center.py -q
+& '..\..\.venv\Scripts\python.exe' -m pytest -q
 & '..\..\.venv\Scripts\python.exe' scripts/check_snowflake_readiness.py
 git diff --check
 ```
@@ -104,7 +104,7 @@ SQL engine syntax/results are **to verify**; this task did not run it. Its
 unchanged additive Base candidate is superseded by the confirmed latest-Base
 snapshot rule. Use the file for source/link reconciliation, not a valid account
 position. A separately authorized follow-up must update that candidate SQL; this
-task expressly prohibits editing it.
+task changes only its superseded header comment, not the SQL logic.
 
 ## 5. Deferred business and runtime work
 

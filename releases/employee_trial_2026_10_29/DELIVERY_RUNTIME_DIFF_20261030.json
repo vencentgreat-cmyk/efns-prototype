@@ -14,23 +14,23 @@
     {
       "path": "app/pages/5_Flocks.py",
       "status": "MODIFIED",
-      "reason": "Latest Count observations/conflict display from prior local draft; original navigation preserved.",
+      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
-      "candidate_lf_sha256": "48ffb1d62b19e9b8428f3d4b720fdb7cc9d6c3456cf4b8ac352730530f68e372"
+      "candidate_lf_sha256": "7b28c323bd3bdad074e415d698085186de80f53495e3bb02e1953fcefaaa8dc1"
     },
     {
       "path": "app/pages/8_Quota_Transactions.py",
       "status": "MODIFIED",
-      "reason": "Price NULL/0 and decimal fidelity; type-specific quantity input (finite nonzero signed Adjustment only), conditional counterparty and legacy edit preservation.",
+      "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
-      "candidate_lf_sha256": "72315ff0a4da0812c258c0761fba103e21a9f3967cbb4bb577bfb34ada5978f8"
+      "candidate_lf_sha256": "bd0c2c362f77461e044116893518e5c1642a3e367e017104e56bb49e33177e8f"
     },
     {
       "path": "app/services/quota_usage.py",
       "status": "MODIFIED",
-      "reason": "PENDING components/English limitations and alias-compatible registered Bird Count summaries; no established percentage.",
+      "reason": "PENDING Account-wide recorded Bird Count and guarded draft calculation; current stock/percentage remain unestablished; detailed limitations moved into expander.",
       "baseline_lf_sha256": "452859f1faa2cfe43c1b6394ad517205ce63737c07c276f6ea11a433d5f17417",
-      "candidate_lf_sha256": "0902f4ed96f955e88dca5b71729bb0347f0487ab0a8ef7d7e7aa13c586c827f3"
+      "candidate_lf_sha256": "020c632f7f994abb4e2e09bfd3af2cb328ce06b187d024dd29e25058fe358f19"
     },
     {
       "path": "app/services/report_builder.py",
@@ -82,6 +82,13 @@
       "candidate_lf_sha256": "6f2aee2b5b00f34e4b105e1cb501666448b0f72b676198e799a8d3164a5f2c09"
     },
     {
+      "path": "data/operational_flock_quota_import.py",
+      "status": "MODIFIED",
+      "reason": "Daily quota preview uses shared changed-field validation; existing parsing, identity, normalization and blank UPDATE contracts preserved.",
+      "baseline_lf_sha256": "1a8c3c9006a2ded13efbe0bda21622ee68466132a820cac20fc4cdc4456a5987",
+      "candidate_lf_sha256": "c8e3ac018bf9a0b744ccd23010722745b3fde35234bd3f005847aa73471ea060"
+    },
+    {
       "path": "data/position_evidence.py",
       "status": "NEW",
       "reason": "Prior pure null/date/GUID/state helpers used by the PENDING draft.",
@@ -91,9 +98,9 @@
     {
       "path": "data/quota_position.py",
       "status": "NEW",
-      "reason": "PENDING owner components with latest Base snapshots/absorbed activity and zero-effect closure diagnostics.",
+      "reason": "PENDING owner component/latest-Base draft plus logged built-in PENDING fallback for missing/invalid rules.",
       "baseline_lf_sha256": null,
-      "candidate_lf_sha256": "22dff735efc0812c8df6664088a5f2fb99f19d7abbb6e5826478e680c0f017d9"
+      "candidate_lf_sha256": "fc40cc98eee47640eeba6da0cfc6044c5fe3a31f2b11b03c1b44d4f50d50ee38"
     },
     {
       "path": "data/quota_types.py",
@@ -112,23 +119,23 @@
     {
       "path": "data/repositories/mock.py",
       "status": "MODIFIED",
-      "reason": "Alias-compatible quota read filters for offline behavior.",
+      "reason": "Existing alias-compatible reads plus shared daily quota validation at commit, before writer, preserving rollback behavior.",
       "baseline_lf_sha256": "0c19af988ddc3596ae25e5e871740bb0b23fddcaceed72d0ec8c82c6d7532330",
-      "candidate_lf_sha256": "adc56d6b5e65e0b404d6f94c57cde84f61e49f75e915415a31bc0a0ecad272fc"
+      "candidate_lf_sha256": "6515577787359a5b4d1d96c922ac5a3f2da47c79d83d1822bdae9e0aa5a2a8dd"
     },
     {
       "path": "data/repositories/snowflake.py",
       "status": "MODIFIED",
-      "reason": "Bound alias-inclusive read predicates for quota registrations, transactions, summaries and allocations; write/transaction paths unchanged.",
+      "reason": "Existing alias-compatible reads plus shared daily quota validation and unique parent checks inside existing commit transaction; no executor/transaction implementation change.",
       "baseline_lf_sha256": "b7f42aa1c5f14fd888d8d7f3ea01f7baacf9850f9bfcb51b4ab04c184f7af5e3",
-      "candidate_lf_sha256": "7c4f207279664aac73798b9c302b8217ec8f1f7f4e4ee75ecde0557cbbca5f8f"
+      "candidate_lf_sha256": "9dd61907adc309a064cae820fbaa173aab4319ea5ac29930dadbe304f9cdb60b"
     },
     {
       "path": "data/validation.py",
       "status": "MODIFIED",
-      "reason": "Shared finite/nonzero signed Adjustment rule; other types remain positive; optional Price, counterparty and quota-label compatibility retained.",
+      "reason": "Shared finite signed nonzero Adjustment, optional Price/counterparty/date rules and changed-field daily quota review helper; historical unchanged values retained.",
       "baseline_lf_sha256": "97a381b7ef1ed7c844717e5561100894ef195a2b71f0fc96a49112f5b4f1c632",
-      "candidate_lf_sha256": "bcf49b00d242dc6522f8c02bb2e18192050dac00b5da1b6810e88083e8be3512"
+      "candidate_lf_sha256": "df6e1101d22a8c938a209675fe545e29da04d6c23599260712bfd2f5bf172af9"
     }
   ],
   "deployment_metadata_changes": {
