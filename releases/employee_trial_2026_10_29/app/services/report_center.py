@@ -11,7 +11,7 @@ from app.security import Permission, User, has_permission, require_permission
 from app.services.export import spreadsheet_safe
 from data.constants import QUOTA_TYPES
 from app.services.report_relationships import report_relationships
-from data.producer_identity import production_identities
+from data.producer_identity import production_identities, text as stored_text
 from data.source_scope import scope_production
 
 
@@ -71,7 +71,7 @@ CUSTOM_DATASETS = {
     "Quota Registrations": ("get_quota_registrations", "QUOTA_ID", (
         FieldDefinition("Quota ID", "QUOTA_ID"), FieldDefinition("Account ID", "ACCOUNT_ID"), FieldDefinition("Registration Number", "REGISTRATION_NUMBER"), FieldDefinition("Quota Name", "QUOTA_NAME"), FieldDefinition("Quota Type", "QUOTA_TYPE"), FieldDefinition("Status", "STATUS"), FieldDefinition("Effective Date", "EFFECTIVE_DATE", "date"), FieldDefinition("End Date", "END_DATE", "date"))),
     "Quota Transactions": ("get_quota_transactions", "QUOTA_TRANSACTION_ID", (
-        FieldDefinition("Transaction ID", "QUOTA_TRANSACTION_ID"), FieldDefinition("Quota ID", "QUOTA_ID"), FieldDefinition("Owner Account ID", "OWNER_ACCOUNT_ID"), FieldDefinition("Transaction Type", "TRANSACTION_TYPE"), FieldDefinition("Effective Date", "EFFECTIVE_DATE", "date"), FieldDefinition("Quota Count", "QUOTA_COUNT", "number", ("sum", "min", "max", "mean")), FieldDefinition("Price", "PRICE", "number", ("sum", "min", "max", "mean")))),
+        FieldDefinition("Transaction ID", "QUOTA_TRANSACTION_ID"), FieldDefinition("Quota ID", "QUOTA_ID"), FieldDefinition("Owner Account ID", "OWNER_ACCOUNT_ID"), FieldDefinition("Transaction Type", "TRANSACTION_TYPE"), FieldDefinition("Effective Date", "EFFECTIVE_DATE", "date"), FieldDefinition("Quota Count", "QUOTA_COUNT", "number", ("sum", "min", "max", "mean")), FieldDefinition("Price", "PRICE", "number", ("sum", "min", "max", "mean")), FieldDefinition("Credit Type", "QUOTA_LEASE_TYPE"))),
     "Salmonella Tests": ("get_salmonella_tests", "SALMONELLA_TEST_ID", (
         FieldDefinition("Test ID", "SALMONELLA_TEST_ID"), FieldDefinition("Account ID", "ACCOUNT_ID"), FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Permit Number", "PERMIT_NUMBER"), FieldDefinition("Testing Date", "TESTING_DATE", "date"), FieldDefinition("Result", "TEST_RESULT"), FieldDefinition("Number of Samples", "NUMBER_OF_SAMPLES", "number", ("sum", "min", "max", "mean")))),
     "Production Records": ("get_production_records", "PRODUCTION_ID", (
@@ -140,6 +140,17 @@ def build_quota_summary(
     return frame[[column for column in columns if column in frame]], {
         "producer_count": int(producer_count), "total_issuance": total_issuance,
     }
+
+
+def transaction_type_options(repo, dataset: str) -> tuple[str, ...]:
+    """Report filters describe stored activity, not the new-entry allowlist."""
+    methods = {'Flock Transactions': 'get_flock_transactions',
+               'Quota Transactions': 'get_quota_transactions'}
+    if dataset not in methods:
+        return ()
+    frame = getattr(repo, methods[dataset])()
+    values = frame.get('TRANSACTION_TYPE', pd.Series(dtype=object))
+    return tuple(sorted({stored_text(value) for value in values if stored_text(value)}))
 
 
 def _query_dataset(repo, name: str, filters: dict) -> pd.DataFrame:

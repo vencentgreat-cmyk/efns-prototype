@@ -13,13 +13,13 @@ from app.navigation import format_timestamp, page_file, timestamp_columns
 from app.security import Permission
 from app.services.report_center import (
     CUSTOM_DATASETS, build_custom_report, build_quota_summary, report_csv,
-    report_definition, report_xlsx, visible_catalog, FLOCK_RECORD_COUNT, FLOCK_RECORD_COUNT_LABEL,
+    report_definition, report_xlsx, visible_catalog, FLOCK_RECORD_COUNT, FLOCK_RECORD_COUNT_LABEL, transaction_type_options,
 )
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.constants import (
     ACCOUNT_STATUSES, FACILITY_DETAIL_STATUSES, FACILITY_STATUSES,
-    FARM_LOCATION_STATUSES, FLOCK_STATUSES, FLOCK_TRANSACTION_TYPES,
-    QUOTA_STATUSES, QUOTA_TRANSACTION_TYPES, QUOTA_TYPES,
+    FARM_LOCATION_STATUSES, FLOCK_STATUSES,
+    QUOTA_STATUSES, QUOTA_TYPES,
 )
 from data.repositories import get_repository
 
@@ -199,7 +199,9 @@ elif section == "Customize Report":
     filters["farm_location_id"] = farm_location_options[farm_location_label] if dataset == "Farm Locations" else None
     quota_value = extra[1].selectbox("Quota Type", ["All", *QUOTA_TYPES], key="custom_filter_quota",disabled=dataset not in {"Quota Registrations","Quota Transactions"})
     filters["quota_type"] = None if quota_value == "All" else quota_value
-    transaction_values = FLOCK_TRANSACTION_TYPES if dataset == "Flock Transactions" else QUOTA_TRANSACTION_TYPES if dataset == "Quota Transactions" else ()
+    transaction_values = transaction_type_options(repo, dataset)
+    if st.session_state.get('custom_filter_transaction') not in ('All', *transaction_values):
+        st.session_state.pop('custom_filter_transaction', None)
     transaction_value = extra[2].selectbox("Transaction Type", ["All", *transaction_values], disabled=not transaction_values, key="custom_filter_transaction")
     filters["transaction_type"] = None if transaction_value == "All" else transaction_value
     use_dates = extra[3].checkbox("Use date range", disabled=dataset not in {"Flocks","Flock Transactions","Quota Transactions","Salmonella Tests"}, key="custom_filter_use_dates")

@@ -109,7 +109,7 @@ REPORT_FIELDS = {
         ("QUOTA_PRICE", "Quota Price", "PRICE"),
         (
             "QUOTA_LEASE_TYPE",
-            "Quota Lease Type",
+            "Credit Type",
             "QUOTA_LEASE_TYPE",
         ),
         (
