@@ -4,6 +4,8 @@ No repository calls or writes. RAW coverage/state evidence must be supplied by
 the caller; CORE does not contain it. Related Account is never treated as Owner.
 """
 import json
+import copy
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -13,10 +15,37 @@ from data.producer_identity import text
 from data.quota_types import quota_type_key
 
 EXCLUDED_TYPES = frozenset({'National Allocation', 'Provincial Allocation'})
+RULES_PATH = Path(__file__).resolve().parents[1] / 'config/quota_rules.json'
+_PENDING_DEFAULTS = {
+    'status': 'PENDING', 'units_compatible': False,
+    'type_sign': {'Base': 1, 'Adjustment': 1, 'Global Adjustment': 1, 'Purchase': 1,
+                  'Sale': -1, 'Lease (In)': 1, 'Lease (Out)': -1, 'Terminate Quota': 0},
+    'excluded_types': ['National Allocation', 'Provincial Allocation'],
+    'base_policy': 'LATEST_SNAPSHOT_PER_REGISTRATION',
+    'terminate_policy': 'ZERO_EFFECT_CLOSE_REGISTRATION',
+    'lease_active_rule': 'EFFECTIVE_DATE<=as_of<=END_DATE',
+    'confirmed_by': None, 'confirmed_on': None, 'evidence': [],
+    'flock_stock': {'status': 'PENDING',
+                    'type_sign': {'Delivery': 1, 'Removal': -1, 'Sale': -1},
+                    'count_source_priority': None, 'lifecycle_rule': None,
+                    'confirmed_by': None, 'confirmed_on': None, 'evidence': []},
+}
 
 
 def load_rules():
-    return json.loads((Path(__file__).resolve().parents[1] / 'config/quota_rules.json').read_text(encoding='utf-8'))
+    try:
+        rules = json.loads(RULES_PATH.read_text(encoding='utf-8'))
+        if (not isinstance(rules, dict) or rules.get('status') not in {'PENDING','CONFIRMED'}
+                or not isinstance(rules.get('type_sign'), dict)
+                or not isinstance(rules.get('flock_stock'), dict)
+                or rules['flock_stock'].get('status') not in {'PENDING','CONFIRMED'}
+                or not isinstance(rules['flock_stock'].get('type_sign'), dict)):
+            raise ValueError('Invalid rules structure')
+        return rules
+    except (OSError, ValueError, TypeError) as exc:
+        logging.getLogger(__name__).warning(
+            'Quota calculation rules unavailable; using PENDING defaults (%s).', type(exc).__name__)
+        return copy.deepcopy(_PENDING_DEFAULTS)
 
 
 def component_table(transactions, account_id=None):
