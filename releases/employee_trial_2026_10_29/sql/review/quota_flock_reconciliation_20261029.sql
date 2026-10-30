@@ -1,3 +1,6 @@
+-- SUPERSEDED CANDIDATE ARITHMETIC (2026-10-30): the additive Base candidate below
+-- is superseded by the confirmed latest-Base snapshot rule and MUST NOT be used
+-- as a position. Retained SQL is for source/link reconciliation only.
 -- READ ONLY – run manually
 -- No connection, DDL, DML, SET/USE, temporary objects or business writes.
 -- Database/schema are explicit. Use an authorized role with SELECT on the named RAW/CORE tables.
