@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from data.constants import QUOTA_TRANSACTION_TYPES
+from data.constants import QUOTA_TRANSACTION_TYPES, QUOTA_TRANSACTION_INPUT_TYPES
 from data.validation import (parse_optional_quota_price, quota_related_account_required,
                              validate_quota_transaction)
 from tests.auth_support import authenticated_app
@@ -28,7 +28,7 @@ def test_related_account_provisional_rule_without_broadening_new_choices(chain, 
     record['RELATED_ACCOUNT_ID'] = 'synthetic-missing'
     assert 'Related Account does not exist.' in validate_quota_transaction(repo, record)
     # This task changes the counterparty rule, NOT the daily type allowlist.
-    assert ('Transaction Type is required.' in errors) is (kind not in QUOTA_TRANSACTION_TYPES)
+    assert ('Transaction Type is required.' in errors) is (kind not in QUOTA_TRANSACTION_INPUT_TYPES)
 
 
 @pytest.mark.parametrize('raw,expected', [(None, None), ('', None), ('  ', None),
@@ -58,6 +58,7 @@ def test_price_create_and_comment_edit_preserve_unknown_vs_zero(chain, tmp_path,
     app = quota_app(repo, tmp_path, monkeypatch)
     assert not app.exception
     assert app.text_input(key='quota_tx_form_price').value == ''
+    app.selectbox(key='quota_tx_form_type').select('Purchase').run()
     assert app.selectbox(key='quota_tx_form_related_account').label == 'Related Account *'
     label = next(v for v in app.selectbox(key='quota_tx_form_related_account').options
                  if 'counterparty' in v)

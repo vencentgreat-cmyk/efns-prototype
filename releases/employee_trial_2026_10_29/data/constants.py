@@ -15,7 +15,9 @@ FLOCK_QUOTA_TYPES = (
 )
 QUOTA_TYPES = FLOCK_QUOTA_TYPES
 QUOTA_STATUSES = ("Active", "Inactive", "Expired")
-QUOTA_TRANSACTION_TYPES = ("Purchase", "Sale", "Lease In", "Lease Out")
+# confirmed from usage data 2026-10-30; provisional until staff confirm
+QUOTA_TRANSACTION_TYPES = ('Adjustment', 'Purchase', 'Sale', 'Lease (In)', 'Lease (Out)', 'Base')
+QUOTA_TRANSACTION_INPUT_TYPES = (*QUOTA_TRANSACTION_TYPES, 'Lease In', 'Lease Out')
 QUOTA_LEASE_TYPES = ("Fixed Term", "Open Ended", "Seasonal")
 SALMONELLA_RESULTS = ("Pending", "Negative", "Positive", "Inconclusive")
 FLOCK_TRANSACTION_TYPES = ("Count", "Delivery", "Removal", "Sale")

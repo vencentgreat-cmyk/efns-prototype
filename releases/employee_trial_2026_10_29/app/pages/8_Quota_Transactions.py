@@ -212,6 +212,7 @@ else:
             owner_id = quota_accounts[quota_id]
             left.text_input("Owner Account", value=account_names.get(owner_id, "Unknown"), disabled=True, key="quota_tx_form_owner")
             transaction_type = left.selectbox("Transaction Type *", stored_options(QUOTA_TRANSACTION_TYPES,current.get("TRANSACTION_TYPE"),bool(view.record_id)), index=(stored_index(QUOTA_TRANSACTION_TYPES,current.get("TRANSACTION_TYPE")) if view.record_id else option_index(list(QUOTA_TRANSACTION_TYPES), current.get("TRANSACTION_TYPE"))), key="quota_tx_form_type")
+            left.caption('Type list confirmed from usage data 2026-10-30; provisional until staff confirm. Base is a snapshot, intended for new registrations. Historical types remain visible on existing records.')
             effective_date = left.date_input("Effective Date *", value=as_date(current.get("EFFECTIVE_DATE"), None if view.record_id else halifax_today()), key="quota_tx_form_effective")
             end_date = left.date_input("End Date", value=as_date(current.get("END_DATE")), key="quota_tx_form_end")
             quota_count = left.text_input("Quota Count *",value=stored_text(current.get("QUOTA_COUNT")),key='quota_tx_form_count') if view.record_id else left.number_input("Quota Count *", min_value=0.0, value=float(current.get("QUOTA_COUNT") or 0), step=1.0, key="quota_tx_form_count")

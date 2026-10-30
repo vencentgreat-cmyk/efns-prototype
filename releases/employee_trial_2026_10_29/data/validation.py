@@ -14,6 +14,7 @@ from data.constants import (
     FARM_LOCATION_STATUSES,
     FLOCK_TRANSACTION_TYPES,
     QUOTA_TRANSACTION_TYPES,
+    QUOTA_TRANSACTION_INPUT_TYPES,
     QUOTA_TYPES,
     SALMONELLA_RESULTS,
 )
@@ -240,7 +241,7 @@ def validate_quota_transaction(repo: "BaseRepository", record: dict) -> list[str
     quota = repo.get_quota_registration(quota_id) if quota_id else None
     if quota is None:
         errors.append("Quota Registration is required.")
-    if record.get("TRANSACTION_TYPE") not in QUOTA_TRANSACTION_TYPES:
+    if record.get("TRANSACTION_TYPE") not in QUOTA_TRANSACTION_INPUT_TYPES:
         errors.append("Transaction Type is required.")
     try:
         count = float(record.get('QUOTA_COUNT'))
