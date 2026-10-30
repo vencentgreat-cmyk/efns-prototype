@@ -2,6 +2,8 @@
 from decimal import Decimal, InvalidOperation
 import pandas as pd
 from data.producer_identity import text
+from data.quota_position import quota_position, load_rules
+from data.business_time import halifax_today
 
 
 def usage_numbers(known_total, missing, baseline=None, *, compatible_units=False):
@@ -16,7 +18,8 @@ def usage_numbers(known_total, missing, baseline=None, *, compatible_units=False
     return result
 
 
-def account_usage_context(repo, account_id):
+def account_usage_context(repo, account_id, *, rules=None, source_evidence=None, stock_by_type=None):
+    rules = load_rules() if rules is None else rules
     if not text(account_id):
         return dict(account_id=None,summaries=[],facility_details=pd.DataFrame(),reasons=['Missing Account identity; no global records were loaded.'],quotas=pd.DataFrame(),transaction_count=0,scope='Account-wide')
     flocks=repo.get_flocks(account_id=account_id).copy()
@@ -58,10 +61,22 @@ def account_usage_context(repo, account_id):
         known=[r['value'] for r in selected if r['value'] is not None]
         missing=len(selected)-len(known)
         total=sum(known,Decimal(0)) if known else (Decimal(0) if not selected else None)
+        evidence = (source_evidence or {}).get(kind, {})
+        position = quota_position(quotas, activity, account_id, kind, halifax_today(), rules, **evidence)
+        stock = (stock_by_type or {}).get(kind, {})
+        # Registered Bird Count totals are NOT a confirmed current stock input.
+        can_use = (rules.get('status') == 'CONFIRMED'
+                   and rules.get('flock_stock', {}).get('status') == 'CONFIRMED'
+                   and rules.get('units_compatible') is True and stock.get('verified') is True
+                   and not stock.get('reasons') and position['net_position'] is not None)
+        numbers = usage_numbers(stock.get('current_quantity') if can_use else None,
+                                0 if can_use else 1,
+                                position['net_position'] if can_use else None,
+                                compatible_units=can_use)
         summaries.append(dict(quota_type=kind,flock_count=len(selected),known_count=len(known),missing_count=missing,
             known_bird_count=total,registration_count=sum(text(q.get('QUOTA_TYPE'))==kind for q in quotas.to_dict('records')),
             status_counts=pd.Series([r['status'] for r in selected],dtype=object).value_counts().to_dict(),
-            **dict(usage_numbers(total,missing,baseline=None),current_occupancy=None)))
+            position=position, **numbers))
         for fid in sorted({r['facility_id'] for r in selected}):
             group=[r for r in selected if r['facility_id']==fid]; values=[r['value'] for r in group if r['value'] is not None]
             details.append({'Quota type':kind,'Facility ID':fid,'Facility':group[0]['facility'],'Flock records':len(group),
@@ -89,12 +104,18 @@ def render_account_usage(repo, account_id, *, quota_type=None):
         with st.container(border=True):
             st.write('Quota type:',row['quota_type'])
             columns=st.columns(4)
-            columns[0].metric('Current usable quota','Not established')
+            columns[0].metric('Current usable quota',str(row['applicable_quota']) if row['applicable_quota'] is not None else 'Not established')
             columns[1].metric('Recorded Bird Count total',str(row['known_bird_count']) if row['known_bird_count'] is not None else 'Unknown')
-            columns[2].metric('Current occupancy','Not established')
-            columns[3].metric('Usage percentage','计算依据待确认')
+            columns[2].metric('Current occupancy',str(row['current_occupancy']) if row['current_occupancy'] is not None else 'Not established')
+            columns[3].metric('Usage percentage',str(row['usage_percent'])+'%' if row['usage_percent'] is not None else 'Not established')
+            components = row['position']['components']
+            if components:
+                st.dataframe(pd.DataFrame([{'Transaction Type': k, 'Recorded component quantity (not a balance)': v}
+                                           for k, v in components.items()]), hide_index=True, width='stretch')
+            for reason in row['position']['reasons']:
+                st.caption(reason)
             st.caption(f"{row['flock_count']} unique Flocks; {row['known_count']} known / {row['missing_count']} missing or invalid Bird Count. Incomplete totals are not complete occupancy; even complete stored values do not prove current inventory. {row['registration_count']} registration record(s). Status breakdown: {row['status_counts']}")
-    st.caption('计算依据待确认：登记 Bird Count 不等于实时存栏，当前配额容量、单位及交易计算口径尚未确认。')
+    st.caption('Calculation basis pending confirmation. Registered Bird Count is not current inventory. RAW completeness/state, capacity, units, count-source priority and lifecycle rules require verified evidence.')
     with st.expander('Calculation basis and limitations'):
         st.info('These are two independent missing business definitions: current usable quota and current occupancy. Supplying a single capacity number is not sufficient to validate utilization. No quantity/unit field exists on the current Quota Registration. Registration dates/status are not capacity. Quota transaction direction, lease rules and units are not confirmed, so transactions are not added into a balance. Zero baselines would not divide; genuine over-capacity percentages would remain above 100%.')
     for reason in context['reasons']: st.warning(reason)

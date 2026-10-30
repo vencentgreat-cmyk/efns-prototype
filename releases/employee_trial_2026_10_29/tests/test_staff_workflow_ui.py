@@ -67,10 +67,10 @@ def test_employee_pages_save_cancel_and_refresh(chain,tmp_path,monkeypatch):
     app.session_state['_efns_record_5_Flocks_id']=flock
     app.switch_page('app/pages/5_Flocks.py').run()
     assert not app.exception and not app.error
-    assert any(m.label=='Usage percentage' and m.value=='计算依据待确认' for m in app.metric)
+    assert any(m.label=='Usage percentage' and m.value=='Not established' for m in app.metric)
     assert any(m.label=='Recorded Bird Count total' and m.value=='7' for m in app.metric)
     assert any('Account-wide' in c.value for c in app.caption)
-    assert any('计算依据待确认' in c.value for c in app.caption)
+    assert any('Calculation basis pending confirmation' in c.value for c in app.caption)
     # Salmonella actual page rejects missing required sample count, then saves.
     app.session_state['_efns_record_9_Salmonella_Tests_view']='new'
     app.switch_page('app/pages/9_Salmonella_Tests.py').run()

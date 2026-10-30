@@ -1,6 +1,6 @@
 # Published employee-trial source snapshot — 2026-10-29
 
-This standalone directory is the primary target for current-version review. Its 89 runtime files match the previously verified company deployment. Original authentication is preserved; this is not a disabled-seed sharing copy. The root working application is older unmerged development work and is retained without overwriting local edits.
+This standalone directory is the primary target for current-version review. Its baseline contains 89 runtime files captured from the previously verified company deployment. Local quota/flock evidence-gate changes are now present and are NOT deployed; see docs/quota_flock_review_20261029.md and QUOTA_FLOCK_PATCH_MANIFEST.json. Original authentication is preserved; this is not a disabled-seed sharing copy. The root working application is older unmerged development work and is retained without overwriting local edits.
 
 Start with ../../docs/CLAUDE_REVIEW_GUIDE.md. The SQL files are structural context and executable deployment/migration code, not instructions to run against any account. No private source documents, company execution manifests, original CSV/XLSX/API payloads, company query results, credentials or business-row fixtures are included.
 

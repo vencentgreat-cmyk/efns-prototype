@@ -305,6 +305,8 @@ def normalize_migration_row(
         rule_error = _rule_error(field, value, spec.get("numeric_rules", {}).get(field, {}))
         if rule_error:
             messages.append(rule_error)
+    if entity == 'QUOTA_TRANSACTION' and normalized.get('TRANSACTION_TYPE') in {'National Allocation', 'Provincial Allocation'}:
+        messages.append('National/Provincial Allocation is outside producer entitlement; retain RAW only, never import as QUOTA_TRANSACTION.')
     return normalized, messages
 
 
@@ -416,6 +418,8 @@ def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> Mig
         for offset, _raw in enumerate(parsed[entity], 2):
             key = (entity, offset)
             normalized = row_normalized[key]
+            if entity == 'QUOTA_TRANSACTION' and normalized.get('TRANSACTION_TYPE') in {'National Allocation', 'Provincial Allocation'}:
+                row_errors[key].append('National/Provincial Allocation is outside producer entitlement; retain RAW only, never import as QUOTA_TRANSACTION.')
             for target_field, rule in spec.get("derive_parent_fields", {}).items():
                 source_field, parent_entity, parent_key, parent_field = rule
                 source_id = normalized.get(source_field)

@@ -18,6 +18,7 @@ from data.constants import QUOTA_LEASE_TYPES, QUOTA_TRANSACTION_TYPES, QUOTA_TYP
 from data.repositories import get_repository
 from data.repositories.base import RepositoryError
 from data.validation import validate_quota_transaction
+from data.quota_position import component_table
 
 
 require_operational_page()
@@ -84,7 +85,10 @@ if view.name == "list":
     filters = st.columns(5)
     account_filter = filters[0].selectbox("Account", ["All", *account_options], key="quota_tx_filter_account")
     quota_type_filter = filters[1].selectbox("Quota Type", ["All", *QUOTA_TYPES], key="quota_tx_filter_quota_type")
-    transaction_type_filter = filters[2].selectbox("Transaction Type", ["All", *QUOTA_TRANSACTION_TYPES], key="quota_tx_filter_transaction_type")
+    type_choices = ['All', *sorted({stored_text(v) for v in all_transactions.get('TRANSACTION_TYPE', pd.Series(dtype=object)) if stored_text(v)})]
+    if st.session_state.get('quota_tx_filter_transaction_type') not in type_choices:
+        st.session_state.pop('quota_tx_filter_transaction_type', None)
+    transaction_type_filter = filters[2].selectbox("Transaction Type", type_choices, key="quota_tx_filter_transaction_type")
     date_from = filters[3].date_input("From", value=None, key="quota_tx_filter_from")
     date_to = filters[4].date_input("To", value=None, key="quota_tx_filter_to")
     display = repo.get_quota_transactions(
@@ -101,10 +105,9 @@ if view.name == "list":
         if keyword:
             columns = ["QUOTA_TRANSACTION_ID", "TRANSACTION_TYPE", "QUOTA_NAME", "OWNER_NAME", "RELATED_NAME"]
             display = display[display[columns].fillna("").astype(str).apply(lambda column: column.str.contains(keyword, case=False, regex=False)).any(axis=1)]
-    quantity = pd.to_numeric(display.get("QUOTA_COUNT", pd.Series(dtype=float)), errors="coerce").fillna(0).sum()
-    metrics = st.columns(2)
-    metrics[0].metric("Filtered transactions", f"{len(display):,}")
-    metrics[1].metric("Filtered quantity", f"{quantity:,.0f}")
+    st.metric("Filtered transactions", f"{len(display):,}")
+    st.caption('Recorded owner-row quantities by type, not an available quota balance. Related Account is a counterparty, not an entitlement owner. RAW inactive/missing-source coverage is not established here. Allocation totals are excluded.')
+    st.dataframe(component_table(display, account_options.get(account_filter)), hide_index=True, width='stretch')
     if display.empty:
         st.info("No Quota Transactions match the current filters.")
     else:
@@ -142,7 +145,7 @@ else:
                 left.markdown(f"**End Date**  \n{as_date(current.get('END_DATE'), '—')}")
                 middle.markdown(f"**Quota Count**  \n{float(current.get('QUOTA_COUNT') or 0):,.0f}")
                 middle.markdown(f"**Price**  \n${float(current.get('PRICE') or 0):,.2f}")
-                middle.markdown(f"**Lease Type**  \n{current.get('QUOTA_LEASE_TYPE') or '—'}")
+                middle.markdown(f"**Credit Type**  \n{current.get('QUOTA_LEASE_TYPE') or '—'}")
                 right.markdown(f"**Comments**  \n{current.get('COMMENTS') or 'No comments.'}")
                 st.info("This page shows transaction activity only. No available quota balance has been inferred.")
         with relationships:
@@ -192,7 +195,7 @@ else:
             related_transaction_label = right.selectbox("Related Transaction", list(transaction_options), index=option_index(list(transaction_options), label_for_id(transaction_options, current.get("RELATED_TRANSACTION_ID"), UNASSIGNED_LABEL)), key="quota_tx_form_related_transaction")
             price = right.text_input("Price",value=stored_text(current.get("PRICE")),key='quota_tx_form_price') if view.record_id else right.number_input("Price", min_value=0.0, value=float(current.get("PRICE") or 0), step=1.0, key="quota_tx_form_price")
             lease_options = ["Not applicable", *QUOTA_LEASE_TYPES]
-            lease_type = right.selectbox("Quota Lease Type", lease_options, index=option_index(lease_options, current.get("QUOTA_LEASE_TYPE") or "Not applicable"), key="quota_tx_form_lease")
+            lease_type = right.selectbox("Credit Type", lease_options, index=option_index(lease_options, current.get("QUOTA_LEASE_TYPE") or "Not applicable"), key="quota_tx_form_lease")
             comments = right.text_area("Comments", value=str(current.get("COMMENTS") or ""), key="quota_tx_form_comments")
         capture_form('quota_tx_form_',current,{'QUOTA_ID': ['quota_tx_form_quota'], 'OWNER_ACCOUNT_ID': ['quota_tx_form_quota'], 'TRANSACTION_TYPE': ['quota_tx_form_type'], 'EFFECTIVE_DATE': ['quota_tx_form_effective'], 'END_DATE': ['quota_tx_form_end'], 'QUOTA_COUNT': ['quota_tx_form_count'], 'RELATED_ACCOUNT_ID': ['quota_tx_form_related_account'], 'RELATED_QUOTA_ID': ['quota_tx_form_related_quota'], 'RELATED_TRANSACTION_ID': ['quota_tx_form_related_transaction'], 'PRICE': ['quota_tx_form_price'], 'QUOTA_LEASE_TYPE': ['quota_tx_form_lease'], 'COMMENTS': ['quota_tx_form_comments']})
         if view.record_id: st.text_input("Reason for correction *",key='quota_tx_form_revision_reason')

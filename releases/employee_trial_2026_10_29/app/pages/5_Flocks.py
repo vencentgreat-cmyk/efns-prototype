@@ -23,6 +23,8 @@ from data.validation import validate_flock
 from data.repositories.continuity import changed_attributes
 from data.producer_identity import text
 from app.services.quota_usage import render_quota_usage
+from data.flock_stock import flock_stock
+from data.quota_position import load_rules
 from data.repositories.snowflake import normalize_numeric_bind
 
 
@@ -107,6 +109,17 @@ else:
                 middle.markdown(f"**Placement Date**  \n{current.get('PLACEMENT_DATE') or '—'}")
                 known_count=current.get('BIRD_COUNT')
                 right.markdown(f"**Bird Count**  \n{int(known_count) if pd.notna(known_count) else 'Unknown'}")
+                observed = flock_stock(current, repo.get_flock_transactions(view.record_id), halifax_today(), load_rules())
+                if observed['latest_count_date'] in observed['count_conflict_dates']:
+                    right.warning('Latest Count: same-day source/quantity conflict; no observation selected.')
+                elif observed['latest_count_date']:
+                    right.markdown(f"**Latest Count observation**  \n{observed['latest_count_date']} · {observed['latest_count_quantity'] if observed['latest_count_quantity'] is not None else 'Unknown'}")
+                else:
+                    right.caption('Latest Count: not available.')
+                right.caption('Observation only; RAW inactive coverage and current inventory are not verified.')
+                if observed['latest_counts']:
+                    count_rows = pd.DataFrame(observed['latest_counts'])
+                    st.dataframe(count_rows[[c for c in ('FLOCK_TRANSACTION_ID', 'TRANSACTION_DATE', 'QUANTITY', 'COUNT_SOURCE_LABEL') if c in count_rows.columns]], hide_index=True, width='stretch')
                 right.markdown(f"**Egg Colour**  \n{current.get('EGG_COLOUR') or '—'}")
                 right.markdown(f"**Status**  \n{current.get('STATUS')}")
             render_quota_usage(repo, current)
