@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import math
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -13,6 +14,39 @@ from data.constants import (
     QUOTA_TYPES,
     SALMONELLA_RESULTS,
 )
+
+
+def normalize_optional_account_links(record: dict) -> dict:
+    """Normalize explicit null placeholders; never invent a missing parent ID."""
+    result = dict(record)
+    for field in ("PARENT_ACCOUNT_ID", "GRADING_STATION_ACCOUNT_ID", "PULLET_GROWER_ACCOUNT_ID"):
+        if field not in result:
+            continue
+        value = result[field]
+        if value is None or pd.isna(value) or (
+            isinstance(value, str) and value.strip().lower() in {"", "none", "null"}
+        ):
+            result[field] = None
+    return result
+
+
+def parse_optional_coordinate(value, field: str) -> float | None:
+    """Keep unknown coordinates null and accept finite coordinates, including zero."""
+    limit = {"LATITUDE": 90, "LONGITUDE": 180}[field]
+    label = field.title()
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    try:
+        if isinstance(value, bool):
+            raise ValueError
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be a number or left blank.") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"{label} must be a finite number.")
+    if not -limit <= number <= limit:
+        raise ValueError(f"{label} must be between -{limit} and {limit}.")
+    return number
 
 
 def validate_farm_location(repo, record: dict) -> list[str]:
@@ -98,6 +132,8 @@ def validate_flock(repo: "BaseRepository", record: dict) -> list[str]:
 
     account_id = record.get("ACCOUNT_ID")
     facility_id = record.get("FACILITY_ID")
+    if account_id and repo.get_account(account_id) is None:
+        errors.append('Account does not exist.')
     if account_id and facility_id:
         facilities = repo.get_facilities(account_id=account_id)
         if facilities.empty or facility_id not in set(facilities["FACILITY_ID"]):

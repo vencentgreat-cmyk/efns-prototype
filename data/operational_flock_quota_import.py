@@ -116,6 +116,7 @@ class OperationalRow:
     messages: list[str]
     raw_data: dict[str, Any]
     write_record: dict[str, Any] | None = None
+    source_file_hash: str | None = None
 
 
 @dataclass
@@ -154,9 +155,13 @@ class OperationalReport:
                 "SOURCE_ROW_NUMBER": row.row_number,
                 "RAW_DATA": {
                     "source_filename": row.filename,
+                    "source_file_hash": row.source_file_hash,
                     "source_entity": row.entity,
                     "values": row.raw_data,
+                    "normalized_write_record": row.write_record,
                 },
+                "TARGET_ENTITY": row.entity if row.write_record else None,
+                "TARGET_ID": row.write_record.get({"FLOCK":"FLOCK_ID","QUOTA_REGISTRATION":"QUOTA_ID","FLOCK_TRANSACTION":"FLOCK_TRANSACTION_ID","QUOTA_TRANSACTION":"QUOTA_TRANSACTION_ID"}[row.entity]) if row.write_record else None,
                 "VALIDATION_STATUS": row.status.upper(),
                 "MATCH_STATUS": row.action or "UNRESOLVED",
                 "VALIDATION_MESSAGES": row.messages,
@@ -203,8 +208,8 @@ def _key(value: Any) -> str:
 
 
 def _mapping() -> dict[str, Any]:
-    path = Path(__file__).resolve().parents[1] / "config" / "eims_migration_mapping_v3.json"
-    return json.loads(path.read_text(encoding="utf-8"))
+    from data.migration import load_mapping
+    return load_mapping()
 
 
 def _aliases(entity: str, contract: dict[str, Any]) -> dict[str, str]:
@@ -532,7 +537,12 @@ def analyze_operational_files(
             fingerprints.append(f"{content_hash}:TOO_LARGE")
             files.append(OperationalFile(filename, None, 0, [], pd.DataFrame(), content_hash, len(content), ["The file exceeds the configured upload limit."]))
             continue
-        frame = _read_file(filename, content)
+        try:
+            frame = _read_file(filename, content)
+        except OperationalImportError:
+            files.append(OperationalFile(filename,None,0,[],pd.DataFrame(),content_hash,len(content),["File could not be parsed; original bytes must be retained for review."]))
+            fingerprints.append(f"{content_hash}:PARSE_FAILED")
+            continue
         original_columns = [str(value) for value in frame.columns]
         normalized = [_header(value) for value in original_columns]
         duplicate_headers = sorted(name for name, count in Counter(normalized).items() if name and count > 1)
@@ -549,18 +559,20 @@ def analyze_operational_files(
         ))
         if entity and not errors:
             for index, row in frame.iterrows():
-                pending.append((filename, entity, int(index) + 2, {str(k): v for k, v in row.to_dict().items()}))
+                pending.append((filename, entity, int(index) + 2, {str(k): v for k, v in row.to_dict().items()}, digest))
         elif errors:
             for index, row in frame.iterrows():
                 invalid_rows.append(OperationalRow(
                     filename, int(index) + 2, unsupported_entity or entity or "UNKNOWN", "", None,
                     "Unsupported" if unsupported_entity else "Rejected", list(errors),
-                    {str(k): v for k, v in row.to_dict().items()}, None,
+                    {str(k): v for k, v in row.to_dict().items()}, None, digest,
                 ))
     package_hash = hashlib.sha256("|".join(sorted(fingerprints)).encode("utf-8")).hexdigest()
     seen: Counter = Counter()
-    rows = [
-        _validate_row(entity, raw, filename, row_number, contract, frames, seen)
-        for filename, entity, row_number, raw in pending
-    ] + invalid_rows
+    rows = []
+    for filename, entity, row_number, raw, digest in pending:
+        row = _validate_row(entity, raw, filename, row_number, contract, frames, seen)
+        row.source_file_hash = digest
+        rows.append(row)
+    rows += invalid_rows
     return OperationalReport(files, rows, package_hash)

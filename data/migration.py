@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 import hashlib
 import io
 import json
+import copy
 from pathlib import Path
 import re
 from typing import Iterable
@@ -20,10 +21,10 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping_v3.json"
+DEFAULT_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping_v3_disposal_r1.json"
 V1_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping_v1.json"
 V2_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping_v2.json"
-V3_MAPPING_PATH = DEFAULT_MAPPING_PATH
+V3_MAPPING_PATH = ROOT / "config" / "eims_migration_mapping_v3.json"
 SYNTHETIC_PREFIXES = ("DEV_MIGRATION_", "DEV_SYNTH_")
 WORKFLOW_STATUSES = (
     "UPLOADED", "PARSED", "VALIDATED", "READY", "COMMITTED",
@@ -61,12 +62,33 @@ class MigrationAnalysis:
 
 
 def load_mapping(path: Path = DEFAULT_MAPPING_PATH) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    contract = json.loads(path.read_text(encoding="utf-8"))
+    if contract.get("extends"):
+        if contract["extends"] != "EFNS-EIMS-DATAVERSE-3":
+            raise ValueError("Unknown base migration contract.")
+        base = load_mapping(V3_MAPPING_PATH)
+        for entity, fields in contract["field_map_overrides"].items():
+            base["entities"][entity]["field_map"].update(fields)
+        base.update({k: v for k, v in contract.items() if k != "field_map_overrides"})
+        return base
+    return contract
+
+
+def correction_mapping(contract: dict) -> dict:
+    """Explicit new-write interpretation; original batch contract stays immutable."""
+    if contract.get("schema_version") != "EFNS-EIMS-DATAVERSE-3":
+        return copy.deepcopy(contract)
+    result = copy.deepcopy(contract)
+    revised = load_mapping()
+    for field in ("EST_DISPOSAL", "DISPOSAL_DATE"):
+        result["entities"]["FLOCK"]["field_map"][field] = revised["entities"]["FLOCK"]["field_map"][field]
+    result["schema_version"] = revised["schema_version"]
+    return result
 
 
 def load_mapping_for_version(schema_version: str | None) -> dict:
     """Resolve the explicit migration contract without ambiguous file sets."""
-    for path in (V3_MAPPING_PATH, V2_MAPPING_PATH, V1_MAPPING_PATH):
+    for path in (DEFAULT_MAPPING_PATH, V3_MAPPING_PATH, V2_MAPPING_PATH, V1_MAPPING_PATH):
         contract = load_mapping(path)
         if schema_version == contract["schema_version"]:
             return contract
@@ -190,6 +212,28 @@ def _field_types(spec: dict) -> dict[str, str]:
     return spec["fields"]
 
 
+def parse_reporting_period(value) -> tuple[int, int] | None:
+    """Parse EIMS YYYYWW or legacy CYYWW production-week codes."""
+    if _missing(value):
+        return None
+    text = str(value).strip()
+    if re.fullmatch(r"\d{6}", text):
+        return int(text[:4]), int(text[4:])
+    if re.fullmatch(r"[12]\d{4}", text):
+        century = 1900 if text[0] == "1" else 2000
+        return century + int(text[1:3]), int(text[3:])
+    return None
+
+
+def normalize_production_period_fields(record: dict) -> dict:
+    """Derive target period fields while retaining the source week code."""
+    normalized = dict(record)
+    period = parse_reporting_period(normalized.get("SOURCE_WEEK_CODE"))
+    if period is not None:
+        normalized["REPORTING_YEAR"], normalized["REPORTING_WEEK"] = period
+    return normalized
+
+
 def _source_value(raw: dict, spec: dict, field: str, source_row: int):
     if field in spec.get("constants", {}):
         return spec["constants"][field]
@@ -205,9 +249,9 @@ def _source_value(raw: dict, spec: dict, field: str, source_row: int):
     value = raw.get(str(source_field).upper())
     period_part = spec.get("period_fields", {}).get(field)
     if period_part and not _missing(value):
-        text = str(value).strip()
-        if re.fullmatch(r"\d{6}", text):
-            return text[:4] if period_part == "year" else text[4:]
+        period = parse_reporting_period(value)
+        if period is not None:
+            return period[0] if period_part == "year" else period[1]
     return value
 
 
@@ -232,11 +276,37 @@ def _rule_error(field: str, value, rule: dict) -> str | None:
     return None
 
 
+def normalize_migration_row(
+    entity: str,
+    raw_data: dict,
+    source_row: int,
+    mapping: dict | None = None,
+) -> tuple[dict, list[str]]:
+    """Normalize one preserved RAW row without changing its stored lineage."""
+    contract = mapping or load_mapping()
+    spec = contract["entities"][entity]
+    raw = {str(key).upper(): value for key, value in dict(raw_data or {}).items()}
+    normalized: dict[str, object] = {}
+    messages: list[str] = []
+    for field, kind in _field_types(spec).items():
+        value, error = _convert(_source_value(raw, spec, field, source_row), kind, field)
+        normalized[field] = value
+        if error:
+            messages.append(error)
+        choices = spec.get("choices", {}).get(field)
+        if value is not None and choices and value not in choices:
+            messages.append(f"{field} contains an unknown choice value.")
+        rule_error = _rule_error(field, value, spec.get("numeric_rules", {}).get(field, {}))
+        if rule_error:
+            messages.append(rule_error)
+    return normalized, messages
+
+
 def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> MigrationAnalysis:
     sources = [_source_file(value) for value in files]
     if mapping is None:
         supplied = {source.name for source in sources}
-        contracts = [load_mapping(path) for path in (V3_MAPPING_PATH, V2_MAPPING_PATH, V1_MAPPING_PATH)]
+        contracts = [load_mapping(path) for path in (DEFAULT_MAPPING_PATH, V2_MAPPING_PATH, V1_MAPPING_PATH)]
         contract = next(
             (candidate for candidate in contracts if supplied == set(expected_filenames(candidate))),
             load_mapping(),
@@ -373,7 +443,7 @@ def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> Mig
                     row_errors[key].append("FACILITY_DETAIL_ID does not belong to FACILITY_ID.")
                 if quota and quota.get("ACCOUNT_ID") != normalized.get("ACCOUNT_ID"):
                     row_errors[key].append("QUOTA_ID does not belong to ACCOUNT_ID.")
-            if entity == "SALMONELLA_TEST" and not row_errors[key]:
+            if entity == "SALMONELLA_TEST" and not spec.get("allow_account_mismatch") and not row_errors[key]:
                 flock = normalized_indexes.get("FLOCK", {}).get(str(normalized.get("FLOCK_ID")))
                 if flock and flock.get("ACCOUNT_ID") != normalized.get("ACCOUNT_ID"):
                     row_errors[key].append("FLOCK_ID does not belong to ACCOUNT_ID.")

@@ -6,14 +6,21 @@
 from __future__ import annotations
 
 import datetime as dt
+import copy
 import uuid
 from typing import Optional
 
 import pandas as pd
 
-from data.repositories.base import BaseRepository, ConcurrencyError
+from data.repositories.base import BaseRepository, ConcurrencyError, RepositoryError, migration_commit_failure_details
 from data.synthetic import generate_all
+from data.repositories.continuity import ContinuityRepository
+from data.repositories.correction_review import CorrectionReviewRepository
+from data.repositories.flock_supplement import FlockSupplementRepository
+from data.repositories.flock_date_repair import FlockDateRepairRepository
 from data.validation import (
+    normalize_optional_account_links,
+    parse_optional_coordinate,
     normalize_flock_dates,
     validate_farm_location,
     validate_flock,
@@ -38,7 +45,7 @@ def _stamp(value) -> Optional[str]:
         return str(value)
 
 
-class MockRepository(BaseRepository):
+class MockRepository(FlockDateRepairRepository, FlockSupplementRepository, CorrectionReviewRepository, ContinuityRepository, BaseRepository):
     """
     In-memory data store for prototyping without Snowflake.
 
@@ -46,6 +53,7 @@ class MockRepository(BaseRepository):
     """
 
     def __init__(self, seed: int = 42):
+        self._init_continuity()
         data = generate_all(seed=seed)
         self._accounts = data["accounts"].copy()
         self._contacts = pd.DataFrame(columns=["CONTACT_ID", "ACCOUNT_ID", "FULL_NAME", "STATUS"])
@@ -54,6 +62,7 @@ class MockRepository(BaseRepository):
         self._facility_details = data["facility_details"].copy()
         self._flocks = data["flocks"].copy()
         self._flock_transactions = data["flock_transactions"].copy()
+        self._flock_transactions["COUNT_SOURCE_LABEL"] = None
         self._quota_registrations = data["quota_registrations"].copy()
         self._quota_transactions = data["quota_transactions"].copy()
         self._quota_allocations = pd.DataFrame(columns=["QUOTA_ALLOCATION_ID", "QUOTA_TYPE", "PROVINCE", "STATUS"])
@@ -70,6 +79,10 @@ class MockRepository(BaseRepository):
         self._migration_id_map: list[dict] = []
         self._migration_errors: list[dict] = []
         self._migration_reconciliation: list[dict] = []
+        self._migration_correction_batches: list[dict] = []
+        self._migration_correction_rows: list[dict] = []
+        self._migration_correction_decisions: list[dict] = []
+        self._migration_review_audit: list[dict] = []
         # Link production to a synthetic import batch
         self._ensure_default_batch()
 
@@ -163,7 +176,10 @@ class MockRepository(BaseRepository):
         return self._accounts[matches].copy()
 
     def upsert_account(self, record: dict) -> str:
-        record = dict(record)
+        record = normalize_optional_account_links(record)
+        for field in ("LATITUDE", "LONGITUDE"):
+            if field in record:
+                record[field] = parse_optional_coordinate(record[field], field)
         aid = record.get("ACCOUNT_ID") or str(uuid.uuid4())
         registration = str(record.get("REGISTRATION_NUMBER") or "").strip()
         if registration:
@@ -273,9 +289,12 @@ class MockRepository(BaseRepository):
         return df
 
     def upsert_facility(self, record: dict) -> str:
-        return self._upsert_frame("_facilities", "FACILITY_ID", record)
+        with self._continuity_transaction():
+            self.check_facility_ownership(record)
+            return self._upsert_frame("_facilities", "FACILITY_ID", record)
 
     def delete_facility(self, facility_id: str) -> bool:
+        self.check_facility_history(facility_id)
         if not self.get_flocks(facility_id=facility_id).empty or not self.get_facility_details(facility_id).empty:
             raise ValueError("Facility cannot be deleted while related records exist.")
         before = len(self._facilities)
@@ -340,13 +359,17 @@ class MockRepository(BaseRepository):
         return match.iloc[0].to_dict() if len(match) else None
 
     def upsert_flock(self, record: dict) -> str:
-        record = normalize_flock_dates(record)
-        errors = validate_flock(self, record)
-        if errors:
-            raise ValueError(" ".join(errors))
-        return self._upsert_frame("_flocks", "FLOCK_ID", record)
+        with self._continuity_transaction():
+            record = normalize_flock_dates(record)
+            self.check_flock_reference_change(record)
+            errors = validate_flock(self, record)
+            if errors:
+                raise ValueError(" ".join(errors))
+            return self._upsert_frame("_flocks", "FLOCK_ID", record)
 
     def delete_flock(self, flock_id: str) -> bool:
+        if not self.get_flock_events(flock_id).empty:
+            raise RepositoryError("Flock cannot be deleted while business history exists.")
         production = self._production
         has_production = "FLOCK_ID" in production and bool((production["FLOCK_ID"] == flock_id).any())
         if (
@@ -779,12 +802,15 @@ class MockRepository(BaseRepository):
     ) -> dict:
         """Commit accepted operational rows with full in-memory rollback."""
         file_hash = batch.get("FILE_HASH")
-        if file_hash and self.find_import_by_hash(file_hash):
+        prepared = batch.get("_PREPARED_IMPORT_ID")
+        duplicate = self.find_import_by_hash(file_hash) if file_hash else None
+        if duplicate and not (prepared == duplicate["IMPORT_ID"] and duplicate["STATUS"] == "Staged"):
             raise ValueError("This exact upload has already been imported.")
         snapshots = (
             self._quota_registrations.copy(deep=True), self._flocks.copy(deep=True),
             self._flock_transactions.copy(deep=True), self._quota_transactions.copy(deep=True),
             [dict(item) for item in self._import_batches], [dict(item) for item in self._raw_rows],
+            copy.deepcopy(self._continuity_rows),
         )
         frames = {
             "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
@@ -833,7 +859,10 @@ class MockRepository(BaseRepository):
                             quota = self.get_quota_registration(quota_id)
                             if quota is None or str(quota.get("ACCOUNT_ID")) != str(record.get("ACCOUNT_ID")):
                                 raise ValueError("Quota Registration no longer belongs to the selected Account.")
+                        before_flock = self.get_flock(entity_id) if action == 'UPDATE' else None
                         self.upsert_flock(record)
+                        if before_flock is not None:
+                            self.append_operational_flock_revision(None,batch,before_flock,self.get_flock(entity_id))
                     elif entity == "FLOCK_TRANSACTION":
                         if self.get_flock(record.get("FLOCK_ID")) is None:
                             raise ValueError("Flock no longer exists.")
@@ -855,12 +884,14 @@ class MockRepository(BaseRepository):
                     updated_count += int(action == "UPDATE")
 
             total_count = sum(counts.values())
-            import_id = self.create_import_batch({
-                **batch, "SOURCE": "Daily Flock & Quota Import",
-                "SOURCE_RECORD_COUNT": len(raw_rows), "ROW_COUNT": total_count,
-                "ERROR_COUNT": len(raw_rows) - total_count, "STATUS": "Committed",
-            })
-            self.insert_raw_rows(import_id, raw_rows)
+            values = {**batch,"SOURCE":"Daily Flock & Quota Import","SOURCE_RECORD_COUNT":len(raw_rows),"ROW_COUNT":total_count,"ERROR_COUNT":len(raw_rows)-total_count,"STATUS":"Committed"}
+            if prepared:
+                import_id=prepared
+                for stored in self._import_batches:
+                    if stored["IMPORT_ID"]==import_id: stored.update({key:value for key,value in values.items() if not key.startswith('_')})
+            else:
+                import_id=self.create_import_batch(values)
+                self.insert_raw_rows(import_id,raw_rows)
             return {
                 "import_id": import_id, "file_hash": file_hash, "filename": batch.get("FILENAME"),
                 "total_count": total_count, "created_count": created_count,
@@ -871,6 +902,7 @@ class MockRepository(BaseRepository):
             (
                 self._quota_registrations, self._flocks, self._flock_transactions,
                 self._quota_transactions, self._import_batches, self._raw_rows,
+                self._continuity_rows,
             ) = snapshots
             raise
 
@@ -904,18 +936,41 @@ class MockRepository(BaseRepository):
             if row["MIGRATION_BATCH_ID"] == batch_id
         ])
 
+    def get_migration_commit_errors(self, batch_id: str) -> pd.DataFrame:
+        columns = ["CREATED_AT", "SOURCE_ENTITY", "FIELD_NAME", "ERROR_MESSAGE"]
+        rows = [
+            {column: row.get(column) for column in columns}
+            for row in self._migration_errors
+            if row["MIGRATION_BATCH_ID"] == batch_id
+            and row.get("ERROR_CATEGORY") == "COMMIT"
+        ]
+        return pd.DataFrame(rows, columns=columns).sort_values(
+            "CREATED_AT", ascending=False, ignore_index=True
+        ) if rows else pd.DataFrame(columns=columns)
+
     def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:
         from data.migration import migration_stage_path
         del content
         return migration_stage_path(batch_id, filename)
 
     def prepare_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:
+        from data.migration_identity import scoped_raw_rows
+        raw_rows = scoped_raw_rows(batch["MIGRATION_BATCH_ID"], raw_rows, allow_unassigned=True)
         package_hash = batch.get("PACKAGE_HASH")
         if package_hash and self.find_migration_by_hash(package_hash):
             raise ValueError("This exact migration package has already been prepared.")
         batch_id = batch["MIGRATION_BATCH_ID"]
         now = dt.datetime.now(dt.timezone.utc)
-        stored = {**batch, "STATUS": batch.get("STATUS", "READY"), "CREATED_AT": now, "UPDATED_AT": now}
+        stored = {
+            **batch,
+            "STATUS": batch.get("STATUS", "READY"),
+            "SOURCE_FILE_COUNT": len(files),
+            "SOURCE_ROW_COUNT": len(raw_rows),
+            "READY_ROW_COUNT": sum(row.get("VALIDATION_STATUS") == "READY" for row in raw_rows),
+            "REJECTED_ROW_COUNT": sum(row.get("VALIDATION_STATUS") == "REJECTED" for row in raw_rows),
+            "CREATED_AT": now,
+            "UPDATED_AT": now,
+        }
         self._migration_batches.append(stored)
         for file in files:
             self._migration_files.append({**{k: v for k, v in file.items() if k != "CONTENT"}, "MIGRATION_BATCH_ID": batch_id})
@@ -926,6 +981,7 @@ class MockRepository(BaseRepository):
                 self._migration_id_map.append({
                     "MIGRATION_BATCH_ID": batch_id, "SOURCE_ENTITY": item["SOURCE_ENTITY"],
                     "SOURCE_ID": item.get("SOURCE_ID"), "TARGET_ID": item["TARGET_ID"], "STATUS": "READY",
+                    "MIGRATION_RAW_ROW_ID": item["MIGRATION_RAW_ROW_ID"],
                 })
             for message in item.get("VALIDATION_MESSAGES", []):
                 self._migration_errors.append({
@@ -948,12 +1004,246 @@ class MockRepository(BaseRepository):
             })
         return batch_id
 
+    def get_migration_retry_status(self, batch_id: str) -> dict:
+        from data.migration import load_mapping_for_version
+
+        batch = next((row for row in self._migration_batches if row["MIGRATION_BATCH_ID"] == batch_id), None)
+        if not batch:
+            return {
+                "batch_id": batch_id, "status": "MISSING", "complete": False,
+                "retryable": False, "issues": ["Migration batch was not found."],
+                "missing_files": [],
+            }
+        contract = load_mapping_for_version(batch.get("SCHEMA_VERSION"))
+        expected_files = {
+            spec["filename"]: entity for entity, spec in contract["entities"].items()
+        }
+        files = [row for row in self._migration_files if row["MIGRATION_BATCH_ID"] == batch_id]
+        raw_rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id]
+        reconciliation = [
+            row for row in self._migration_reconciliation if row["MIGRATION_BATCH_ID"] == batch_id
+        ]
+        maps = [row for row in self._migration_id_map if row["MIGRATION_BATCH_ID"] == batch_id]
+        errors = [row for row in self._migration_errors if row["MIGRATION_BATCH_ID"] == batch_id]
+        issues: list[str] = []
+        file_names = [row.get("SOURCE_FILENAME") for row in files]
+        missing_files = sorted(set(expected_files) - set(file_names))
+        unexpected_files = sorted(set(file_names) - set(expected_files))
+        if missing_files:
+            issues.append("Missing migration files: " + ", ".join(missing_files) + ".")
+        if unexpected_files:
+            issues.append("Unexpected migration files: " + ", ".join(unexpected_files) + ".")
+        if len(file_names) != len(set(file_names)):
+            issues.append("Duplicate migration file metadata is present.")
+
+        ready_rows = sum(row.get("VALIDATION_STATUS") == "READY" for row in raw_rows)
+        rejected_rows = sum(row.get("VALIDATION_STATUS") == "REJECTED" for row in raw_rows)
+        expected_totals = {
+            "SOURCE_ROW_COUNT": len(raw_rows),
+            "READY_ROW_COUNT": ready_rows,
+            "REJECTED_ROW_COUNT": rejected_rows,
+        }
+        for field, actual in expected_totals.items():
+            if int(batch.get(field) or 0) != actual:
+                issues.append(f"{field} does not match the saved RAW rows.")
+        if int(batch.get("SOURCE_FILE_COUNT") or 0) != len(expected_files):
+            issues.append("SOURCE_FILE_COUNT does not match the migration contract.")
+
+        reconciliation_by_entity = {row.get("SOURCE_ENTITY"): row for row in reconciliation}
+        for entity, spec in contract["entities"].items():
+            entity_rows = [row for row in raw_rows if row.get("SOURCE_ENTITY") == entity]
+            expected = (
+                len(entity_rows),
+                sum(row.get("VALIDATION_STATUS") == "READY" for row in entity_rows),
+                sum(row.get("VALIDATION_STATUS") == "REJECTED" for row in entity_rows),
+            )
+            file_matches = [row for row in files if row.get("SOURCE_FILENAME") == spec["filename"]]
+            if file_matches and (
+                file_matches[0].get("SOURCE_ENTITY") != entity
+                or int(file_matches[0].get("SOURCE_ROW_COUNT") or 0) != expected[0]
+            ):
+                issues.append(f"{spec['filename']} metadata does not match its RAW rows.")
+            saved = reconciliation_by_entity.get(entity)
+            if not saved:
+                issues.append(f"Missing reconciliation for {entity}.")
+            elif tuple(int(saved.get(field) or 0) for field in ("SOURCE_ROWS", "READY_ROWS", "REJECTED_ROWS")) != expected:
+                issues.append(f"Reconciliation does not match RAW rows for {entity}.")
+
+        expected_map_pairs = {
+            (str(row.get("MIGRATION_RAW_ROW_ID")), str(row.get("SOURCE_ENTITY")), str(row.get("SOURCE_ID")), str(row.get("TARGET_ID")))
+            for row in raw_rows
+            if row.get("VALIDATION_STATUS") == "READY" and row.get("TARGET_ID") is not None
+        }
+        actual_map_pairs = {
+            (str(row.get("MIGRATION_RAW_ROW_ID")), str(row.get("SOURCE_ENTITY")), str(row.get("SOURCE_ID")), str(row.get("TARGET_ID")))
+            for row in maps
+        }
+        if expected_map_pairs - actual_map_pairs:
+            issues.append("One or more Ready RAW rows are missing ID mappings.")
+        if actual_map_pairs - expected_map_pairs:
+            issues.append("One or more ID mappings do not match the saved RAW rows.")
+        rejected_keys = {
+            (row.get("SOURCE_FILENAME"), row.get("SOURCE_ENTITY"), row.get("SOURCE_ROW_NUMBER"))
+            for row in raw_rows if row.get("VALIDATION_STATUS") == "REJECTED"
+        }
+        error_keys = {
+            (row.get("SOURCE_FILENAME"), row.get("SOURCE_ENTITY"), row.get("SOURCE_ROW_NUMBER"))
+            for row in errors
+        }
+        if rejected_keys - error_keys:
+            issues.append("One or more rejected RAW rows are missing error details.")
+
+        status = str(batch.get("STATUS") or "").upper()
+        complete = not issues
+        return {
+            "batch_id": batch_id,
+            "status": status,
+            "complete": complete,
+            "retryable": status == "FAILED" and complete,
+            "issues": issues,
+            "missing_files": missing_files,
+            "source_rows": len(raw_rows),
+            "ready_rows": ready_rows,
+            "rejected_rows": rejected_rows,
+        }
+
+    def repair_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:
+        from data.migration_identity import scoped_raw_rows
+        raw_rows = scoped_raw_rows(batch["MIGRATION_BATCH_ID"], raw_rows, allow_unassigned=True)
+        batch_id = batch["MIGRATION_BATCH_ID"]
+        stored = next((row for row in self._migration_batches if row["MIGRATION_BATCH_ID"] == batch_id), None)
+        if not stored:
+            raise ValueError("Migration batch was not found.")
+        if str(stored.get("STATUS", "")).upper() != "FAILED":
+            raise ValueError("Only a failed migration batch can be repaired for retry.")
+        if stored.get("PACKAGE_HASH") != batch.get("PACKAGE_HASH") or stored.get("SCHEMA_VERSION") != batch.get("SCHEMA_VERSION"):
+            raise ValueError("The uploaded package does not match the failed migration batch.")
+
+        from data.migration import load_mapping_for_version
+        contract = load_mapping_for_version(stored.get("SCHEMA_VERSION"))
+        expected_names = {spec["filename"] for spec in contract["entities"].values()}
+        supplied_names = {row["SOURCE_FILENAME"] for row in files}
+        if supplied_names != expected_names:
+            raise ValueError("Repair requires the same complete historical migration package.")
+
+        snapshots = {
+            name: [dict(row) for row in getattr(self, name)]
+            for name in (
+                "_migration_files", "_migration_raw_rows", "_migration_id_map",
+                "_migration_errors", "_migration_reconciliation",
+            )
+        }
+        batch_snapshot = dict(stored)
+        try:
+            existing_files = {
+                row["SOURCE_FILENAME"]: row for row in self._migration_files
+                if row["MIGRATION_BATCH_ID"] == batch_id
+            }
+            for row in files:
+                current = existing_files.get(row["SOURCE_FILENAME"])
+                if current and any(current.get(field) != row.get(field) for field in ("SOURCE_ENTITY", "FILE_HASH", "SOURCE_ROW_COUNT")):
+                    raise ValueError(f"Saved metadata conflicts with {row['SOURCE_FILENAME']}.")
+                if not current:
+                    self._migration_files.append({
+                        **{key: value for key, value in row.items() if key != "CONTENT"},
+                        "MIGRATION_BATCH_ID": batch_id,
+                    })
+
+            existing_raw = {
+                row["MIGRATION_RAW_ROW_ID"]: row for row in self._migration_raw_rows
+                if row["MIGRATION_BATCH_ID"] == batch_id
+            }
+            now = dt.datetime.now(dt.timezone.utc)
+            for row in raw_rows:
+                current = existing_raw.get(row["MIGRATION_RAW_ROW_ID"])
+                compare_fields = (
+                    "SOURCE_FILENAME", "SOURCE_ENTITY", "SOURCE_ROW_NUMBER", "SOURCE_ID",
+                    "TARGET_ID", "VALIDATION_STATUS", "MATCH_STATUS", "RAW_DATA",
+                    "NORMALIZED_DATA", "VALIDATION_MESSAGES",
+                )
+                if current and any(current.get(field) != row.get(field) for field in compare_fields):
+                    raise ValueError("Saved RAW data conflicts with the uploaded migration package.")
+                if not current:
+                    self._migration_raw_rows.append({
+                        **row, "MIGRATION_BATCH_ID": batch_id,
+                        "CREATED_AT": now, "UPDATED_AT": now,
+                    })
+
+            existing_pairs = {
+                str(row["MIGRATION_RAW_ROW_ID"])
+                for row in self._migration_id_map if row["MIGRATION_BATCH_ID"] == batch_id
+            }
+            for row in raw_rows:
+                if row.get("VALIDATION_STATUS") != "READY" or row.get("TARGET_ID") is None:
+                    continue
+                pair = str(row["MIGRATION_RAW_ROW_ID"])
+                if pair not in existing_pairs:
+                    self._migration_id_map.append({
+                        "MIGRATION_BATCH_ID": batch_id, "SOURCE_ENTITY": row["SOURCE_ENTITY"],
+                        "SOURCE_ID": row.get("SOURCE_ID"), "TARGET_ID": row["TARGET_ID"],
+                        "STATUS": "READY",
+                        "MIGRATION_RAW_ROW_ID": row["MIGRATION_RAW_ROW_ID"],
+                    })
+                    existing_pairs.add(pair)
+
+            existing_errors = {
+                (row.get("SOURCE_FILENAME"), row.get("SOURCE_ENTITY"), row.get("SOURCE_ROW_NUMBER"), row.get("ERROR_MESSAGE"))
+                for row in self._migration_errors if row["MIGRATION_BATCH_ID"] == batch_id
+            }
+            for row in raw_rows:
+                for message in row.get("VALIDATION_MESSAGES", []):
+                    key = (row["SOURCE_FILENAME"], row["SOURCE_ENTITY"], row["SOURCE_ROW_NUMBER"], str(message))
+                    if key not in existing_errors:
+                        self._migration_errors.append({
+                            "MIGRATION_BATCH_ID": batch_id, "SOURCE_FILENAME": row["SOURCE_FILENAME"],
+                            "SOURCE_ENTITY": row["SOURCE_ENTITY"], "SOURCE_ROW_NUMBER": row["SOURCE_ROW_NUMBER"],
+                            "FIELD_NAME": str(message).split(" ", 1)[0].rstrip("."),
+                            "ERROR_MESSAGE": str(message),
+                        })
+                        existing_errors.add(key)
+
+            reconciliation_by_entity = {
+                row["SOURCE_ENTITY"]: row for row in self._migration_reconciliation
+                if row["MIGRATION_BATCH_ID"] == batch_id
+            }
+            for entity in contract["entity_order"]:
+                entity_rows = [row for row in raw_rows if row["SOURCE_ENTITY"] == entity]
+                values = {
+                    "SOURCE_ROWS": len(entity_rows),
+                    "READY_ROWS": sum(row["VALIDATION_STATUS"] == "READY" for row in entity_rows),
+                    "REJECTED_ROWS": sum(row["VALIDATION_STATUS"] == "REJECTED" for row in entity_rows),
+                }
+                current = reconciliation_by_entity.get(entity)
+                if current:
+                    current.update(values)
+                else:
+                    self._migration_reconciliation.append({
+                        "MIGRATION_BATCH_ID": batch_id, "SOURCE_ENTITY": entity,
+                        **values, "INSERTED_ROWS": 0,
+                    })
+            stored["UPDATED_AT"] = now
+            status = self.get_migration_retry_status(batch_id)
+            if not status["complete"]:
+                raise ValueError("The failed migration batch is still incomplete: " + " ".join(status["issues"]))
+        except Exception:
+            for name, values in snapshots.items():
+                setattr(self, name, values)
+            stored.clear()
+            stored.update(batch_snapshot)
+            raise
+        return batch_id
+
     def commit_migration_batch(self, batch_id: str) -> dict:
         batch = next((row for row in self._migration_batches if row["MIGRATION_BATCH_ID"] == batch_id), None)
         if not batch:
             raise ValueError("Migration batch was not found.")
         if batch.get("STATUS") == "COMMITTED":
             return {"batch_id": batch_id, "counts": dict(batch.get("COMMITTED_COUNTS", {})), "idempotent": True}
+        retry_status = self.get_migration_retry_status(batch_id)
+        if not retry_status["complete"]:
+            raise ValueError("Migration batch is incomplete: " + " ".join(retry_status["issues"]))
+        if str(batch.get("STATUS", "")).upper() not in {"READY", "PARTIAL", "FAILED"}:
+            raise ValueError("Migration batch status is not eligible for commit.")
         entity_frames = {
             "ACCOUNT": ("_accounts", "ACCOUNT_ID"),
             "CONTACT": ("_contacts", "CONTACT_ID"),
@@ -974,7 +1264,7 @@ class MockRepository(BaseRepository):
         import_snapshot = [dict(row) for row in self._import_batches]
         counts = {}
         try:
-            from data.migration import load_mapping_for_version
+            from data.migration import load_mapping_for_version, normalize_production_period_fields
             rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] == batch_id and row["VALIDATION_STATUS"] == "READY"]
             for entity in load_mapping_for_version(batch.get("SCHEMA_VERSION"))["entity_order"]:
                 records = [
@@ -982,6 +1272,7 @@ class MockRepository(BaseRepository):
                     if row["SOURCE_ENTITY"] == entity and row.get("NORMALIZED_DATA") is not None
                 ]
                 if entity == "PRODUCTION_RECORD":
+                    records = [normalize_production_period_fields(record) for record in records]
                     if not any(item.get("IMPORT_ID") == batch_id for item in self._import_batches):
                         self.create_import_batch({"IMPORT_ID": batch_id, "FILENAME": "EIMS migration", "SOURCE": "EIMS_MIGRATION", "STATUS": "Validated"})
                     existing = set(self._production.get("PRODUCTION_ID", pd.Series(dtype=str)).astype(str))
@@ -997,49 +1288,166 @@ class MockRepository(BaseRepository):
                             self._upsert_frame(attribute, key, record)
                             existing.add(str(record[key]))
                             counts[entity] += 1
-            batch["STATUS"] = "COMMITTED"; batch["COMMITTED_COUNTS"] = counts; batch["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
+            committed_at = dt.datetime.now(dt.timezone.utc)
+            batch["STATUS"] = "COMMITTED"; batch["COMMITTED_COUNTS"] = counts
+            batch["COMMITTED_AT"] = committed_at; batch["UPDATED_AT"] = committed_at
             for row in self._migration_reconciliation:
                 if row["MIGRATION_BATCH_ID"] == batch_id:
                     row["INSERTED_ROWS"] = counts.get(row["SOURCE_ENTITY"], 0)
             for row in self._migration_id_map:
                 if row["MIGRATION_BATCH_ID"] == batch_id: row["STATUS"] = "COMMITTED"
             return {"batch_id": batch_id, "counts": counts, "idempotent": False}
-        except Exception:
+        except Exception as primary:
             for name, frame in snapshots.items(): setattr(self, name, frame)
             self._import_batches = import_snapshot
-            batch["STATUS"] = "FAILED"; batch["UPDATED_AT"] = dt.datetime.now(dt.timezone.utc)
+            batch["STATUS"] = "FAILED"; batch["COMMITTED_AT"] = None
+            failed_at = dt.datetime.now(dt.timezone.utc)
+            batch["UPDATED_AT"] = failed_at
+            entity, operation, message = migration_commit_failure_details(primary)
+            self._migration_errors.append({
+                "MIGRATION_BATCH_ID": batch_id,
+                "SOURCE_FILENAME": "__MIGRATION_COMMIT__",
+                "SOURCE_ENTITY": entity,
+                "SOURCE_ROW_NUMBER": 0,
+                "FIELD_NAME": operation,
+                "ERROR_CATEGORY": "COMMIT",
+                "ERROR_MESSAGE": message,
+                "CREATED_AT": failed_at,
+            })
+            raise
+
+    def preview_historical_corrections(self, batch_id: str):
+        from data.historical_corrections import build_historical_correction_preview
+
+        batch = next((row for row in self._migration_batches if row["MIGRATION_BATCH_ID"] == batch_id), None)
+        if not batch or str(batch.get("STATUS", "")).upper() != "COMMITTED":
+            raise ValueError("Historical corrections require a committed migration batch.")
+        frames = {
+            "ACCOUNT": (self._accounts, "ACCOUNT_ID"),
+            "FACILITY": (self._facilities, "FACILITY_ID"),
+            "FLOCK": (self._flocks, "FLOCK_ID"),
+            "FLOCK_TRANSACTION": (self._flock_transactions, "FLOCK_TRANSACTION_ID"),
+            "QUOTA_REGISTRATION": (self._quota_registrations, "QUOTA_ID"),
+            "QUOTA_TRANSACTION": (self._quota_transactions, "QUOTA_TRANSACTION_ID"),
+            "SALMONELLA_TEST": (self._salmonella_tests, "SALMONELLA_TEST_ID"),
+        }
+        existing_ids = {
+            entity: set(frame[key].dropna().astype(str)) if key in frame else set()
+            for entity, (frame, key) in frames.items()
+        }
+        quota_accounts = {
+            str(row.QUOTA_ID): row.ACCOUNT_ID
+            for row in self._quota_registrations.itertuples()
+        }
+        return build_historical_correction_preview(
+            batch_id,
+            self.get_migration_raw_rows(batch_id),
+            existing_ids,
+            quota_accounts=quota_accounts,
+            correction_batches=[
+                row for row in self._migration_correction_batches
+                if row["ORIGINAL_MIGRATION_BATCH_ID"] == batch_id
+            ],
+            correction_history=[
+                row for row in self._migration_correction_rows
+                if row["ORIGINAL_MIGRATION_BATCH_ID"] == batch_id
+            ],
+        )
+
+    def get_historical_correction_status(self, batch_id: str) -> Optional[dict]:
+        matches = [
+            row for row in self._migration_correction_batches
+            if row["ORIGINAL_MIGRATION_BATCH_ID"] == batch_id
+        ]
+        if not matches:
+            return None
+        return dict(sorted(matches, key=lambda row: str(row.get("UPDATED_AT") or ""), reverse=True)[0])
+
+    def commit_historical_corrections(self, batch_id: str) -> dict:
+        if self._review_read('MIGRATION_CORRECTION_DECISION',batch_id):
+            raise RepositoryError('Manual decisions require the revalidated review-token commit workflow.')
+        from data.migration_identity import validate_correction_sources
+        preview = self.preview_historical_corrections(batch_id)
+        validate_correction_sources(batch_id, preview.rows, self.get_migration_raw_rows(batch_id))
+        existing_batch = next((
+            row for row in self._migration_correction_batches
+            if row["MIGRATION_CORRECTION_BATCH_ID"] == preview.correction_batch_id
+        ), None)
+        if existing_batch and str(existing_batch.get("STATUS", "")).upper() in {"COMMITTED", "COMMITTED_WITH_PENDING"}:
+            return {
+                "correction_batch_id": preview.correction_batch_id,
+                "counts": {},
+                "pending_count": len(preview.pending_rows),
+                "idempotent": True,
+            }
+        entity_frames = {
+            "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
+            "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
+            "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"),
+            "SALMONELLA_TEST": ("_salmonella_tests", "SALMONELLA_TEST_ID"),
+        }
+        snapshots = {
+            name: getattr(self, name).copy(deep=True)
+            for name, _key_name in entity_frames.values()
+        }
+        batch_snapshot = [dict(row) for row in self._migration_correction_batches]
+        row_snapshot = [dict(row) for row in self._migration_correction_rows]
+        try:
+            counts: dict[str, int] = {}
+            for entity in ("QUOTA_REGISTRATION", "FLOCK_TRANSACTION", "QUOTA_TRANSACTION", "SALMONELLA_TEST"):
+                attribute, key = entity_frames[entity]
+                frame = getattr(self, attribute)
+                existing = set(frame[key].dropna().astype(str)) if key in frame else set()
+                counts[entity] = 0
+                for item in preview.core_rows:
+                    if item["SOURCE_ENTITY"] != entity:
+                        continue
+                    record = dict(item["CORRECTED_DATA"])
+                    if str(record[key]) not in existing:
+                        self._upsert_frame(attribute, key, record)
+                        existing.add(str(record[key]))
+                        counts[entity] += 1
+            now = dt.datetime.now(dt.timezone.utc)
+            self._migration_correction_rows = [
+                row for row in self._migration_correction_rows
+                if row["MIGRATION_CORRECTION_BATCH_ID"] != preview.correction_batch_id
+            ]
+            self._migration_correction_rows.extend(
+                {**row, "CREATED_AT": now, "UPDATED_AT": now}
+                for row in preview.rows if row["DISPOSITION"] != "ALREADY_COMMITTED"
+            )
+            stored = {
+                "MIGRATION_CORRECTION_BATCH_ID": preview.correction_batch_id,
+                "ORIGINAL_MIGRATION_BATCH_ID": batch_id,
+                "STATUS": "COMMITTED_WITH_PENDING" if preview.pending_rows else "COMMITTED",
+                "READY_ROW_COUNT": len(preview.core_rows),
+                "PENDING_ROW_COUNT": len(preview.pending_rows),
+                "COMMITTED_COUNTS": counts,
+                "COMMITTED_AT": now,
+                "CREATED_AT": now,
+                "UPDATED_AT": now,
+            }
+            if existing_batch:
+                existing_batch.update(stored)
+            else:
+                self._migration_correction_batches.append(stored)
+            return {
+                "correction_batch_id": preview.correction_batch_id,
+                "counts": counts,
+                "pending_count": len(preview.pending_rows),
+                "idempotent": False,
+            }
+        except Exception:
+            for name, frame in snapshots.items():
+                setattr(self, name, frame)
+            self._migration_correction_batches = batch_snapshot
+            self._migration_correction_rows = row_snapshot
             raise
 
     def cleanup_synthetic_migration(self, batch_id: str) -> bool:
-        if not str(batch_id).startswith("DEV_MIGRATION_"):
-            raise ValueError("Cleanup is restricted to DEV_MIGRATION_ batches.")
-        maps = [row for row in self._migration_id_map if row["MIGRATION_BATCH_ID"] == batch_id]
-        targets = {}
-        for row in maps: targets.setdefault(row["SOURCE_ENTITY"], set()).add(row["TARGET_ID"])
-        frame_map = {
-            "ACCOUNT": ("_accounts", "ACCOUNT_ID"), "CONTACT": ("_contacts", "CONTACT_ID"),
-            "FARM_LOCATION": ("_farm_locations", "FARM_LOCATION_ID"), "FACILITY": ("_facilities", "FACILITY_ID"),
-            "FACILITY_DETAIL": ("_facility_details", "FACILITY_DETAIL_ID"), "QUOTA_REGISTRATION": ("_quota_registrations", "QUOTA_ID"),
-            "FLOCK": ("_flocks", "FLOCK_ID"), "FLOCK_TRANSACTION": ("_flock_transactions", "FLOCK_TRANSACTION_ID"),
-            "QUOTA_TRANSACTION": ("_quota_transactions", "QUOTA_TRANSACTION_ID"), "SALMONELLA_TEST": ("_salmonella_tests", "SALMONELLA_TEST_ID"),
-            "SALMONELLA_TEST_SAMPLE": ("_salmonella_test_samples", "SALMONELLA_TEST_SAMPLE_ID"),
-            "QUOTA_ALLOCATION": ("_quota_allocations", "QUOTA_ALLOCATION_ID"),
-            "DIM_EFC_DATE": ("_efc_dates", "DAY"),
-            "PRODUCTION_RECORD": ("_production", "PRODUCTION_ID"),
-        }
-        for entity in reversed(list(frame_map)):
-            attribute, key = frame_map[entity]; frame = getattr(self, attribute)
-            if key in frame: setattr(self, attribute, frame[~frame[key].isin(targets.get(entity, set()))].copy())
-        self._import_batches = [row for row in self._import_batches if row.get("IMPORT_ID") != batch_id]
-        self._migration_batches = [row for row in self._migration_batches if row["MIGRATION_BATCH_ID"] != batch_id]
-        self._migration_files = [row for row in self._migration_files if row["MIGRATION_BATCH_ID"] != batch_id]
-        self._migration_raw_rows = [row for row in self._migration_raw_rows if row["MIGRATION_BATCH_ID"] != batch_id]
-        self._migration_id_map = [row for row in self._migration_id_map if row["MIGRATION_BATCH_ID"] != batch_id]
-        self._migration_errors = [row for row in self._migration_errors if row["MIGRATION_BATCH_ID"] != batch_id]
-        self._migration_reconciliation = [
-            row for row in self._migration_reconciliation if row["MIGRATION_BATCH_ID"] != batch_id
-        ]
-        return True
+        raise ValueError(
+            "Automatic migration cleanup is disabled: a DEV batch prefix does not prove synthetic provenance."
+        )
 
     def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:
         """Insert production records. Returns count inserted."""
@@ -1079,26 +1487,18 @@ class MockRepository(BaseRepository):
         egg_colour: Optional[str] = None,
         account_id: Optional[str] = None,
     ) -> pd.DataFrame:
-        # Join production to import batches for year/week
+        # Batch metadata is optional; periods belong to the production row.
         ib = pd.DataFrame(self._import_batches)
-        if ib.empty:
-            return self._production.copy()
-        df = self._production.merge(
-            ib[["IMPORT_ID", "REPORTING_YEAR", "REPORTING_WEEK", "FILENAME", "SOURCE"]],
-            on="IMPORT_ID",
-            how="left",
-            suffixes=("", "_IB"),
-        )
-        # Use the row-level reporting period, with its import batch as fallback,
-        # so the displayed values and filters have the same meaning.
+        production = self._production.copy()
         for period_col in ("REPORTING_YEAR", "REPORTING_WEEK"):
-            batch_col = f"{period_col}_IB"
-            if period_col not in df.columns and batch_col in df.columns:
-                df[period_col] = df[batch_col]
-            elif batch_col in df.columns:
-                df[period_col] = df[period_col].where(
-                    df[period_col].notna(), df[batch_col]
-                )
+            if period_col not in production:
+                production[period_col] = None
+        df = production if ib.empty else production.merge(
+            ib[["IMPORT_ID", "REPORTING_YEAR", "REPORTING_WEEK", "FILENAME", "SOURCE"]],
+            on="IMPORT_ID", how="left", suffixes=("", "_IB"), validate="many_to_one",
+        )
+        # Match the reporting views: an unknown row period stays unknown, even
+        # when the import batch happens to contain a year/week.
         if reporting_year is not None:
             if "REPORTING_YEAR" in df.columns:
                 df = df[df["REPORTING_YEAR"] == reporting_year]
@@ -1125,19 +1525,19 @@ class MockRepository(BaseRepository):
         n_records = len(pr)
         n_accounts = len(self._accounts)
         n_flocks = len(self._flocks)
-        total_received = pr["TOTAL_RECEIVED"].sum() if "TOTAL_RECEIVED" in pr.columns else 0
-        total_accepted = pr["TOTAL_ACCEPTED"].sum() if "TOTAL_ACCEPTED" in pr.columns else 0
-        total_rejected = pr["REJECTED"].sum() if "REJECTED" in pr.columns and pr["REJECTED"].notna().any() else 0
-        total_loss = pr["LOSS"].sum() if "LOSS" in pr.columns and pr["LOSS"].notna().any() else 0
+        def measured_sum(field):
+            values = pd.to_numeric(pr.get(field, pd.Series(dtype=float)), errors="coerce")
+            total = values.sum(min_count=1)
+            return None if pd.isna(total) else float(total)
         return {
             "import_count": n_imports,
             "production_record_count": n_records,
             "account_count": n_accounts,
             "flock_count": n_flocks,
-            "total_received": float(total_received),
-            "total_accepted": float(total_accepted),
-            "total_rejected": float(total_rejected),
-            "total_loss": float(total_loss),
+            "total_received": measured_sum("TOTAL_RECEIVED"),
+            "total_accepted": measured_sum("TOTAL_ACCEPTED"),
+            "total_rejected": measured_sum("REJECTED"),
+            "total_loss": measured_sum("LOSS"),
         }
 
     def get_efc_dates(self, date_from=None, date_to=None) -> pd.DataFrame:

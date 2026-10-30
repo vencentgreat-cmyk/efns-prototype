@@ -1,0 +1,747 @@
+[
+  {
+    "name": "FK_ACCOUNT_PARENT",
+    "child": "CORE.ACCOUNT",
+    "child_columns": [
+      "PARENT_ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R01_FK_ACCOUNT_PARENT.dot",
+    "image": "relationships/R01_FK_ACCOUNT_PARENT.png",
+    "svg": "relationships/R01_FK_ACCOUNT_PARENT.svg"
+  },
+  {
+    "name": "FK_ACCOUNT_GRADING_STATION",
+    "child": "CORE.ACCOUNT",
+    "child_columns": [
+      "GRADING_STATION_ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R02_FK_ACCOUNT_GRADING_STATION.dot",
+    "image": "relationships/R02_FK_ACCOUNT_GRADING_STATION.png",
+    "svg": "relationships/R02_FK_ACCOUNT_GRADING_STATION.svg"
+  },
+  {
+    "name": "FK_ACCOUNT_PULLET_GROWER",
+    "child": "CORE.ACCOUNT",
+    "child_columns": [
+      "PULLET_GROWER_ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R03_FK_ACCOUNT_PULLET_GROWER.dot",
+    "image": "relationships/R03_FK_ACCOUNT_PULLET_GROWER.png",
+    "svg": "relationships/R03_FK_ACCOUNT_PULLET_GROWER.svg"
+  },
+  {
+    "name": "FK_FACILITY_ACCOUNT",
+    "child": "CORE.FACILITY",
+    "child_columns": [
+      "ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R04_FK_FACILITY_ACCOUNT.dot",
+    "image": "relationships/R04_FK_FACILITY_ACCOUNT.png",
+    "svg": "relationships/R04_FK_FACILITY_ACCOUNT.svg"
+  },
+  {
+    "name": "FK_PRODUCTION_ACCOUNT",
+    "child": "CORE.PRODUCTION_RECORD",
+    "child_columns": [
+      "PRODUCER_ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R05_FK_PRODUCTION_ACCOUNT.dot",
+    "image": "relationships/R05_FK_PRODUCTION_ACCOUNT.png",
+    "svg": "relationships/R05_FK_PRODUCTION_ACCOUNT.svg"
+  },
+  {
+    "name": "FK_QUOTA_ACCOUNT",
+    "child": "CORE.QUOTA_REGISTRATION",
+    "child_columns": [
+      "ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R06_FK_QUOTA_ACCOUNT.dot",
+    "image": "relationships/R06_FK_QUOTA_ACCOUNT.png",
+    "svg": "relationships/R06_FK_QUOTA_ACCOUNT.svg"
+  },
+  {
+    "name": "FK_FLOCK_ACCOUNT",
+    "child": "CORE.FLOCK",
+    "child_columns": [
+      "ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R07_FK_FLOCK_ACCOUNT.dot",
+    "image": "relationships/R07_FK_FLOCK_ACCOUNT.png",
+    "svg": "relationships/R07_FK_FLOCK_ACCOUNT.svg"
+  },
+  {
+    "name": "FK_QUOTA_TRANSACTION_OWNER",
+    "child": "CORE.QUOTA_TRANSACTION",
+    "child_columns": [
+      "OWNER_ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R08_FK_QUOTA_TRANSACTION_OWNER.dot",
+    "image": "relationships/R08_FK_QUOTA_TRANSACTION_OWNER.png",
+    "svg": "relationships/R08_FK_QUOTA_TRANSACTION_OWNER.svg"
+  },
+  {
+    "name": "FK_QUOTA_TRANSACTION_RELATED_ACCOUNT",
+    "child": "CORE.QUOTA_TRANSACTION",
+    "child_columns": [
+      "RELATED_ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R09_FK_QUOTA_TRANSACTION_RELATED_ACCOUNT.dot",
+    "image": "relationships/R09_FK_QUOTA_TRANSACTION_RELATED_ACCOUNT.png",
+    "svg": "relationships/R09_FK_QUOTA_TRANSACTION_RELATED_ACCOUNT.svg"
+  },
+  {
+    "name": "FK_SALMONELLA_TEST_ACCOUNT",
+    "child": "CORE.SALMONELLA_TEST",
+    "child_columns": [
+      "ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R10_FK_SALMONELLA_TEST_ACCOUNT.dot",
+    "image": "relationships/R10_FK_SALMONELLA_TEST_ACCOUNT.png",
+    "svg": "relationships/R10_FK_SALMONELLA_TEST_ACCOUNT.svg"
+  },
+  {
+    "name": "FK_FARM_LOCATION_ACCOUNT",
+    "child": "CORE.FARM_LOCATION",
+    "child_columns": [
+      "ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R11_FK_FARM_LOCATION_ACCOUNT.dot",
+    "image": "relationships/R11_FK_FARM_LOCATION_ACCOUNT.png",
+    "svg": "relationships/R11_FK_FARM_LOCATION_ACCOUNT.svg"
+  },
+  {
+    "name": "FK_CONTACT_ACCOUNT",
+    "child": "CORE.CONTACT",
+    "child_columns": [
+      "ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R12_FK_CONTACT_ACCOUNT.dot",
+    "image": "relationships/R12_FK_CONTACT_ACCOUNT.png",
+    "svg": "relationships/R12_FK_CONTACT_ACCOUNT.svg"
+  },
+  {
+    "name": "FK_PRODUCTION_GRADER_ACCOUNT",
+    "child": "CORE.PRODUCTION_RECORD",
+    "child_columns": [
+      "GRADER_ACCOUNT_ID"
+    ],
+    "parent": "CORE.ACCOUNT",
+    "parent_columns": [
+      "ACCOUNT_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R13_FK_PRODUCTION_GRADER_ACCOUNT.dot",
+    "image": "relationships/R13_FK_PRODUCTION_GRADER_ACCOUNT.png",
+    "svg": "relationships/R13_FK_PRODUCTION_GRADER_ACCOUNT.svg"
+  },
+  {
+    "name": "FK_FACILITY_DETAIL_FACILITY",
+    "child": "CORE.FACILITY_DETAIL",
+    "child_columns": [
+      "FACILITY_ID"
+    ],
+    "parent": "CORE.FACILITY",
+    "parent_columns": [
+      "FACILITY_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R14_FK_FACILITY_DETAIL_FACILITY.dot",
+    "image": "relationships/R14_FK_FACILITY_DETAIL_FACILITY.png",
+    "svg": "relationships/R14_FK_FACILITY_DETAIL_FACILITY.svg"
+  },
+  {
+    "name": "FK_PRODUCTION_FACILITY",
+    "child": "CORE.PRODUCTION_RECORD",
+    "child_columns": [
+      "FACILITY_ID"
+    ],
+    "parent": "CORE.FACILITY",
+    "parent_columns": [
+      "FACILITY_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R15_FK_PRODUCTION_FACILITY.dot",
+    "image": "relationships/R15_FK_PRODUCTION_FACILITY.png",
+    "svg": "relationships/R15_FK_PRODUCTION_FACILITY.svg"
+  },
+  {
+    "name": "FK_FLOCK_FACILITY",
+    "child": "CORE.FLOCK",
+    "child_columns": [
+      "FACILITY_ID"
+    ],
+    "parent": "CORE.FACILITY",
+    "parent_columns": [
+      "FACILITY_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R16_FK_FLOCK_FACILITY.dot",
+    "image": "relationships/R16_FK_FLOCK_FACILITY.png",
+    "svg": "relationships/R16_FK_FLOCK_FACILITY.svg"
+  },
+  {
+    "name": "FK_FLOCK_DETAIL",
+    "child": "CORE.FLOCK",
+    "child_columns": [
+      "FACILITY_DETAIL_ID"
+    ],
+    "parent": "CORE.FACILITY_DETAIL",
+    "parent_columns": [
+      "FACILITY_DETAIL_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R17_FK_FLOCK_DETAIL.dot",
+    "image": "relationships/R17_FK_FLOCK_DETAIL.png",
+    "svg": "relationships/R17_FK_FLOCK_DETAIL.svg"
+  },
+  {
+    "name": "FK_FACILITY_FARM_LOCATION",
+    "child": "CORE.FACILITY",
+    "child_columns": [
+      "FARM_LOCATION_ID"
+    ],
+    "parent": "CORE.FARM_LOCATION",
+    "parent_columns": [
+      "FARM_LOCATION_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R18_FK_FACILITY_FARM_LOCATION.dot",
+    "image": "relationships/R18_FK_FACILITY_FARM_LOCATION.png",
+    "svg": "relationships/R18_FK_FACILITY_FARM_LOCATION.svg"
+  },
+  {
+    "name": "FK_FLOCK_TRANSACTION_FLOCK",
+    "child": "CORE.FLOCK_TRANSACTION",
+    "child_columns": [
+      "FLOCK_ID"
+    ],
+    "parent": "CORE.FLOCK",
+    "parent_columns": [
+      "FLOCK_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R19_FK_FLOCK_TRANSACTION_FLOCK.dot",
+    "image": "relationships/R19_FK_FLOCK_TRANSACTION_FLOCK.png",
+    "svg": "relationships/R19_FK_FLOCK_TRANSACTION_FLOCK.svg"
+  },
+  {
+    "name": "FK_PRODUCTION_FLOCK",
+    "child": "CORE.PRODUCTION_RECORD",
+    "child_columns": [
+      "FLOCK_ID"
+    ],
+    "parent": "CORE.FLOCK",
+    "parent_columns": [
+      "FLOCK_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R20_FK_PRODUCTION_FLOCK.dot",
+    "image": "relationships/R20_FK_PRODUCTION_FLOCK.png",
+    "svg": "relationships/R20_FK_PRODUCTION_FLOCK.svg"
+  },
+  {
+    "name": "FK_SALMONELLA_TEST_FLOCK",
+    "child": "CORE.SALMONELLA_TEST",
+    "child_columns": [
+      "FLOCK_ID"
+    ],
+    "parent": "CORE.FLOCK",
+    "parent_columns": [
+      "FLOCK_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R21_FK_SALMONELLA_TEST_FLOCK.dot",
+    "image": "relationships/R21_FK_SALMONELLA_TEST_FLOCK.png",
+    "svg": "relationships/R21_FK_SALMONELLA_TEST_FLOCK.svg"
+  },
+  {
+    "name": "FK_SIZE_PRODUCTION",
+    "child": "CORE.PRODUCTION_SIZE_BREAKDOWN",
+    "child_columns": [
+      "PRODUCTION_ID"
+    ],
+    "parent": "CORE.PRODUCTION_RECORD",
+    "parent_columns": [
+      "PRODUCTION_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R22_FK_SIZE_PRODUCTION.dot",
+    "image": "relationships/R22_FK_SIZE_PRODUCTION.png",
+    "svg": "relationships/R22_FK_SIZE_PRODUCTION.svg"
+  },
+  {
+    "name": "FK_FLOCK_QUOTA",
+    "child": "CORE.FLOCK",
+    "child_columns": [
+      "QUOTA_ID"
+    ],
+    "parent": "CORE.QUOTA_REGISTRATION",
+    "parent_columns": [
+      "QUOTA_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R23_FK_FLOCK_QUOTA.dot",
+    "image": "relationships/R23_FK_FLOCK_QUOTA.png",
+    "svg": "relationships/R23_FK_FLOCK_QUOTA.svg"
+  },
+  {
+    "name": "FK_QUOTA_TRANSACTION_QUOTA",
+    "child": "CORE.QUOTA_TRANSACTION",
+    "child_columns": [
+      "QUOTA_ID"
+    ],
+    "parent": "CORE.QUOTA_REGISTRATION",
+    "parent_columns": [
+      "QUOTA_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R24_FK_QUOTA_TRANSACTION_QUOTA.dot",
+    "image": "relationships/R24_FK_QUOTA_TRANSACTION_QUOTA.png",
+    "svg": "relationships/R24_FK_QUOTA_TRANSACTION_QUOTA.svg"
+  },
+  {
+    "name": "FK_QUOTA_TRANSACTION_RELATED_QUOTA",
+    "child": "CORE.QUOTA_TRANSACTION",
+    "child_columns": [
+      "RELATED_QUOTA_ID"
+    ],
+    "parent": "CORE.QUOTA_REGISTRATION",
+    "parent_columns": [
+      "QUOTA_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R25_FK_QUOTA_TRANSACTION_RELATED_QUOTA.dot",
+    "image": "relationships/R25_FK_QUOTA_TRANSACTION_RELATED_QUOTA.png",
+    "svg": "relationships/R25_FK_QUOTA_TRANSACTION_RELATED_QUOTA.svg"
+  },
+  {
+    "name": "FK_QUOTA_TRANSACTION_RELATED_TRANSACTION",
+    "child": "CORE.QUOTA_TRANSACTION",
+    "child_columns": [
+      "RELATED_TRANSACTION_ID"
+    ],
+    "parent": "CORE.QUOTA_TRANSACTION",
+    "parent_columns": [
+      "QUOTA_TRANSACTION_ID"
+    ],
+    "optional": true,
+    "parent_cardinality": "0..1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R26_FK_QUOTA_TRANSACTION_RELATED_TRANSACTION.dot",
+    "image": "relationships/R26_FK_QUOTA_TRANSACTION_RELATED_TRANSACTION.png",
+    "svg": "relationships/R26_FK_QUOTA_TRANSACTION_RELATED_TRANSACTION.svg"
+  },
+  {
+    "name": "FK_SALMONELLA_SAMPLE_TEST",
+    "child": "CORE.SALMONELLA_TEST_SAMPLE",
+    "child_columns": [
+      "SALMONELLA_TEST_ID"
+    ],
+    "parent": "CORE.SALMONELLA_TEST",
+    "parent_columns": [
+      "SALMONELLA_TEST_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R27_FK_SALMONELLA_SAMPLE_TEST.dot",
+    "image": "relationships/R27_FK_SALMONELLA_SAMPLE_TEST.png",
+    "svg": "relationships/R27_FK_SALMONELLA_SAMPLE_TEST.svg"
+  },
+  {
+    "name": "FK_PRODUCTION_IMPORT",
+    "child": "CORE.PRODUCTION_RECORD",
+    "child_columns": [
+      "IMPORT_ID"
+    ],
+    "parent": "RAW.IMPORT_BATCH",
+    "parent_columns": [
+      "IMPORT_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R28_FK_PRODUCTION_IMPORT.dot",
+    "image": "relationships/R28_FK_PRODUCTION_IMPORT.png",
+    "svg": "relationships/R28_FK_PRODUCTION_IMPORT.svg"
+  },
+  {
+    "name": "FK_RAW_ROW_IMPORT",
+    "child": "RAW.IMPORT_RAW_ROW",
+    "child_columns": [
+      "IMPORT_ID"
+    ],
+    "parent": "RAW.IMPORT_BATCH",
+    "parent_columns": [
+      "IMPORT_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R29_FK_RAW_ROW_IMPORT.dot",
+    "image": "relationships/R29_FK_RAW_ROW_IMPORT.png",
+    "svg": "relationships/R29_FK_RAW_ROW_IMPORT.svg"
+  },
+  {
+    "name": "FK_MIGRATION_RAW_ROW_BATCH",
+    "child": "RAW.MIGRATION_RAW_ROW",
+    "child_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "parent": "RAW.MIGRATION_BATCH",
+    "parent_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": true,
+    "enforced": false,
+    "source": "relationships/R30_FK_MIGRATION_RAW_ROW_BATCH.dot",
+    "image": "relationships/R30_FK_MIGRATION_RAW_ROW_BATCH.png",
+    "svg": "relationships/R30_FK_MIGRATION_RAW_ROW_BATCH.svg"
+  },
+  {
+    "name": "FK_MIGRATION_ID_MAP_BATCH",
+    "child": "RAW.MIGRATION_ID_MAP",
+    "child_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "parent": "RAW.MIGRATION_BATCH",
+    "parent_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R31_FK_MIGRATION_ID_MAP_BATCH.dot",
+    "image": "relationships/R31_FK_MIGRATION_ID_MAP_BATCH.png",
+    "svg": "relationships/R31_FK_MIGRATION_ID_MAP_BATCH.svg"
+  },
+  {
+    "name": "FK_MIGRATION_FILE_BATCH",
+    "child": "RAW.MIGRATION_FILE",
+    "child_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "parent": "RAW.MIGRATION_BATCH",
+    "parent_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R32_FK_MIGRATION_FILE_BATCH.dot",
+    "image": "relationships/R32_FK_MIGRATION_FILE_BATCH.png",
+    "svg": "relationships/R32_FK_MIGRATION_FILE_BATCH.svg"
+  },
+  {
+    "name": "FK_MIGRATION_RECONCILIATION_BATCH",
+    "child": "RAW.MIGRATION_RECONCILIATION",
+    "child_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "parent": "RAW.MIGRATION_BATCH",
+    "parent_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R33_FK_MIGRATION_RECONCILIATION_BATCH.dot",
+    "image": "relationships/R33_FK_MIGRATION_RECONCILIATION_BATCH.png",
+    "svg": "relationships/R33_FK_MIGRATION_RECONCILIATION_BATCH.svg"
+  },
+  {
+    "name": "FK_MIGRATION_ERROR_BATCH",
+    "child": "RAW.MIGRATION_ERROR",
+    "child_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "parent": "RAW.MIGRATION_BATCH",
+    "parent_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R34_FK_MIGRATION_ERROR_BATCH.dot",
+    "image": "relationships/R34_FK_MIGRATION_ERROR_BATCH.png",
+    "svg": "relationships/R34_FK_MIGRATION_ERROR_BATCH.svg"
+  },
+  {
+    "name": "FK_MIGRATION_CORRECTION_ORIGINAL_BATCH",
+    "child": "RAW.MIGRATION_CORRECTION_BATCH",
+    "child_columns": [
+      "ORIGINAL_MIGRATION_BATCH_ID"
+    ],
+    "parent": "RAW.MIGRATION_BATCH",
+    "parent_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R35_FK_MIGRATION_CORRECTION_ORIGINAL_BATCH.dot",
+    "image": "relationships/R35_FK_MIGRATION_CORRECTION_ORIGINAL_BATCH.png",
+    "svg": "relationships/R35_FK_MIGRATION_CORRECTION_ORIGINAL_BATCH.svg"
+  },
+  {
+    "name": "FK_MIGRATION_CORRECTION_ROW_ORIGINAL_BATCH",
+    "child": "RAW.MIGRATION_CORRECTION_ROW",
+    "child_columns": [
+      "ORIGINAL_MIGRATION_BATCH_ID"
+    ],
+    "parent": "RAW.MIGRATION_BATCH",
+    "parent_columns": [
+      "MIGRATION_BATCH_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R36_FK_MIGRATION_CORRECTION_ROW_ORIGINAL_BATCH.dot",
+    "image": "relationships/R36_FK_MIGRATION_CORRECTION_ROW_ORIGINAL_BATCH.png",
+    "svg": "relationships/R36_FK_MIGRATION_CORRECTION_ROW_ORIGINAL_BATCH.svg"
+  },
+  {
+    "name": "FK_MIGRATION_CORRECTION_ROW_BATCH",
+    "child": "RAW.MIGRATION_CORRECTION_ROW",
+    "child_columns": [
+      "MIGRATION_CORRECTION_BATCH_ID"
+    ],
+    "parent": "RAW.MIGRATION_CORRECTION_BATCH",
+    "parent_columns": [
+      "MIGRATION_CORRECTION_BATCH_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R37_FK_MIGRATION_CORRECTION_ROW_BATCH.dot",
+    "image": "relationships/R37_FK_MIGRATION_CORRECTION_ROW_BATCH.png",
+    "svg": "relationships/R37_FK_MIGRATION_CORRECTION_ROW_BATCH.svg"
+  },
+  {
+    "name": "FK_MIGRATION_CORRECTION_RAW_ROW",
+    "child": "RAW.MIGRATION_CORRECTION_ROW",
+    "child_columns": [
+      "ORIGINAL_MIGRATION_BATCH_ID",
+      "MIGRATION_RAW_ROW_ID"
+    ],
+    "parent": "RAW.MIGRATION_RAW_ROW",
+    "parent_columns": [
+      "MIGRATION_BATCH_ID",
+      "MIGRATION_RAW_ROW_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..many",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R38_FK_MIGRATION_CORRECTION_RAW_ROW.dot",
+    "image": "relationships/R38_FK_MIGRATION_CORRECTION_RAW_ROW.png",
+    "svg": "relationships/R38_FK_MIGRATION_CORRECTION_RAW_ROW.svg"
+  },
+  {
+    "name": "FK_MIGRATION_ID_MAP_RAW_ROW",
+    "child": "RAW.MIGRATION_ID_MAP",
+    "child_columns": [
+      "MIGRATION_BATCH_ID",
+      "MIGRATION_RAW_ROW_ID"
+    ],
+    "parent": "RAW.MIGRATION_RAW_ROW",
+    "parent_columns": [
+      "MIGRATION_BATCH_ID",
+      "MIGRATION_RAW_ROW_ID"
+    ],
+    "optional": false,
+    "parent_cardinality": "1",
+    "child_cardinality": "0..1",
+    "identifying": false,
+    "enforced": false,
+    "source": "relationships/R39_FK_MIGRATION_ID_MAP_RAW_ROW.dot",
+    "image": "relationships/R39_FK_MIGRATION_ID_MAP_RAW_ROW.png",
+    "svg": "relationships/R39_FK_MIGRATION_ID_MAP_RAW_ROW.svg"
+  }
+]

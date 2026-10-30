@@ -1,0 +1,282 @@
+"""Shared record navigation and command-bar helpers."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import inspect
+from pathlib import Path
+
+import pandas as pd
+import streamlit as st
+
+from app.auth import can_current
+from app.security import Permission
+
+VALID_VIEWS = {"list", "new", "detail", "edit"}
+DISPLAY_TIMEZONE = "America/Halifax"
+DISPLAY_TIMEZONE_LABEL = "America/Halifax"
+_ACTIVE_SCOPE_KEY = "_efns_active_record_scope"
+_PAGE_FILES = {
+    "Accounts_&_Facilities": "3_Accounts_Facilities_Flocks.py",
+    "Facilities": "11_Facilities.py",
+    "Facility_Details": "13_Facility_Details.py",
+    "Farm_Locations": "18_Farm_Locations.py",
+    "Flocks": "5_Flocks.py",
+    "Flock_Transactions": "6_Flock_Transactions.py",
+    "Quota_Registrations": "7_Quota_Registrations.py",
+    "Quota_Transactions": "8_Quota_Transactions.py",
+    "Salmonella_Tests": "9_Salmonella_Tests.py",
+}
+
+
+def page_file(filename: str) -> str:
+    """Resolve the same source file for registration, links and page switches.
+
+    Absolute source paths work with both root streamlit_app.py and app/Home.py.
+    The process environment can be restored between reruns or callbacks.
+    """
+    return str(Path(__file__).resolve().parent / "pages" / filename)
+
+
+def saved_view_selector(
+    entity: str,
+    plural_label: str,
+    *,
+    key: str,
+    role_views=(),
+    selection_keys=(),
+) -> tuple[tuple[str, ...] | None, str | None]:
+    """Render one reusable Active/Inactive/All selector.
+
+    Returns the selected status tuple and optional Account role field.  A view
+    change clears page-provided row-selection keys before the table is read.
+    """
+    from data.constants import SAVED_VIEW_STATUS_GROUPS
+
+    groups = SAVED_VIEW_STATUS_GROUPS[entity]
+    options = [f"Active {plural_label}", f"Inactive {plural_label}", f"All {plural_label}"]
+    role_by_label = {f"Active {label}": field for field, label in role_views}
+    options.extend(role_by_label)
+    selected = st.selectbox("View", options, key=key)
+    marker = f"{key}_applied"
+    if st.session_state.get(marker) != selected:
+        for state_key in selection_keys:
+            st.session_state.pop(state_key, None)
+        st.session_state[marker] = selected
+    if selected == f"All {plural_label}":
+        return None, None
+    if selected == f"Inactive {plural_label}":
+        return tuple(groups["inactive"]), None
+    return tuple(groups["active"]), role_by_label.get(selected)
+
+
+def _caller_scope() -> str:
+    frame = inspect.currentframe()
+    while frame:
+        filename = Path(frame.f_code.co_filename)
+        if filename.parent.name == "pages":
+            return filename.stem
+        frame = frame.f_back
+    return "application"
+
+
+def _view_key(scope: str, name: str) -> str:
+    return f"_efns_record_{scope}_{name}"
+
+
+@dataclass(frozen=True)
+class RecordView:
+    name: str
+    record_id: str | None = None
+
+
+def read_record_view() -> RecordView:
+    """Read page-local record state without constructing browser routes."""
+    scope = _caller_scope()
+    st.session_state[_ACTIVE_SCOPE_KEY] = scope
+    name = str(st.session_state.get(_view_key(scope, "view"), "list")).lower()
+    if name not in VALID_VIEWS:
+        name = "list"
+    record_id = st.session_state.get(_view_key(scope, "id"))
+    if name in {"detail", "edit"} and not record_id:
+        name = "list"
+    return RecordView(name, str(record_id) if record_id else None)
+
+
+def open_view(name: str, record_id: str | None = None, **parameters) -> None:
+    """Navigate inside the registered page using session state only."""
+    scope = st.session_state.get(_ACTIVE_SCOPE_KEY) or _caller_scope()
+    selected_view = name if name in VALID_VIEWS else "list"
+    st.session_state[_view_key(scope, "view")] = selected_view
+    if record_id:
+        st.session_state[_view_key(scope, "id")] = str(record_id)
+    else:
+        st.session_state.pop(_view_key(scope, "id"), None)
+    parameter_prefix = _view_key(scope, "parameter_")
+    for key in [key for key in st.session_state if key.startswith(parameter_prefix)]:
+        st.session_state.pop(key, None)
+    for key, value in parameters.items():
+        if value is not None and value != "":
+            st.session_state[f"{parameter_prefix}{key}"] = value
+    st.rerun()
+
+
+def back_to_list() -> None:
+    open_view("list")
+
+
+def view_parameter(name: str, default=None):
+    """Return a page-local parameter set by an internal registered-page action."""
+    scope = st.session_state.get(_ACTIVE_SCOPE_KEY) or _caller_scope()
+    return st.session_state.get(f"{_view_key(scope, 'parameter_')}{name}", default)
+
+
+def open_module(
+    page_slug: str,
+    view: str = "list",
+    record_id: str | None = None,
+    **parameters,
+) -> None:
+    """Switch registered pages without creating a browser URL or href."""
+    filename = _PAGE_FILES.get(page_slug)
+    if not filename:
+        raise ValueError("Unknown application page.")
+    scope = Path(filename).stem
+    st.session_state[_view_key(scope, "view")] = view if view in VALID_VIEWS else "list"
+    if record_id:
+        st.session_state[_view_key(scope, "id")] = str(record_id)
+    else:
+        st.session_state.pop(_view_key(scope, "id"), None)
+    parameter_prefix = _view_key(scope, "parameter_")
+    for key in [key for key in st.session_state if key.startswith(parameter_prefix)]:
+        st.session_state.pop(key, None)
+    for key, value in parameters.items():
+        if value is not None and value != "":
+            st.session_state[f"{parameter_prefix}{key}"] = value
+
+    st.switch_page(page_file(filename))
+
+
+def ensure_record_form_state(prefix: str, record_id: str | None) -> None:
+    """Discard widget values when a form starts editing a different record."""
+    marker = f"{prefix}loaded_record_id"
+    identity = str(record_id or "__new__")
+    if st.session_state.get(marker) != identity:
+        clear_keys = [key for key in st.session_state if key.startswith(prefix)]
+        for key in clear_keys:
+            st.session_state.pop(key, None)
+        st.session_state[marker] = identity
+
+
+def to_display_timestamp(value, *, naive_timezone=None):
+    """Convert known instants; retain historical NTZ values without guessing."""
+    converted = pd.to_datetime(value, errors="coerce")
+    if pd.isna(converted):
+        return converted
+    if converted.tzinfo is None:
+        if naive_timezone is None:
+            return converted
+        converted = converted.tz_localize(naive_timezone)
+    return converted.tz_convert(DISPLAY_TIMEZONE)
+
+
+def format_timestamp(value, *, naive_timezone=None) -> str:
+    converted = to_display_timestamp(value, naive_timezone=naive_timezone)
+    if pd.isna(converted):
+        return "Not available"
+    if converted.tzinfo is None:
+        return f"{converted.strftime('%Y-%m-%d %H:%M')} (stored time; timezone unverified)"
+    return f"{converted.strftime('%Y-%m-%d %H:%M %Z')} ({DISPLAY_TIMEZONE_LABEL})"
+
+
+def timestamp_column(label: str):
+    """Mixed-age NTZ columns cannot be assigned a timezone without provenance."""
+    return st.column_config.DatetimeColumn(
+        f"{label} (stored time; timezone unverified)",
+        format="YYYY-MM-DD HH:mm",
+    )
+
+
+def timestamp_columns(columns) -> dict:
+    """Build stored-time display configuration for mixed historical fields."""
+    configured = {}
+    for column in columns:
+        name = str(column)
+        if name.endswith(("_AT", "_ON", " At", " On")) or name == "UPLOAD_TIMESTAMP":
+            label = name.replace("_", " ").title()
+            configured[name] = timestamp_column(label)
+    return configured
+
+
+def selected_row_index(key: str) -> int | None:
+    """Return the prior rerun's single selected dataframe row."""
+    state = st.session_state.get(key)
+    selection = getattr(state, "selection", None)
+    rows = getattr(selection, "rows", []) if selection is not None else []
+    return int(rows[0]) if rows else None
+
+
+def related_records_table(
+    title: str,
+    frame: pd.DataFrame,
+    *,
+    id_column: str,
+    label_column: str,
+    page_slug: str,
+    key: str,
+) -> None:
+    """Show a deduplicated related table with registered-page navigation."""
+    st.markdown(f"**{title} ({len(frame.drop_duplicates(id_column)) if id_column in frame else 0})**")
+    if frame.empty or id_column not in frame:
+        st.info(f"No related {title}.")
+        return
+    display = frame.drop_duplicates(id_column).copy().reset_index(drop=True)
+    display["RECORD"] = display.apply(
+        lambda row: row.get(label_column) or str(row[id_column]), axis=1
+    )
+    visible = [column for column in display.columns if column not in {id_column, "RECORD", "CREATED_AT", "UPDATED_AT"}][:5]
+    st.dataframe(
+        display[["RECORD", *visible]], width="stretch", hide_index=True,
+        on_select="rerun", selection_mode="single-row", key=key,
+    )
+    index = selected_row_index(key)
+    if index is not None and index < len(display):
+        if st.button(f"View selected {title}", key=f"{key}_open", icon=":material/visibility:"):
+            open_module(page_slug, "detail", str(display.iloc[index][id_column]))
+
+
+def list_command_bar(prefix: str, selected: bool = False) -> str | None:
+    """Render a Dynamics-like list command bar and return the chosen action."""
+    st.caption("Select a record to view its details.")
+    action = None
+    with st.container(border=True, horizontal=True, vertical_alignment="center"):
+        if st.button("New", icon=":material/add:", type="primary", key=f"{prefix}_new", disabled=not can_current(Permission.CREATE_DATA)):
+            action = "new"
+        if st.button("View", icon=":material/visibility:", key=f"{prefix}_view", disabled=not selected):
+            action = "view"
+        if st.button("Delete", icon=":material/delete:", disabled=not selected or not can_current(Permission.DELETE_DATA), key=f"{prefix}_delete"):
+            action = "delete"
+        if st.button("Refresh", icon=":material/refresh:", key=f"{prefix}_refresh"):
+            action = "refresh"
+    return action
+
+
+def record_command_bar(prefix: str, view: str, allow_delete: bool = True) -> str | None:
+    """Render Back/Edit/Save/Cancel/Delete actions for record pages."""
+    action = None
+    with st.container(border=True, horizontal=True, vertical_alignment="center"):
+        if st.button("Back", icon=":material/arrow_back:", key=f"{prefix}_back"):
+            action = "back"
+        if view == "detail" and st.button("Edit", icon=":material/edit:", type="primary", key=f"{prefix}_edit", disabled=not can_current(Permission.UPDATE_DATA)):
+            action = "edit"
+        if view == "detail" and st.button("Refresh", icon=":material/refresh:", key=f"{prefix}_refresh"):
+            action = "refresh"
+        if view in {"new", "edit"}:
+            if st.button("Save", icon=":material/save:", type="primary", key=f"{prefix}_save", disabled=not can_current(Permission.CREATE_DATA if view == "new" else Permission.UPDATE_DATA)):
+                action = "save"
+            if st.button("Cancel", icon=":material/close:", key=f"{prefix}_cancel"):
+                action = "cancel"
+        if view in {"detail", "edit"} and allow_delete:
+            if st.button("Delete", icon=":material/delete:", key=f"{prefix}_delete", disabled=not can_current(Permission.DELETE_DATA)):
+                action = "delete"
+    return action

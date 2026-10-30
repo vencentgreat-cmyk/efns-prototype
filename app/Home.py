@@ -1,12 +1,10 @@
 """EFNS application entry point and grouped navigation."""
 
 from __future__ import annotations
-from pathlib import Path
 import streamlit as st
-import os
 
 from app.auth import ensure_authorized_repository, render_user_sidebar, require_authenticated
-from app.navigation import timestamp_column
+from app.navigation import page_file, timestamp_column
 from app.security import Permission, has_permission
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.connection import LazySqlExecutor
@@ -18,10 +16,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
-
-def page_file(filename: str) -> str:
-    return str(Path(__file__).resolve().parent / "pages" / filename)
 
 
 apply_theme()
@@ -216,6 +210,7 @@ pages = {
             st.Page(page_file("8_Quota_Transactions.py"), title="Quota Transactions", icon=":material/compare_arrows:"),
         ],
         "Reporting": [
+            st.Page(page_file("21_Record_History.py"), title="Record Review & History", icon=":material/history:"),
             st.Page(
                 page_file("4_Reports.py"),
                 title="Report Center",
@@ -244,6 +239,8 @@ if administration:
     pages["Administration"] = administration
 
 navigation = st.navigation(pages)
+# The dashboard is a callable Page, not an entrypoint file that can be switched to.
+st.session_state["_efns_dashboard_page"] = pages["Overview"][0]
 
 with st.sidebar:
     render_user_sidebar(user)

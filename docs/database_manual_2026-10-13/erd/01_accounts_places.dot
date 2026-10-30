@@ -1,0 +1,18 @@
+digraph G { graph [rankdir=TB,bgcolor="white",pad=0.2,nodesep=0.35,ranksep=0.55,splines=polyline,label="Accounts, Contacts, Sites and Buildings
+EFNS_DEV declarations | 13 October 2026
+Dashed: non-identifying | Solid: identifying
+Grey: repeated table | Rxx: exact relation sheet",labelloc=t,fontname="Arial",fontsize=15];node [shape=plain,fontname="Arial",fontsize=14];edge [fontname="Arial",fontcolor="#303a40"];CORE_ACCOUNT [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.ACCOUNT</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">ACCOUNT_ID  [PK]</TD></TR><TR><TD ALIGN="LEFT" PORT="p1">PARENT_ACCOUNT_ID  [FK / optional]</TD></TR><TR><TD ALIGN="LEFT" PORT="p2">GRADING_STATION_ACCOUNT_ID  [FK / optional]</TD></TR><TR><TD ALIGN="LEFT" PORT="p3">PULLET_GROWER_ACCOUNT_ID  [FK / optional]</TD></TR></TABLE>>];
+CORE_CONTACT [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.CONTACT</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">CONTACT_ID  [PK]</TD></TR><TR><TD ALIGN="LEFT" PORT="p1">ACCOUNT_ID  [FK / optional]</TD></TR></TABLE>>];
+CORE_FACILITY [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.FACILITY</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">FACILITY_ID  [PK]</TD></TR><TR><TD ALIGN="LEFT" PORT="p1">ACCOUNT_ID  [FK]</TD></TR><TR><TD ALIGN="LEFT" PORT="p2">FARM_LOCATION_ID  [FK / optional]</TD></TR></TABLE>>];
+CORE_FACILITY_DETAIL [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.FACILITY_DETAIL</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">FACILITY_DETAIL_ID  [PK]</TD></TR><TR><TD ALIGN="LEFT" PORT="p1">FACILITY_ID  [FK]</TD></TR></TABLE>>];
+CORE_FARM_LOCATION [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.FARM_LOCATION</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">FARM_LOCATION_ID  [PK]</TD></TR><TR><TD ALIGN="LEFT" PORT="p1">ACCOUNT_ID  [FK]</TD></TR></TABLE>>];CORE_ACCOUNT:p0:e -> CORE_ACCOUNT:p1:e [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R01
+PARENT_ACCOUNT_ID",fontsize=12];
+CORE_ACCOUNT:p0:e -> CORE_ACCOUNT:p2:e [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R02
+GRADING_STATION_ACCOUNT_ID",fontsize=12];
+CORE_ACCOUNT:p0:e -> CORE_ACCOUNT:p3:e [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R03
+PULLET_GROWER_ACCOUNT_ID",fontsize=12];
+CORE_ACCOUNT -> CORE_FACILITY [dir=both,arrowtail="teetee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R04",fontsize=12];
+CORE_ACCOUNT -> CORE_FARM_LOCATION [dir=both,arrowtail="teetee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R11",fontsize=12];
+CORE_ACCOUNT -> CORE_CONTACT [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R12",fontsize=12];
+CORE_FACILITY -> CORE_FACILITY_DETAIL [dir=both,arrowtail="teetee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R14",fontsize=12];
+CORE_FARM_LOCATION -> CORE_FACILITY [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R18",fontsize=12];}

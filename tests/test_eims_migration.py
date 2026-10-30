@@ -17,7 +17,9 @@ from data.migration import (
     load_mapping,
     migration_stage_path,
     migration_stage_prefix,
+    parse_reporting_period,
 )
+from data.repositories.base import MigrationDataError, migration_commit_failure_details
 from data.repositories.mock import MockRepository
 from data.repositories.snowflake import SnowflakeRepository
 from data.connection import ConnectorExecutor
@@ -85,6 +87,128 @@ def test_v3_named_column_package_preserves_types_relationships_and_date_deduplic
     assert analysis.records["QUOTA_TRANSACTION"][0]["OWNER_ACCOUNT_ID"] == ids["ACCOUNT"]
     assert len(analysis.records["DIM_EFC_DATE"]) == 1
     assert analysis.records["DIM_EFC_DATE"][0]["ELEMENT_CODES"] == "A,B"
+
+
+def test_v3_production_period_accepts_legacy_cyyww_and_preserves_source_code():
+    sources, mapping, _ids = _v3_sources()
+    production_filename = mapping["entities"]["PRODUCTION_RECORD"]["filename"]
+    updated_sources = []
+    for source in sources:
+        if source.name != production_filename:
+            updated_sources.append(source)
+            continue
+        frame = pd.read_csv(io.BytesIO(source.content), dtype=str, keep_default_na=False)
+        frame["efc_productionweek"] = "21841"
+        updated_sources.append(MigrationSourceFile(
+            source.name, frame.to_csv(index=False).encode("utf-8-sig")
+        ))
+
+    analysis = analyze_migration_files(updated_sources, mapping)
+    production = analysis.records["PRODUCTION_RECORD"][0]
+
+    assert production["SOURCE_WEEK_CODE"] == "21841"
+    assert production["REPORTING_YEAR"] == 2018
+    assert production["REPORTING_WEEK"] == 41
+    assert parse_reporting_period("19953") == (1999, 53)
+
+
+def test_failed_batch_retry_normalizes_legacy_saved_production_period_at_commit():
+    sources, mapping, _ids = _v3_sources()
+    analysis = analyze_migration_files(sources, mapping)
+    production_raw = next(
+        row for row in analysis.raw_rows if row["SOURCE_ENTITY"] == "PRODUCTION_RECORD"
+    )
+    production_raw["RAW_DATA"]["EFC_PRODUCTIONWEEK"] = "21841"
+    production_raw["NORMALIZED_DATA"]["SOURCE_WEEK_CODE"] = "21841"
+    production_raw["NORMALIZED_DATA"]["REPORTING_YEAR"] = 21841
+    production_raw["NORMALIZED_DATA"]["REPORTING_WEEK"] = 21841
+
+    repository = MockRepository()
+    repository.prepare_migration_batch(
+        {
+            "MIGRATION_BATCH_ID": analysis.batch_id,
+            "PACKAGE_HASH": analysis.package_hash,
+            "SCHEMA_VERSION": analysis.schema_version,
+            "STATUS": "FAILED",
+        },
+        analysis.files,
+        analysis.raw_rows,
+    )
+
+    repository.commit_migration_batch(analysis.batch_id)
+    saved = repository._production.iloc[-1]
+
+    assert saved["SOURCE_WEEK_CODE"] == "21841"
+    assert saved["REPORTING_YEAR"] == 2018
+    assert saved["REPORTING_WEEK"] == 41
+    persisted_raw = repository.get_migration_raw_rows(analysis.batch_id)
+    persisted_production = persisted_raw[persisted_raw["SOURCE_ENTITY"] == "PRODUCTION_RECORD"].iloc[0]
+    assert persisted_production["RAW_DATA"]["EFC_PRODUCTIONWEEK"] == "21841"
+    assert persisted_production["NORMALIZED_DATA"]["REPORTING_YEAR"] == 21841
+
+
+def test_snowflake_retry_skips_only_declared_deduplicated_variant_null_lineage():
+    canonical = {
+        "SOURCE_ENTITY": "DIM_EFC_DATE",
+        "SOURCE_ROW_NUMBER": 2,
+        "NORMALIZED_DATA": json.dumps({"DAY": "2026-01-01", "ELEMENT_CODES": "A,B"}),
+    }
+    duplicate_lineage = {
+        "SOURCE_ENTITY": "DIM_EFC_DATE",
+        "SOURCE_ROW_NUMBER": 3,
+        "NORMALIZED_DATA": "null",
+    }
+
+    records = SnowflakeRepository._migration_entity_records(
+        [canonical, duplicate_lineage],
+        "DIM_EFC_DATE",
+        {"deduplicate_by": "DAY"},
+    )
+
+    assert records == [{"DAY": "2026-01-01", "ELEMENT_CODES": "A,B"}]
+
+
+def test_snowflake_retry_rejects_unexpected_ready_variant_null_with_context():
+    row = {
+        "SOURCE_ENTITY": "PRODUCTION_RECORD",
+        "SOURCE_ROW_NUMBER": 24676,
+        "NORMALIZED_DATA": "null",
+    }
+
+    with pytest.raises(MigrationDataError) as captured:
+        SnowflakeRepository._migration_entity_records(
+            [row], "PRODUCTION_RECORD", {"deduplicate_by": None}
+        )
+
+    assert captured.value.entity == "PRODUCTION_RECORD"
+    assert captured.value.operation == "NORMALIZE"
+    assert captured.value.source_row == 24676
+    entity, operation, message = migration_commit_failure_details(captured.value)
+    assert (entity, operation) == ("PRODUCTION_RECORD", "NORMALIZE")
+    assert "source row 24676" in message
+
+
+def test_v3_production_period_rejects_out_of_range_legacy_week():
+    sources, mapping, _ids = _v3_sources()
+    production_filename = mapping["entities"]["PRODUCTION_RECORD"]["filename"]
+    updated_sources = []
+    for source in sources:
+        if source.name != production_filename:
+            updated_sources.append(source)
+            continue
+        frame = pd.read_csv(io.BytesIO(source.content), dtype=str, keep_default_na=False)
+        frame["efc_productionweek"] = "21899"
+        updated_sources.append(MigrationSourceFile(
+            source.name, frame.to_csv(index=False).encode("utf-8-sig")
+        ))
+
+    analysis = analyze_migration_files(updated_sources, mapping)
+    production_raw = next(
+        row for row in analysis.raw_rows if row["SOURCE_ENTITY"] == "PRODUCTION_RECORD"
+    )
+
+    assert production_raw["VALIDATION_STATUS"] == "REJECTED"
+    assert "REPORTING_WEEK must be no more than 53." in production_raw["VALIDATION_MESSAGES"]
 
 
 def test_v3_reconciliation_is_persisted_and_commit_rolls_back_atomically(monkeypatch):
@@ -318,8 +442,9 @@ def test_mock_migration_preserves_raw_commits_in_order_and_retries_idempotently(
     assert result["counts"] == EXPECTED_COUNTS
     retry = repository.commit_migration_batch(analysis.batch_id)
     assert retry["idempotent"] is True
-    assert repository.cleanup_synthetic_migration(analysis.batch_id) is True
-    assert repository.get_migration_batches().empty
+    with pytest.raises(ValueError, match="cleanup is disabled"):
+        repository.cleanup_synthetic_migration(analysis.batch_id)
+    assert not repository.get_migration_batches().empty
 
 
 def test_mock_core_commit_rolls_back_and_marks_batch_failed(generated, monkeypatch):
@@ -340,7 +465,115 @@ def test_mock_core_commit_rolls_back_and_marks_batch_failed(generated, monkeypat
         repository.commit_migration_batch(analysis.batch_id)
     assert len(repository.get_accounts()) == initial_accounts
     assert repository.get_migration_batches().iloc[0]["STATUS"] == "FAILED"
+    assert repository.get_migration_batches().iloc[0].get("COMMITTED_AT") is None
     assert len(repository.get_migration_raw_rows(analysis.batch_id)) == sum(EXPECTED_COUNTS.values())
+
+
+def test_failed_migration_retry_skips_existing_targets_and_commits_once(monkeypatch):
+    sources, mapping, _ids = _v3_sources()
+    analysis = analyze_migration_files(sources, mapping)
+    repository = MockRepository()
+    repository.prepare_migration_batch(
+        {
+            "MIGRATION_BATCH_ID": analysis.batch_id,
+            "PACKAGE_HASH": analysis.package_hash,
+            "SCHEMA_VERSION": analysis.schema_version,
+            "STATUS": "PARTIAL",
+        },
+        analysis.files,
+        analysis.raw_rows,
+    )
+    raw_before = repository.get_migration_raw_rows(analysis.batch_id).to_dict("records")
+    errors_before = [dict(row) for row in repository._migration_errors]
+    original_insert = repository.insert_production_records
+
+    def fail_production(*_args, **_kwargs):
+        raise RuntimeError("synthetic retry probe")
+
+    monkeypatch.setattr(repository, "insert_production_records", fail_production)
+    with pytest.raises(RuntimeError, match="retry probe"):
+        repository.commit_migration_batch(analysis.batch_id)
+
+    retry_status = repository.get_migration_retry_status(analysis.batch_id)
+    assert retry_status["status"] == "FAILED"
+    assert retry_status["complete"] is True
+    assert retry_status["retryable"] is True
+    assert repository.get_migration_batches().iloc[0].get("COMMITTED_AT") is None
+    failures = repository.get_migration_commit_errors(analysis.batch_id)
+    assert len(failures) == 1
+    assert failures.iloc[0]["SOURCE_ENTITY"] == "MIGRATION_BATCH"
+    assert failures.iloc[0]["FIELD_NAME"] == "COMMIT"
+    assert "retry probe" not in failures.iloc[0]["ERROR_MESSAGE"]
+
+    account = dict(analysis.records["ACCOUNT"][0])
+    repository._upsert_frame("_accounts", "ACCOUNT_ID", account)
+    monkeypatch.setattr(repository, "insert_production_records", original_insert)
+    result = repository.commit_migration_batch(analysis.batch_id)
+
+    assert result["idempotent"] is False
+    assert result["counts"]["ACCOUNT"] == 0
+    assert sum(repository._accounts["ACCOUNT_ID"].astype(str) == str(account["ACCOUNT_ID"])) == 1
+    saved_batch = repository.get_migration_batches().iloc[0]
+    assert saved_batch["STATUS"] == "COMMITTED"
+    assert saved_batch["COMMITTED_AT"] is not None
+    assert repository.get_migration_raw_rows(analysis.batch_id).to_dict("records") == raw_before
+    assert repository._migration_errors[:len(errors_before)] == errors_before
+    assert len(repository.get_migration_commit_errors(analysis.batch_id)) == 1
+    assert repository.commit_migration_batch(analysis.batch_id)["idempotent"] is True
+
+
+def test_failed_batch_can_restore_only_missing_lineage_before_retry():
+    sources, mapping, _ids = _v3_sources()
+    analysis = analyze_migration_files(sources, mapping)
+    repository = MockRepository()
+    repository.prepare_migration_batch(
+        {
+            "MIGRATION_BATCH_ID": analysis.batch_id,
+            "PACKAGE_HASH": analysis.package_hash,
+            "SCHEMA_VERSION": analysis.schema_version,
+            "STATUS": "FAILED",
+        },
+        analysis.files,
+        analysis.raw_rows,
+    )
+    missing_entity = "DIM_EFC_DATE"
+    missing_filename = load_mapping()["entities"][missing_entity]["filename"]
+    repository._migration_files = [
+        row for row in repository._migration_files if row["SOURCE_FILENAME"] != missing_filename
+    ]
+    repository._migration_raw_rows = [
+        row for row in repository._migration_raw_rows if row["SOURCE_ENTITY"] != missing_entity
+    ]
+    repository._migration_id_map = [
+        row for row in repository._migration_id_map if row["SOURCE_ENTITY"] != missing_entity
+    ]
+    repository._migration_reconciliation = [
+        row for row in repository._migration_reconciliation if row["SOURCE_ENTITY"] != missing_entity
+    ]
+
+    incomplete = repository.get_migration_retry_status(analysis.batch_id)
+    with pytest.raises(ValueError, match="incomplete"):
+        repository.commit_migration_batch(analysis.batch_id)
+    assert incomplete["complete"] is False
+    assert incomplete["missing_files"] == [missing_filename]
+
+    repository.repair_migration_batch(
+        {
+            "MIGRATION_BATCH_ID": analysis.batch_id,
+            "PACKAGE_HASH": analysis.package_hash,
+            "SCHEMA_VERSION": analysis.schema_version,
+        },
+        analysis.files,
+        analysis.raw_rows,
+    )
+
+    repaired = repository.get_migration_retry_status(analysis.batch_id)
+    assert repaired["complete"] is True
+    assert repaired["retryable"] is True
+    assert len(repository._migration_files) == len(analysis.files)
+    assert len(repository._migration_raw_rows) == len(analysis.raw_rows)
+    assert len({row["MIGRATION_RAW_ROW_ID"] for row in repository._migration_raw_rows}) == len(analysis.raw_rows)
+    assert repository.get_migration_batches().iloc[0]["STATUS"] == "FAILED"
 
 
 def test_snowflake_commit_preserves_initial_error_when_failed_status_write_also_fails():
@@ -378,6 +611,9 @@ def test_snowflake_commit_preserves_initial_error_when_failed_status_write_also_
     repository._one = lambda *_args, **_kwargs: {
         "STATUS": "READY", "SCHEMA_VERSION": load_mapping()["schema_version"]
     }
+    repository.get_migration_retry_status = lambda _batch_id: {
+        "complete": True, "issues": [], "status": "READY"
+    }
 
     with pytest.raises(RepositoryOperationError) as captured:
         repository.commit_migration_batch("batch-1")
@@ -388,6 +624,138 @@ def test_snowflake_commit_preserves_initial_error_when_failed_status_write_also_
     assert any("original operation error is preserved" in note for note in captured.value.__notes__)
 
 
+def test_snowflake_commit_persists_sanitized_failure_after_rollback():
+    from data.migration import load_mapping
+    from data.repositories.base import RepositoryOperationError
+
+    initial = RepositoryOperationError(
+        "INSERT", "SALMONELLA_TEST_SAMPLE",
+        query_id="01c78479-0002-e2f1-0003-b706000d5f62",
+        error_code="3001",
+    )
+
+    class Executor:
+        def __init__(self):
+            self.transaction_number = 0
+            self.active_transaction = 0
+            self.failure_writes = []
+
+        @contextmanager
+        def transaction(self):
+            self.transaction_number += 1
+            self.active_transaction = self.transaction_number
+            try:
+                yield self
+            finally:
+                self.active_transaction = 0
+
+        def query(self, _sql, _params=None):
+            return pd.DataFrame(columns=["SOURCE_ENTITY", "NORMALIZED_DATA"])
+
+        def execute(self, sql, params=None):
+            if self.active_transaction == 1:
+                raise initial
+            self.failure_writes.append((sql, params))
+            return 1
+
+    executor = Executor()
+    repository = SnowflakeRepository.__new__(SnowflakeRepository)
+    repository.executor = executor
+    repository.database = "EFNS_DEV"
+    repository.schema_core = "CORE"
+    repository.schema_raw = "RAW"
+    repository.schema_reporting = "REPORTING"
+    repository._one = lambda *_args, **_kwargs: {
+        "STATUS": "FAILED", "SCHEMA_VERSION": load_mapping()["schema_version"]
+    }
+    repository.get_migration_retry_status = lambda _batch_id: {
+        "complete": True, "issues": [], "status": "FAILED"
+    }
+
+    with pytest.raises(RepositoryOperationError) as captured:
+        repository.commit_migration_batch("batch-1")
+
+    assert captured.value is initial
+    assert len(executor.failure_writes) == 2
+    update_sql, update_params = executor.failure_writes[0]
+    insert_sql, insert_params = executor.failure_writes[1]
+    assert "COMMITTED_AT = NULL" in update_sql
+    assert update_params == ("FAILED", "batch-1")
+    assert "MIGRATION_ERROR" in insert_sql
+    assert insert_params[1:7] == (
+        "batch-1", "__MIGRATION_COMMIT__", "SALMONELLA_TEST_SAMPLE",
+        "INSERT", "COMMIT",
+        "Snowflake INSERT failed for SALMONELLA_TEST_SAMPLE. Reference: query ID "
+        "01c78479-0002-e2f1-0003-b706000d5f62, code 3001. Ask an administrator "
+        "to correlate this reference with Snowflake query history.",
+    )
+
+
+def test_snowflake_commit_persists_unexpected_variant_null_context_after_rollback():
+    from data.migration import load_mapping
+
+    class Executor:
+        def __init__(self):
+            self.transaction_number = 0
+            self.active_transaction = 0
+            self.rolled_back = False
+            self.failure_writes = []
+
+        @contextmanager
+        def transaction(self):
+            self.transaction_number += 1
+            self.active_transaction = self.transaction_number
+            try:
+                yield self
+            except Exception:
+                if self.active_transaction == 1:
+                    self.rolled_back = True
+                raise
+            finally:
+                self.active_transaction = 0
+
+        def query(self, sql, _params=None):
+            if "MIGRATION_RAW_ROW" in sql:
+                return pd.DataFrame([{
+                    "SOURCE_ENTITY": "PRODUCTION_RECORD",
+                    "SOURCE_ROW_NUMBER": 24676,
+                    "NORMALIZED_DATA": "null",
+                }])
+            return pd.DataFrame()
+
+        def execute(self, sql, params=None):
+            if self.active_transaction == 2:
+                self.failure_writes.append((sql, params))
+            return 1
+
+    executor = Executor()
+    repository = SnowflakeRepository.__new__(SnowflakeRepository)
+    repository.executor = executor
+    repository.database = "EFNS_DEV"
+    repository.schema_core = "CORE"
+    repository.schema_raw = "RAW"
+    repository.schema_reporting = "REPORTING"
+    repository._one = lambda *_args, **_kwargs: {
+        "STATUS": "FAILED", "SCHEMA_VERSION": load_mapping()["schema_version"]
+    }
+    repository.get_migration_retry_status = lambda _batch_id: {
+        "complete": True, "issues": [], "status": "FAILED"
+    }
+
+    with pytest.raises(MigrationDataError, match="source row 24676"):
+        repository.commit_migration_batch("batch-1")
+
+    assert executor.rolled_back is True
+    assert len(executor.failure_writes) == 2
+    _insert_sql, insert_params = executor.failure_writes[1]
+    assert insert_params[1:7] == (
+        "batch-1", "__MIGRATION_COMMIT__", "PRODUCTION_RECORD",
+        "NORMALIZE", "COMMIT",
+        "Migration normalize failed for PRODUCTION_RECORD at source row 24676: "
+        "a Ready lineage row has no normalized object.",
+    )
+
+
 def test_migration_sql_keeps_stage_and_tables_behind_app_owner():
     sql = Path("sql/11_eims_migration_foundation.sql").read_text(encoding="utf-8").upper()
     assert "ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')" in sql
@@ -396,7 +764,8 @@ def test_migration_sql_keeps_stage_and_tables_behind_app_owner():
     assert "USE ROLE SECURITYADMIN" in sql
     assert "USE ROLE ACCOUNTADMIN" in sql
     assert "CREATE OR REPLACE PROCEDURE EFNS_DEV.RAW.CLEANUP_SYNTHETIC_MIGRATION" in sql
-    assert "SOURCE_ENTITY = 'FARM_LOCATION'" in sql
+    assert "REJECTED_MANUAL_PROVENANCE_REVIEW_REQUIRED" in sql
+    assert "DELETE FROM" not in sql
     assert "GRANT USAGE ON PROCEDURE EFNS_DEV.RAW.CLEANUP_SYNTHETIC_MIGRATION(VARCHAR)" in sql
     assert "GRANT DELETE ON TABLE EFNS_DEV.CORE.PRODUCTION_RECORD TO ROLE EFNS_DEV_APP_OWNER" not in sql
     assert "GRANT DELETE ON TABLE EFNS_DEV.RAW.IMPORT_BATCH TO ROLE EFNS_DEV_APP_OWNER" not in sql
@@ -417,3 +786,7 @@ def test_migration_page_is_permission_guarded_and_navigation_is_internal():
     assert "LinkColumn" not in combined
     assert "href=" not in combined
     assert "query_params" not in combined
+    assert '"Retry migration"' in page
+    assert "get_migration_retry_status" in page
+    assert "repair_migration_batch" in page
+    assert "get_migration_commit_errors" in page

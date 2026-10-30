@@ -1,0 +1,16 @@
+﻿Field,Gap
+CORE.PRODUCTION_RECORD.MATCH_CONFIRMED_AT,Missing actual confirmation producer / authoritative matching workflow; writer capability alone does not establish input provenance.
+CORE.PRODUCTION_RECORD.MATCH_CONFIRMED_BY,Missing actual confirmation producer / authoritative matching workflow; writer capability alone does not establish input provenance.
+CORE.PRODUCTION_SIZE_BREAKDOWN.SIZE_BREAKDOWN_ID,No current Snowflake size-child persistence route; generator/output structure is not a deployed writer.
+CORE.PRODUCTION_SIZE_BREAKDOWN.PRODUCTION_ID,No current Snowflake size-child persistence route; generator/output structure is not a deployed writer.
+CORE.PRODUCTION_SIZE_BREAKDOWN.SIZE_BAND,No current Snowflake size-child persistence route; generator/output structure is not a deployed writer.
+CORE.PRODUCTION_SIZE_BREAKDOWN.QUANTITY,No current Snowflake size-child persistence route; generator/output structure is not a deployed writer.
+CORE.PRODUCTION_SIZE_BREAKDOWN.CREATED_AT,No current Snowflake size-child persistence route; generator/output structure is not a deployed writer.
+CORE.PRODUCTION_SIZE_BREAKDOWN.UPDATED_AT,No current Snowflake size-child persistence route; generator/output structure is not a deployed writer.
+CORE.SALMONELLA_TEST_SAMPLE.COMMENTS,Missing upstream real-input producer; generic binding capability only.
+RAW.IMPORT_RAW_ROW.MATCHED_ACCOUNT_ID,No current Snowflake persistence method assigning reviewed match metadata.
+RAW.IMPORT_RAW_ROW.MATCHED_FACILITY_ID,No current Snowflake persistence method assigning reviewed match metadata.
+RAW.IMPORT_RAW_ROW.MATCHED_FLOCK_ID,No current Snowflake persistence method assigning reviewed match metadata.
+RAW.IMPORT_RAW_ROW.MATCH_CONFIRMED_AT,No current Snowflake persistence method assigning reviewed match metadata.
+RAW.IMPORT_RAW_ROW.MATCH_CONFIRMED_BY,No current Snowflake persistence method assigning reviewed match metadata.
+SECURITY.APP_USER.LAST_LOGIN_AT,No current Snowflake login-time update method; displayed value does not prove capture of every login.

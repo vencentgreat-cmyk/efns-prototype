@@ -1,0 +1,55 @@
+{
+  "tables_described": 27,
+  "expected_tables": 27,
+  "dictionary_entries": 520,
+  "expected_columns": 520,
+  "unique_dictionary_keys": 520,
+  "foreign_key_relationships": 39,
+  "expected_FK_constraints": 39,
+  "view_expressions_nonempty": 80,
+  "unresolved_definition_fields": [],
+  "counts": {
+    "schemas": {
+      "APP": 1,
+      "CORE": 15,
+      "RAW": 10,
+      "SECURITY": 1
+    },
+    "tables": 27,
+    "views": 4,
+    "table_columns": 440,
+    "view_columns": 80,
+    "PK": 27,
+    "FK": 39,
+    "UNIQUE": 6,
+    "NOT_NULL_table_fields": 138,
+    "CHECK": 1,
+    "identifying_FK": 1
+  },
+  "no_placeholder_tokens": true,
+  "data_dictionary_embedded": true,
+  "query_receipts": 232,
+  "current_KEY_scan_issues": [],
+  "source_page_explanations": {
+    "2": "Section 2/9 requirements and complete cases",
+    "3": "Section 3/4/5 distinct schema/routes",
+    "4": "Section 6/7 per-table rationale",
+    "11": "Section 4/7 full source and correction flow",
+    "13": "Section 9 executed cases and limits",
+    "15": "Section 9/10 current batch-separated evidence"
+  },
+  "business_logic_changes": false,
+  "DDL_data_writes_deployment": false,
+  "protected_table_aggregate_hashes_unchanged_vs_previous": true,
+  "diagram_checks": {
+    "rendered": 85,
+    "nonblank": 85,
+    "exact_FK_sheets": 39,
+    "full_table_field_entries": 440,
+    "editable_sources": "DOT and SVG",
+    "visual_inspection": "Representative module, composite FK and full-field panel images inspected; all images structurally/pixel checked.",
+    "Word_layout": "DOCX/PDF authoring and final per-page QA is assigned to Claude; not claimed performed here."
+  },
+  "read_only_SQL_verified": true,
+  "all_manuscript_image_links_exist": true
+}

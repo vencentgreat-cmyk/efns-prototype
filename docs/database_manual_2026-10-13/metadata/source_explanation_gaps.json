@@ -1,0 +1,62 @@
+[
+  {
+    "Field": "CORE.PRODUCTION_RECORD.MATCH_CONFIRMED_AT",
+    "Gap": "Missing actual confirmation producer / authoritative matching workflow; writer capability alone does not establish input provenance."
+  },
+  {
+    "Field": "CORE.PRODUCTION_RECORD.MATCH_CONFIRMED_BY",
+    "Gap": "Missing actual confirmation producer / authoritative matching workflow; writer capability alone does not establish input provenance."
+  },
+  {
+    "Field": "CORE.PRODUCTION_SIZE_BREAKDOWN.SIZE_BREAKDOWN_ID",
+    "Gap": "No current Snowflake size-child persistence route; generator/output structure is not a deployed writer."
+  },
+  {
+    "Field": "CORE.PRODUCTION_SIZE_BREAKDOWN.PRODUCTION_ID",
+    "Gap": "No current Snowflake size-child persistence route; generator/output structure is not a deployed writer."
+  },
+  {
+    "Field": "CORE.PRODUCTION_SIZE_BREAKDOWN.SIZE_BAND",
+    "Gap": "No current Snowflake size-child persistence route; generator/output structure is not a deployed writer."
+  },
+  {
+    "Field": "CORE.PRODUCTION_SIZE_BREAKDOWN.QUANTITY",
+    "Gap": "No current Snowflake size-child persistence route; generator/output structure is not a deployed writer."
+  },
+  {
+    "Field": "CORE.PRODUCTION_SIZE_BREAKDOWN.CREATED_AT",
+    "Gap": "No current Snowflake size-child persistence route; generator/output structure is not a deployed writer."
+  },
+  {
+    "Field": "CORE.PRODUCTION_SIZE_BREAKDOWN.UPDATED_AT",
+    "Gap": "No current Snowflake size-child persistence route; generator/output structure is not a deployed writer."
+  },
+  {
+    "Field": "CORE.SALMONELLA_TEST_SAMPLE.COMMENTS",
+    "Gap": "Missing upstream real-input producer; generic binding capability only."
+  },
+  {
+    "Field": "RAW.IMPORT_RAW_ROW.MATCHED_ACCOUNT_ID",
+    "Gap": "No current Snowflake persistence method assigning reviewed match metadata."
+  },
+  {
+    "Field": "RAW.IMPORT_RAW_ROW.MATCHED_FACILITY_ID",
+    "Gap": "No current Snowflake persistence method assigning reviewed match metadata."
+  },
+  {
+    "Field": "RAW.IMPORT_RAW_ROW.MATCHED_FLOCK_ID",
+    "Gap": "No current Snowflake persistence method assigning reviewed match metadata."
+  },
+  {
+    "Field": "RAW.IMPORT_RAW_ROW.MATCH_CONFIRMED_AT",
+    "Gap": "No current Snowflake persistence method assigning reviewed match metadata."
+  },
+  {
+    "Field": "RAW.IMPORT_RAW_ROW.MATCH_CONFIRMED_BY",
+    "Gap": "No current Snowflake persistence method assigning reviewed match metadata."
+  },
+  {
+    "Field": "SECURITY.APP_USER.LAST_LOGIN_AT",
+    "Gap": "No current Snowflake login-time update method; displayed value does not prove capture of every login."
+  }
+]

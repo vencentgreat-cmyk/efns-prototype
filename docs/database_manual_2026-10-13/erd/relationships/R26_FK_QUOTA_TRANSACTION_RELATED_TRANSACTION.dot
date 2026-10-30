@@ -1,0 +1,6 @@
+digraph G { graph [rankdir=LR,bgcolor="white",pad=0.2,nodesep=0.35,ranksep=0.55,splines=polyline,label="R26 - FK_QUOTA_TRANSACTION_RELATED_TRANSACTION
+Parent 0..1; child 0..many; one line per complete FK
+EFNS_DEV declarations | 13 October 2026
+Dashed: non-identifying | Solid: identifying
+Grey: repeated table | Rxx: exact relation sheet",labelloc=t,fontname="Arial",fontsize=15];node [shape=plain,fontname="Arial",fontsize=14];edge [fontname="Arial",fontcolor="#303a40"];CORE_QUOTA_TRANSACTION [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.QUOTA_TRANSACTION</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">QUOTA_TRANSACTION_ID  [PK]</TD></TR><TR><TD ALIGN="LEFT" PORT="p1">RELATED_TRANSACTION_ID  [FK / optional]</TD></TR></TABLE>>];CORE_QUOTA_TRANSACTION:p0:e -> CORE_QUOTA_TRANSACTION:p1:e [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="RELATED_TRANSACTION_ID
+FK_QUOTA_TRANSACTION_RELATED_TRANSACTION",fontsize=12];}

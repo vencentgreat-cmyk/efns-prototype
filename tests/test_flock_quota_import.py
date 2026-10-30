@@ -308,7 +308,7 @@ class _CaptureExecutor:
 
     def execute(self, sql, params=None):
         self.calls.append((sql, tuple(params or ())))
-        return 0 if sql.startswith("UPDATE") else 1
+        return 1 if 'RAW.INTAKE_LOCK' in sql else 0 if sql.startswith("UPDATE") else 1
 
     def query(self, sql, params=None):
         self.calls.append((sql, tuple(params or ())))

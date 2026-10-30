@@ -45,15 +45,16 @@ def apply_theme() -> None:
         .efns-brand {
             margin: .35rem 0 1rem;
             padding: .9rem 1rem;
-            background: #172554;
-            color: #ffffff;
+            background: #e8eefb;
+            color: #172554;
+            border: 1px solid #c7d0df;
             border-radius: 8px;
             font-size: 1.04rem;
             font-weight: 700;
         }
         .efns-brand small {
             display: block;
-            color: #dbe4ff;
+            color: #475467;
             font-size: .75rem;
             font-weight: 500;
             margin-top: .2rem;
@@ -74,14 +75,15 @@ def apply_theme() -> None:
             letter-spacing: .09em;
             text-transform: uppercase;
         }
-        .efns-page-title {
-            color: #172033;
+        [data-testid="stMarkdownContainer"] .efns-page-header h1.efns-page-title {
+            /* Keep the title legible even when native heading CSS changes. */
+            color: #172033 !important;
             font-size: 1.72rem;
             line-height: 1.2;
             margin: .28rem 0 .32rem;
         }
         .efns-page-copy {
-            color: #667085;
+            color: #475467;
             line-height: 1.5;
             margin: 0;
         }
@@ -92,7 +94,7 @@ def apply_theme() -> None:
             margin: .35rem 0 .2rem;
         }
         .efns-section-copy {
-            color: #667085;
+            color: #475467;
             font-size: .88rem;
             line-height: 1.45;
             margin: 0 0 .75rem;
@@ -107,7 +109,7 @@ def apply_theme() -> None:
             font-weight: 700;
         }
         .efns-repository {
-            color: #667085;
+            color: #475467;
             font-size: .8rem;
             margin: .3rem 0 .65rem;
         }
@@ -125,13 +127,13 @@ def apply_theme() -> None:
             margin-bottom: .35rem;
         }
         .efns-next-step span {
-            color: #667085;
+            color: #475467;
             font-size: .88rem;
             line-height: 1.45;
         }
         @media (max-width: 800px) {
             .efns-page-header { padding: 1rem; }
-            .efns-page-title { font-size: 1.45rem; }
+            [data-testid="stMarkdownContainer"] .efns-page-header h1.efns-page-title { font-size: 1.45rem; }
             .efns-next-step { min-height: auto; }
         }
         </style>

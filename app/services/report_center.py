@@ -10,6 +10,9 @@ import pandas as pd
 from app.security import Permission, User, has_permission, require_permission
 from app.services.export import spreadsheet_safe
 from data.constants import QUOTA_TYPES
+from app.services.report_relationships import report_relationships
+from data.producer_identity import production_identities
+from data.source_scope import scope_production
 
 
 @dataclass(frozen=True)
@@ -62,9 +65,9 @@ CUSTOM_DATASETS = {
     "Facility Details": ("get_facility_details", "FACILITY_DETAIL_ID", (
         FieldDefinition("Facility Detail ID", "FACILITY_DETAIL_ID"), FieldDefinition("Facility ID", "FACILITY_ID"), FieldDefinition("Detail Name", "DETAIL_NAME"), FieldDefinition("Detail Type", "DETAIL_TYPE"), FieldDefinition("Status", "STATUS"))),
     "Flocks": ("get_flocks", "FLOCK_ID", (
-        FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Flock Number", "FLOCK_NUMBER"), FieldDefinition("Account ID", "ACCOUNT_ID"), FieldDefinition("Facility ID", "FACILITY_ID"), FieldDefinition("Quota ID", "QUOTA_ID"), FieldDefinition("Status", "STATUS"), FieldDefinition("Hatch Date", "HATCH_DATE", "date"), FieldDefinition("Bird Count", "BIRD_COUNT", "number", ("sum", "min", "max", "mean")))),
+        FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Flock Number", "FLOCK_NUMBER"), FieldDefinition("Account ID", "ACCOUNT_ID"), FieldDefinition("Facility ID", "FACILITY_ID"), FieldDefinition("Quota ID", "QUOTA_ID"), FieldDefinition("Status", "STATUS"), FieldDefinition("Hatch Date", "HATCH_DATE", "date"), FieldDefinition("Placement Date", "PLACEMENT_DATE", "date"), FieldDefinition("Estimated Disposal Date", "EST_DISPOSAL", "date"), FieldDefinition("Actual Disposal Date", "DISPOSAL_DATE", "date"), FieldDefinition("Bird Count", "BIRD_COUNT", "number", ("sum", "min", "max", "mean")))),
     "Flock Transactions": ("get_flock_transactions", "FLOCK_TRANSACTION_ID", (
-        FieldDefinition("Transaction ID", "FLOCK_TRANSACTION_ID"), FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Transaction Type", "TRANSACTION_TYPE"), FieldDefinition("Transaction Date", "TRANSACTION_DATE", "date"), FieldDefinition("Quantity", "QUANTITY", "number", ("sum", "min", "max", "mean")))),
+        FieldDefinition("Transaction ID", "FLOCK_TRANSACTION_ID"), FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Transaction Type", "TRANSACTION_TYPE"), FieldDefinition("Transaction Date", "TRANSACTION_DATE", "date"), FieldDefinition("Quantity", "QUANTITY", "number", ("sum", "min", "max", "mean")), FieldDefinition("Count Source", "COUNT_SOURCE_LABEL"))),
     "Quota Registrations": ("get_quota_registrations", "QUOTA_ID", (
         FieldDefinition("Quota ID", "QUOTA_ID"), FieldDefinition("Account ID", "ACCOUNT_ID"), FieldDefinition("Registration Number", "REGISTRATION_NUMBER"), FieldDefinition("Quota Name", "QUOTA_NAME"), FieldDefinition("Quota Type", "QUOTA_TYPE"), FieldDefinition("Status", "STATUS"), FieldDefinition("Effective Date", "EFFECTIVE_DATE", "date"), FieldDefinition("End Date", "END_DATE", "date"))),
     "Quota Transactions": ("get_quota_transactions", "QUOTA_TRANSACTION_ID", (
@@ -72,8 +75,33 @@ CUSTOM_DATASETS = {
     "Salmonella Tests": ("get_salmonella_tests", "SALMONELLA_TEST_ID", (
         FieldDefinition("Test ID", "SALMONELLA_TEST_ID"), FieldDefinition("Account ID", "ACCOUNT_ID"), FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Permit Number", "PERMIT_NUMBER"), FieldDefinition("Testing Date", "TESTING_DATE", "date"), FieldDefinition("Result", "TEST_RESULT"), FieldDefinition("Number of Samples", "NUMBER_OF_SAMPLES", "number", ("sum", "min", "max", "mean")))),
     "Production Records": ("get_production_records", "PRODUCTION_ID", (
-        FieldDefinition("Production ID", "PRODUCTION_ID"), FieldDefinition("Producer Account ID", "PRODUCER_ACCOUNT_ID"), FieldDefinition("Facility ID", "FACILITY_ID"), FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Reporting Year", "REPORTING_YEAR", "number"), FieldDefinition("Reporting Week", "REPORTING_WEEK", "number"), FieldDefinition("Total Received", "TOTAL_RECEIVED", "number", ("sum", "min", "max", "mean")), FieldDefinition("Total Accepted", "TOTAL_ACCEPTED", "number", ("sum", "min", "max", "mean")), FieldDefinition("Match Status", "MATCH_STATUS"))),
+        FieldDefinition("Producer identity", "PRODUCER_IDENTITY_LABEL"), FieldDefinition("Producer identity key", "PRODUCER_IDENTITY_KEY"), FieldDefinition("Producer identity status", "PRODUCER_IDENTITY_STATUS"), FieldDefinition("Source Producer #", "PRODUCER_NUMBER"),
+        FieldDefinition("Production ID", "PRODUCTION_ID"), FieldDefinition("Producer Account ID", "PRODUCER_ACCOUNT_ID"), FieldDefinition("Facility ID", "FACILITY_ID"), FieldDefinition("Flock ID", "FLOCK_ID"), FieldDefinition("Reporting Year", "REPORTING_YEAR", "number"), FieldDefinition("Reporting Week", "REPORTING_WEEK", "number"), FieldDefinition("Total Received", "TOTAL_RECEIVED", "number", ("sum", "min", "max", "mean")), FieldDefinition("Total Accepted", "TOTAL_ACCEPTED", "number", ("sum", "min", "max", "mean")), FieldDefinition("Match Status", "MATCH_STATUS"), FieldDefinition("Source scope", "SOURCE_SCOPE"), FieldDefinition("Import ID", "IMPORT_ID"))),
 }
+
+_RELATIONSHIP_DATASETS = {
+    "Flocks": "FLOCK", "Flock Transactions": "FLOCK_TRANSACTION",
+    "Production Records": "PRODUCTION_RECORD",
+}
+for _dataset in _RELATIONSHIP_DATASETS:
+    _method, _key, _fields = CUSTOM_DATASETS[_dataset]
+    if _dataset == "Production Records":
+        _fields = tuple(FieldDefinition("Production Facility ID", field.source) if field.source == "FACILITY_ID" else field
+                        for field in _fields)
+    CUSTOM_DATASETS[_dataset] = (_method, _key, (*_fields,
+        FieldDefinition("Flock Account ID", "FLOCK_ACCOUNT_ID"),
+        FieldDefinition("Flock Account", "FLOCK_ACCOUNT_NAME"),
+        FieldDefinition("Facility Account ID", "FACILITY_ACCOUNT_ID"),
+        FieldDefinition("Facility Account", "FACILITY_ACCOUNT_NAME"),
+        FieldDefinition("Facility Name", "FACILITY_NAME"),
+        FieldDefinition("Report Facility ID", "REPORT_FACILITY_ID"),
+        *([FieldDefinition("Producer Account", "PRODUCER_ACCOUNT_NAME"),
+           FieldDefinition("Source Total", "TOTAL", "number", ("sum", "min", "max", "mean")),
+           FieldDefinition("Flock Facility ID", "FLOCK_FACILITY_ID"),
+           FieldDefinition("Facility Source", "REPORT_FACILITY_SOURCE"),
+           FieldDefinition("Facility Reference Comparison", "FACILITY_REFERENCE_DIFFERENCE")]
+          if _dataset == "Production Records" else []),
+    ))
 
 
 def visible_catalog(user: User) -> tuple[ReportDefinition, ...]:
@@ -132,6 +160,14 @@ def _query_dataset(repo, name: str, filters: dict) -> pd.DataFrame:
     return method(**{key: value for key, value in filters.items() if key in supported and value not in (None, "", ())})
 
 
+def _sum_known_values(values: pd.Series):
+    return values.sum(min_count=1)
+
+
+FLOCK_RECORD_COUNT = "_FLOCK_RECORD_COUNT"
+FLOCK_RECORD_COUNT_LABEL = "Flock record count"
+
+
 def build_custom_report(
     repo,
     *,
@@ -143,10 +179,13 @@ def build_custom_report(
     ascending=True,
     group_by=None,
     aggregations=None,
+    count_records=False,
 ) -> pd.DataFrame:
     require_permission(user, Permission.USE_REPORT_BUILDER)
     if dataset not in CUSTOM_DATASETS:
         raise ValueError("Dataset is not available for custom reporting.")
+    if dataset == "Production Records" and any((filters or {}).get(key) not in (None, "") for key in ("date_from", "date_to")):
+        raise ValueError("Production reports use Reporting Year and Reporting Week, not an inferred calendar date range.")
     _method, id_field, definitions = CUSTOM_DATASETS[dataset]
     fields = {field.source: field for field in definitions}
     if not selected_fields or any(field not in fields for field in selected_fields):
@@ -154,20 +193,78 @@ def build_custom_report(
     for field in selected_fields:
         require_permission(user, fields[field].permission)
     frame = _query_dataset(repo, dataset, filters or {})
+    if dataset == 'Flocks' and any((filters or {}).get(k) not in (None,'') for k in ('date_from','date_to')):
+        date_field=(filters or {}).get('date_field')
+        if date_field not in {'HATCH_DATE','PLACEMENT_DATE','EST_DISPOSAL','DISPOSAL_DATE'}:
+            raise ValueError('Choose the Flock date field for the date range.')
+        dates=pd.to_datetime(frame[date_field],errors='coerce').dt.date
+        for bound,op in (('date_from','ge'),('date_to','le')):
+            if (filters or {}).get(bound) not in (None,''):
+                value=pd.Timestamp(filters[bound]).date()
+                frame=frame.loc[dates.ge(value) if op=='ge' else dates.le(value)]
+                dates=dates.loc[frame.index]
     if id_field in frame.columns:
+        if dataset in _RELATIONSHIP_DATASETS and frame[id_field].duplicated().any():
+            raise ValueError("Duplicate report record identifiers; resolve the data issue before aggregating.")
         frame = frame.drop_duplicates(id_field)
+    relationship_fields = {"FLOCK_ACCOUNT_ID", "FLOCK_ACCOUNT_NAME", "FACILITY_ACCOUNT_ID",
+                           "FACILITY_ACCOUNT_NAME", "FACILITY_NAME", "REPORT_FACILITY_ID",
+                           "PRODUCER_ACCOUNT_NAME", "FLOCK_FACILITY_ID", "REPORT_FACILITY_SOURCE",
+                           "FACILITY_REFERENCE_DIFFERENCE"}
+    relationship_filters = {"flock_account_id", "facility_account_id", "facility_id", "flock_id"}
+    needs_relationships = bool(relationship_fields.intersection([*selected_fields, *(group_by or [])])) or any(
+        (filters or {}).get(key) not in (None, "") for key in relationship_filters
+    )
+    if dataset in _RELATIONSHIP_DATASETS and needs_relationships:
+        frame = report_relationships(repo, frame, _RELATIONSHIP_DATASETS[dataset])
+        role_filters = {"flock_account_id": "FLOCK_ACCOUNT_ID", "facility_account_id": "FACILITY_ACCOUNT_ID",
+                        "facility_id": "REPORT_FACILITY_ID", "flock_id": "FLOCK_ID"}
+        for parameter, column in role_filters.items():
+            value = (filters or {}).get(parameter)
+            if value not in (None, ""):
+                frame = frame.loc[frame[column] == value]
     group_by = list(group_by or [])
+    if dataset == "Production Records":
+        frame = production_identities(frame)
+        frame = scope_production(frame, (filters or {}).get('source_scope', 'All DEV records (mixed sources)'))
     aggregations = dict(aggregations or {})
+    if count_records and dataset != "Flocks":
+        raise ValueError("Flock record count is only available for Flocks.")
     if any(field not in fields for field in group_by):
         raise ValueError("Grouping field is not allowlisted.")
     for field, operation in aggregations.items():
         if field not in fields or operation not in fields[field].aggregations:
             raise ValueError("Aggregation is not supported for the selected field.")
-    if aggregations:
+    # Legacy grouped Flock configurations with no numeric aggregation also
+    # mean record counts, never a silent return to detail rows.
+    count_records = count_records or (dataset == "Flocks" and bool(group_by) and not aggregations)
+    if count_records:
+        if not group_by:
+            raise ValueError("Choose at least one grouping field for Flock record count.")
+        if aggregations:
+            raise ValueError("Choose either Flock record count or a numeric aggregation.")
+        frame = frame.groupby(group_by, dropna=False, observed=True).size().reset_index(name=FLOCK_RECORD_COUNT)
+        fields[FLOCK_RECORD_COUNT] = FieldDefinition(FLOCK_RECORD_COUNT_LABEL, FLOCK_RECORD_COUNT, "number")
+        selected_fields = [*group_by, FLOCK_RECORD_COUNT]
+    elif aggregations:
         if not group_by:
             raise ValueError("Choose at least one grouping field for aggregations.")
-        frame = frame.groupby(group_by, dropna=False, as_index=False).agg(aggregations)
+        operations = {
+            field: _sum_known_values if operation == "sum" else operation
+            for field, operation in aggregations.items()
+        }
+        if dataset == 'Production Records' and aggregations.get('TOTAL') == 'sum':
+            frame = frame.assign(_RECORD_COUNT=1,_TOTAL_KNOWN=frame.TOTAL.notna().astype(int),_TOTAL_MISSING=frame.TOTAL.isna().astype(int))
+            operations.update(_RECORD_COUNT='sum',_TOTAL_KNOWN='sum',_TOTAL_MISSING='sum')
+            fields.update({key:FieldDefinition(label,key) for key,label in [('_RECORD_COUNT','Record count'),('_TOTAL_KNOWN','Source Total known count'),('_TOTAL_MISSING','Source Total missing count')]})
+        internal_group = group_by.copy()
+        if dataset == "Production Records" and {"PRODUCER_ACCOUNT_ID", "PRODUCER_ACCOUNT_NAME"}.intersection(group_by) and frame.PRODUCER_ACCOUNT_ID.isna().any():
+            if "PRODUCER_IDENTITY_KEY" not in internal_group: internal_group.append("PRODUCER_IDENTITY_KEY")
+            if "PRODUCER_IDENTITY_LABEL" not in internal_group: internal_group.append("PRODUCER_IDENTITY_LABEL")
+        frame = frame.groupby(internal_group, dropna=False, as_index=False).agg(operations)
+        group_by = internal_group
         selected_fields = [*group_by, *[field for field in aggregations if field not in group_by]]
+        if '_RECORD_COUNT' in operations: selected_fields += ['_RECORD_COUNT','_TOTAL_KNOWN','_TOTAL_MISSING']
     available = [field for field in selected_fields if field in frame.columns]
     result = frame[available].copy() if available else pd.DataFrame(columns=selected_fields)
     if sort_by:

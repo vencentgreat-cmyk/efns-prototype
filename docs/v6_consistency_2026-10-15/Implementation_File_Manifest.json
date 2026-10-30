@@ -1,0 +1,107 @@
+[
+  {
+    "path": "app/pages/1_Production_Import.py",
+    "sha256": "e0868222f9f30c31797d8ce3d733dec09d209efb2cc4d11a47defd7bc92f4fde",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "app/pages/2_Production_Data.py",
+    "sha256": "45e3269aa8b59bb902b5e25d313442aab4d960318d8069f165695eeeebcfa529",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "app/pages/4_Reports.py",
+    "sha256": "c738ad32026f961b1f90df5a1b6ef7dbf6e01400d9851211cdcfff9840451ec4",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "app/pages/5_Flocks.py",
+    "sha256": "a7d6db78d7eae3c619921910f08a3fee831c6da34948bb974249e0684f2df639",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "app/pages/21_Record_History.py",
+    "sha256": "2c217ee1f4d8da884604021731093e347022c93af91fae330274aa59462e72c2",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "app/services/authorized_repository.py",
+    "sha256": "dfe2a7472c3bdb85551ed16bfd2f91b1567468229500256f893bc20856f5de61",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "app/services/report_center.py",
+    "sha256": "d2084c6cd53ba2a567384906f92525477c1ae316afd4aa484574fd33070d644b",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "app/services/report_builder.py",
+    "sha256": "3d2e22b91b8076c90174dcb8f7ae9ab96824b0075d349e21d9def01840b29d61",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "data/importing.py",
+    "sha256": "26ccd679f570246ec23ccd3f9e6bc557a99eced83d198b16033df314343c45a6",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "data/source_scope.py",
+    "sha256": "f98e9e93f5f5a937edb457f5866319d17b3b7ae8080ce2133666544feb99ae71",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "data/validation.py",
+    "sha256": "01e69b2d0e8af4b48517cdab53160c2c898350de296577d233efac4e923169b5",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "data/repositories/base.py",
+    "sha256": "ded976e59ed97c5a68dbd7ca29051dd260be350748072b3214a8c23d74595a06",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "data/repositories/continuity.py",
+    "sha256": "50510387c46c639da53bb83f059cb9f090d791d2ad557c26a5c739e94c461e23",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "data/repositories/mock.py",
+    "sha256": "7a4a207c45f143eaca4a085c3db13910799ab81dace6acb6ce647884b8007003",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "data/repositories/snowflake.py",
+    "sha256": "37f934a4cd19bf3c8b1d952916091fa9a40fd0613546ad8ab13c8d23654cbb16",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "config/source_provenance.json",
+    "sha256": "08c287eb29f2010edcf3af21bbeb2454ccf63f92e7c29cb1e3bf19485c2ca707",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "snowflake.yml",
+    "sha256": "ba8e1b80334c6d0c0c1c82a557586a8c0df684f93e116953fcc2d468ddda8278",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "tests/test_continuity.py",
+    "sha256": "ae8f8cb087ba118e47c7d22ad6886977dbb08d66c8bf433288aef6b953541b4d",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "tests/test_flock_quota_import.py",
+    "sha256": "10025c63df032f96668d7d9e9fa79878e4415741db429672087d23cfc525475b",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "tests/test_snowflake_write_contracts.py",
+    "sha256": "73fed4e3c588c6fd8ccbf2460ff8c6e6199b646b94b7c3fa5bff741ab38d10f0",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  },
+  {
+    "path": "tests/test_v6_consistency.py",
+    "sha256": "42b8a60a0823ae196d5bbdd51352a2f5f3a056fd2d4195e37834e10b2e274db2",
+    "scope": "Current local file, including pre-existing work; not a clean deployment overlay"
+  }
+]

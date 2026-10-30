@@ -1,0 +1,7 @@
+digraph G { graph [rankdir=LR,bgcolor="white",pad=0.2,nodesep=0.35,ranksep=0.55,splines=polyline,label="R29 - FK_RAW_ROW_IMPORT
+Parent 1; child 0..many; one line per complete FK
+EFNS_DEV declarations | 13 October 2026
+Dashed: non-identifying | Solid: identifying
+Grey: repeated table | Rxx: exact relation sheet",labelloc=t,fontname="Arial",fontsize=15];node [shape=plain,fontname="Arial",fontsize=14];edge [fontname="Arial",fontcolor="#303a40"];RAW_IMPORT_BATCH [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#eeeeee"><TR><TD ALIGN="LEFT" BGCOLOR="#dfe2e4"><B>RAW.IMPORT_BATCH [repeated]</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">IMPORT_ID  [PK]</TD></TR></TABLE>>];
+RAW_IMPORT_RAW_ROW [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>RAW.IMPORT_RAW_ROW</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">RAW_ROW_ID  [PK]</TD></TR><TR><TD ALIGN="LEFT" PORT="p1">IMPORT_ID  [FK]</TD></TR></TABLE>>];RAW_IMPORT_BATCH -> RAW_IMPORT_RAW_ROW [dir=both,arrowtail="teetee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="IMPORT_ID
+FK_RAW_ROW_IMPORT",fontsize=12];}

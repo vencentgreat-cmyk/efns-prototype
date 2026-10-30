@@ -1,0 +1,32 @@
+﻿Object,Kind,Module,Grain,Fields,Specification,Current DEV rows
+APP.AUDIT_EVENT,Table,Audit and Application Users,"One audit event; ENTITY_ID is a polymorphic text reference, not a declared business FK.",8,7.1,102
+CORE.ACCOUNT,Table,"Accounts, Contacts, Sites and Buildings",One business organization/account identity.,43,7.2,159
+CORE.CONTACT,Table,"Accounts, Contacts, Sites and Buildings","One contact identity, optionally linked to an Account.",23,7.3,80
+CORE.DIM_EFC_DATE,Table,Production and Independent Calendar,One distinct DAY target; multiple original date source rows can map to it.,27,7.4,26310
+CORE.FACILITY,Table,"Accounts, Contacts, Sites and Buildings",One Account-owned facility/building identity; optional farm location.,18,7.5,249
+CORE.FACILITY_DETAIL,Table,"Accounts, Contacts, Sites and Buildings","One facility detail/history record, not another Facility identity.",19,7.6,153
+CORE.FARM_LOCATION,Table,"Accounts, Contacts, Sites and Buildings",One Account-owned farm-location identity.,14,7.7,48
+CORE.FLOCK,Table,"Flocks, Activity and Testing",One Flock identity with one optional Facility reference; multiple Flocks may share a Facility.,28,7.8,2724
+CORE.FLOCK_TRANSACTION,Table,"Flocks, Activity and Testing",One recorded activity/transaction referring to a Flock.,8,7.9,17455
+CORE.PRODUCTION_RECORD,Table,Production and Independent Calendar,One source/manual production observation; source GUID identifies historical marketing rows.,60,7.10,45182
+CORE.PRODUCTION_SIZE_BREAKDOWN,Table,Production and Independent Calendar,One size-band child row for a production record; historical wide sizes are separate storage.,6,7.11,0
+CORE.QUOTA_ALLOCATION,Table,Quota Records and Independent Allocation,One historical allocation identity; no Account FK is declared.,10,7.12,28
+CORE.QUOTA_REGISTRATION,Table,Quota Records and Independent Allocation,One quota registration identity; historical registration number may be unknown.,11,7.13,197
+CORE.QUOTA_TRANSACTION,Table,Quota Records and Independent Allocation,One quota transaction identity; related quota and related transaction are separate roles.,15,7.14,1636
+CORE.SALMONELLA_TEST,Table,"Flocks, Activity and Testing",One test identity; test and Flock Account roles remain distinct.,17,7.15,540
+CORE.SALMONELLA_TEST_SAMPLE,Table,"Flocks, Activity and Testing",One sample record belonging to one test; not one sample per test by rule.,10,7.16,1
+RAW.IMPORT_BATCH,Table,Ordinary Import Tracking,One production/operational import tracking identity.,16,7.17,5
+RAW.IMPORT_RAW_ROW,Table,Ordinary Import Tracking,One preserved production/operational upload source row.,14,7.18,57
+RAW.MIGRATION_BATCH,Table,Historical Source and Lineage,"One historical package batch, not one daily upload.",12,7.19,2
+RAW.MIGRATION_CORRECTION_BATCH,Table,Independent Corrections,One independent correction attempt/batch linked to an original historical batch.,8,7.20,1
+RAW.MIGRATION_CORRECTION_ROW,Table,Independent Corrections,One source-row correction/review trace within a correction batch.,15,7.21,271
+RAW.MIGRATION_ERROR,Table,Historical Source and Lineage,One validation or runtime error record; multiple errors may refer to a source row.,9,7.22,349
+RAW.MIGRATION_FILE,Table,Historical Source and Lineage,One source-file metadata record within a historical batch.,9,7.23,23
+RAW.MIGRATION_ID_MAP,Table,Historical Source and Lineage,One Ready source-row lineage; many date lineages may share a DAY target.,9,7.24,95087
+RAW.MIGRATION_RAW_ROW,Table,Historical Source and Lineage,One original source row identified by batch plus RAW row ID.,14,7.25,95358
+RAW.MIGRATION_RECONCILIATION,Table,Historical Source and Lineage,"One batch/entity summary, not a target record.",9,7.26,14
+SECURITY.APP_USER,Table,Audit and Application Users,One application user/security identity.,8,7.27,1
+REPORTING.VW_ACCOUNT_FACILITY,View,Read projections,Account/Facility pair; null Facility placeholder for Account with none,20,Section 8 view definition,310
+REPORTING.VW_FLOCK_DETAIL,View,Read projections,One Flock with parent labels,22,Section 8 view definition,2724
+REPORTING.VW_PRODUCTION_SIZE_DETAIL,View,Read projections,One size-child row or one null-child placeholder per Production,9,Section 8 view definition,45182
+REPORTING.VW_PRODUCTION_SUMMARY,View,Read projections,One Production observation,29,Section 8 view definition,45182

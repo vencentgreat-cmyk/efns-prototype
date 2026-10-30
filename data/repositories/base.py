@@ -60,6 +60,19 @@ class RepositoryOperationError(RepositoryError):
         )
 
 
+class MigrationDataError(RepositoryError):
+    """Safe context for malformed persisted migration lineage."""
+
+    def __init__(self, entity: str, operation: str, source_row: int, reason: str) -> None:
+        self.entity = str(entity or "MIGRATION_BATCH").upper()
+        self.operation = str(operation or "NORMALIZE").upper()
+        self.source_row = int(source_row or 0)
+        super().__init__(
+            f"Migration {self.operation.lower()} failed for {self.entity} at source row "
+            f"{self.source_row}: {reason}"
+        )
+
+
 class ConcurrencyError(RepositoryError):
     """Raised when a record changed since the editor last loaded it.
 
@@ -71,7 +84,99 @@ class ConcurrencyError(RepositoryError):
     pass
 
 
+def migration_commit_failure_details(error: Exception) -> tuple[str, str, str]:
+    """Return non-sensitive entity, operation, and message for RAW tracking."""
+    if isinstance(error, (RepositoryOperationError, MigrationDataError)):
+        return error.entity[:100], error.operation[:255], str(error)[:2000]
+    return (
+        "MIGRATION_BATCH",
+        "COMMIT",
+        f"Migration commit failed ({type(error).__name__}). "
+        "Source values and database error text were not stored.",
+    )
+
+
 class BaseRepository(ABC):
+    def archive_source_file(self, filename, content, route, actor=None):
+        raise NotImplementedError
+
+    def get_source_file_bytes(self, file_id):
+        raise NotImplementedError
+
+    def get_source_files(self):
+        raise NotImplementedError
+
+    def record_source_parse(self, file_id, success, actor=None):
+        raise NotImplementedError
+
+    def get_production_match_decisions(self):
+        raise NotImplementedError
+
+    def get_flock_events(self, flock_id):
+        raise NotImplementedError
+
+    def get_flock_position(self, flock_id, as_of):
+        raise NotImplementedError
+
+    def create_flock_with_initial_position(self, record, effective_at, reason, request_id, actor=None):
+        raise NotImplementedError
+
+    def get_record_revisions(self):
+        raise NotImplementedError
+
+    def stage_production_upload(self, batch, raw_rows):
+        raise NotImplementedError
+
+    def stage_operational_review(self, batch, raw_rows):
+        raise NotImplementedError
+
+    def preview_flock_transaction_supplement(self, filename, content, binding):
+        raise NotImplementedError
+
+    def diagnose_flock_date_repair_context(self):
+        raise NotImplementedError
+
+    def preview_flock_date_repair(self, batch_id, basis, holds=None):
+        raise NotImplementedError
+
+    def commit_flock_date_repair(self, batch_id, basis, holds, review_token, *, confirmed=False, actor=None):
+        raise NotImplementedError
+
+    def preview_flock_date_reversal(self, operation_id, basis):
+        raise NotImplementedError
+
+    def commit_flock_date_reversal(self, operation_id, basis, review_token, *, confirmed=False, actor=None):
+        raise NotImplementedError
+
+    def commit_flock_transaction_supplement(self, filename, content, binding, review_token, *, confirmed=False, actor=None):
+        raise NotImplementedError
+
+    def commit_staged_operational(self, import_id, records_by_entity, actor=None):
+        raise NotImplementedError
+
+    def get_source_raw_rows(self, file_id):
+        raise NotImplementedError
+
+    def get_source_review_rows(self, file_id):
+        raise NotImplementedError
+
+    def get_facility(self, facility_id):
+        raise NotImplementedError
+
+    def commit_staged_production(self, import_id, actor=None, new_observations_confirmed=False):
+        raise NotImplementedError
+
+    def match_production_producer(self, production_id, account_id=None, basis=None, actor=None):
+        raise NotImplementedError
+
+    def record_flock_event(self, flock_id, event_type, effective_at, reason, request_id, to_facility_id=None, supersedes_event_id=None, actor=None, position_confirmed=False):
+        raise NotImplementedError
+
+    def revise_record(self, entity, record_id, changes, reason, request_id, actor=None, business_at=None, expected_updated_at=None):
+        raise NotImplementedError
+
+    def create_manual_production(self, record, request_id, actor=None):
+        raise NotImplementedError
     """Abstract repository interface for EFNS data access."""
 
     # ------------------------------------------------------------------
@@ -400,6 +505,11 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
+    def get_migration_commit_errors(self, batch_id: str) -> pd.DataFrame:
+        """Return sanitized commit failures without row-level validation details."""
+        ...
+
+    @abstractmethod
     def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:
         ...
 
@@ -408,12 +518,57 @@ class BaseRepository(ABC):
         ...
 
     @abstractmethod
+    def get_migration_retry_status(self, batch_id: str) -> dict:
+        """Return integrity checks and retry eligibility for a saved batch."""
+        ...
+
+    @abstractmethod
+    def repair_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:
+        """Safely add missing lineage records to the same failed batch."""
+        ...
+
+    @abstractmethod
     def commit_migration_batch(self, batch_id: str) -> dict:
         ...
 
     @abstractmethod
-    def cleanup_synthetic_migration(self, batch_id: str) -> bool:
+    def preview_historical_corrections(self, batch_id: str):
+        """Classify rejected historical rows without changing migration state."""
         ...
+
+    @abstractmethod
+    def get_historical_correction_status(self, batch_id: str) -> Optional[dict]:
+        """Return the persisted correction-batch status for an original batch."""
+        ...
+
+    @abstractmethod
+    def commit_historical_corrections(self, batch_id: str) -> dict:
+        """Persist a separate idempotent correction batch and eligible CORE rows."""
+        ...
+
+    @abstractmethod
+    def cleanup_synthetic_migration(self, batch_id: str) -> bool:
+        """Fail closed until synthetic provenance and shared references are reviewed."""
+        ...
+
+    def get_historical_correction_decisions(self, batch_id: str) -> pd.DataFrame:
+        """Append-only manual decisions, scoped to the original migration batch."""
+        raise NotImplementedError
+
+    def get_historical_correction_source(self, batch_id: str, raw_id: str) -> dict:
+        raise NotImplementedError
+
+    def preview_historical_correction_review(self, batch_id: str):
+        """Revalidate persistent decisions; returns a versioned review token."""
+        raise NotImplementedError
+
+    def save_historical_correction_decision(self, batch_id, raw_id, changes, basis,
+                                          expected_version, request_id, *, confirmed=False, actor=None):
+        raise NotImplementedError
+
+    def commit_historical_correction_review(self, batch_id, review_token, *, actor=None):
+        """Re-read decisions and atomically commit CORE, tracking and audit."""
+        raise NotImplementedError
 
     @abstractmethod
     def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:

@@ -1,0 +1,1 @@
+"""EFNS Streamlit application package."""

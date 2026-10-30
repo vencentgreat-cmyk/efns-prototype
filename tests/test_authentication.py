@@ -172,6 +172,10 @@ class FakeRepository:
         self.calls.append("migration-import")
         return {"batch_id": "migration-batch-1", "counts": {}}
 
+    def repair_migration_batch(self, *args, **kwargs):
+        self.calls.append("migration-repair")
+        return "migration-batch-1"
+
     def check_connection(self):
         self.calls.append("diagnostics")
 
@@ -203,6 +207,7 @@ def test_import_audit_uses_each_operation_result_identifier(auth_context):
     repository = AuthorizedRepository(FakeRepository(), store, users[Role.DATA_EDITOR])
 
     repository.import_flock_quota_batch({}, [], [])
+    repository.repair_migration_batch({}, [], [])
     repository.commit_migration_batch("migration-batch-1")
     repository.import_production_bundle({}, [], pd.DataFrame())
 

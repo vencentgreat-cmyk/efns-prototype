@@ -53,9 +53,25 @@ with st.container(border=True):
     ):
         try:
             with st.spinner("Checking the uploaded rows..."):
+                if may_import:
+                    archives = {}
+                    for upload in uploads:
+                        archived = repo.archive_source_file(upload.name, upload.getvalue(), "DAILY_FLOCK_QUOTA")
+                        archives[upload.name + "\0" + archived["FILE_HASH"]] = archived["SOURCE_FILE_ID"]
+                    st.session_state.daily_source_files = archives
                 report = analyze_operational_files(
                     uploads, selected_type, repo, max_file_bytes=max_upload_mb * 1024 * 1024
                 )
+                if may_import:
+                    for item in report.files:
+                        file_id = archives[item.filename + "\0" + item.file_hash]
+                        repo.record_source_parse(file_id,not any("could not be parsed" in error for error in item.errors))
+                    source_rows=[{**row,"SOURCE_FILE_ID":archives[row["RAW_DATA"]["source_filename"]+"\0"+(row["RAW_DATA"].get("source_file_hash") or "")]} for row in report.raw_rows]
+                    st.session_state.daily_prepared_import_id=repo.stage_operational_review({
+                        "FILENAME":report.files[0].filename if len(report.files)==1 else f"Operational upload ({len(report.files)} files)",
+                        "FILE_HASH":report.package_hash,"FILE_SIZE_BYTES":sum(item.file_size for item in report.files),
+                    },source_rows)
+                    st.session_state.daily_prepared_package_hash=report.package_hash
             st.session_state.daily_flock_quota_report = report
             st.session_state.pop("daily_flock_quota_result", None)
             st.session_state.pop("daily_flock_quota_submitted_hash", None)
@@ -66,10 +82,12 @@ with st.container(border=True):
 
 report = st.session_state.get("daily_flock_quota_report")
 if report is None:
-    st.info("Choose one or more files, then select Review and validate. Nothing is saved during review.")
+    st.info("Choose one or more files, then select Review and validate. Original files are archived for import users; no business records are written during review.")
     st.stop()
 
 existing_import = repo.find_import_by_hash(report.package_hash)
+already_committed = bool(existing_import and str(existing_import.get("STATUS","")).lower()=="committed")
+prepared_for_commit=st.session_state.get("daily_prepared_package_hash")==report.package_hash
 row_frame = report.rows_frame()
 
 metrics = st.columns(5)
@@ -104,7 +122,7 @@ with st.container(border=True):
 
 with st.container(border=True):
     section_intro("Validation results", "Unsupported files and rejected rows are never imported.")
-    if existing_import:
+    if already_committed:
         st.error("This exact set of files has already been imported.")
     elif report.unsupported_files and not report.ready_rows:
         st.warning("The uploaded files contain data that this page does not support.")
@@ -161,27 +179,21 @@ with st.container(border=True):
     confirmed = st.checkbox(
         "I reviewed the validation results and confirm the valid rows for import.",
         key=f"daily_flock_quota_confirm_{report.package_hash[:16]}",
-        disabled=not may_import or not report.ready_rows or bool(existing_import),
+        disabled=not may_import or not prepared_for_commit or not report.ready_rows or already_committed,
     )
     already_submitted = st.session_state.get("daily_flock_quota_submitted_hash") == report.package_hash
     if st.button(
         "Confirm import",
         type="primary",
         icon=":material/publish:",
-        disabled=not may_import or not report.ready_rows or not confirmed or bool(existing_import) or already_submitted,
+        disabled=not may_import or not prepared_for_commit or not report.ready_rows or not confirmed or already_committed or already_submitted,
     ):
         st.session_state.daily_flock_quota_submitted_hash = report.package_hash
         try:
             with st.spinner("Saving the validated rows..."):
-                result = repo.import_operational_flock_quota_batch(
-                    {
-                        "FILENAME": ", ".join(item.filename for item in report.files),
-                        "FILE_HASH": report.package_hash,
-                        "FILE_SIZE_BYTES": sum(item.file_size for item in report.files),
-                        "NOTES": "Daily or incremental Flock and Quota operational import.",
-                    },
+                result = repo.commit_staged_operational(
+                    st.session_state.daily_prepared_import_id,
                     report.records_by_entity,
-                    report.raw_rows,
                 )
             st.session_state.daily_flock_quota_result = result
             st.success(
@@ -191,7 +203,7 @@ with st.container(border=True):
         except Exception:
             st.session_state.pop("daily_flock_quota_submitted_hash", None)
             reference = uuid.uuid4().hex[:12].upper()
-            st.error(f"Nothing was saved. Error reference: {reference}")
+            st.error(f"No business rows were committed. Original files and staged source rows remain available. Error reference: {reference}")
 
 result = st.session_state.get("daily_flock_quota_result")
 if result and result.get("file_hash") == report.package_hash:

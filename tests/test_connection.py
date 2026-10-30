@@ -302,6 +302,19 @@ def test_snowpark_execute_and_transactions():
     assert [call[0] for call in session.calls[-2:]] == ["BEGIN", "COMMIT"]
 
 
+@pytest.mark.parametrize("operation", ["execute", "query"])
+def test_snowpark_single_statement_renders_optional_numbers_as_sql_null(operation):
+    session = FakeSession()
+    executor = connection.SnowparkExecutor(session)
+    getattr(executor, operation)(
+        "SELECT %s AS LATITUDE, %s AS LONGITUDE, '%s ?' AS LITERAL",
+        (None, 0.0),
+    )
+    assert session.calls == [
+        ("SELECT NULL AS LATITUDE, ? AS LONGITUDE, '%s ?' AS LITERAL", [0.0])
+    ]
+
+
 def test_snowpark_failed_transaction_rolls_back():
     session = FakeSession()
     executor = connection.SnowparkExecutor(session)

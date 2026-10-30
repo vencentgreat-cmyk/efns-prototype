@@ -1,0 +1,2 @@
+# Direct dependencies and their resolved local dependency pins.
+-r requirements-lock.txt

@@ -1,0 +1,13 @@
+{
+  "evidence_date": "2026-10-14",
+  "evidence": "docs/identity_history_2026-10-14/Verified_Original_Archive_Manifest.csv and Legacy_Original_File_Gaps.csv",
+  "batches": {
+    "DEV_MIGRATION_255ef9b50a52e766a7dff9": "Confirmed historical package",
+    "ba915859-5e57-4a34-86f9-5cb47773194f": "Archived workbook; business scope unconfirmed",
+    "DEV_SYNTH_IMPORT_001": "DEV test data",
+    "47645428-7c07-4cb0-96b5-e6ad7b7c27fb": "DEV test data"
+  },
+  "legacy_file_imports": {
+    "a577b1aa-0bda-5635-83af-5ef3f94e4fce": ["ba915859-5e57-4a34-86f9-5cb47773194f"]
+  }
+}

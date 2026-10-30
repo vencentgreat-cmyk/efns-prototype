@@ -8,11 +8,11 @@ import pandas as pd
 import streamlit as st
 
 from app.auth import can_current, get_auth_store, require_page_permission
-from app.navigation import format_timestamp, timestamp_columns
+from app.navigation import format_timestamp, page_file, timestamp_columns
 from app.security import Permission
 from app.services.report_center import (
     CUSTOM_DATASETS, build_custom_report, build_quota_summary, report_csv,
-    report_definition, report_xlsx, visible_catalog,
+    report_definition, report_xlsx, visible_catalog, FLOCK_RECORD_COUNT, FLOCK_RECORD_COUNT_LABEL,
 )
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.constants import (
@@ -138,7 +138,7 @@ if section == "Report Library":
         elif definition.handler == "salmonella_report":
             st.info("Use the registered Salmonella Test Report page for the existing filterable report.")
             if st.button("Open Salmonella Test Report", icon=":material/lab_profile:"):
-                st.switch_page("pages/10_Salmonella_Report.py")
+                st.switch_page(page_file("10_Salmonella_Report.py"))
         elif definition.input_entity:
             template_record_selector(definition.input_entity)
 
@@ -147,7 +147,12 @@ elif section == "Customize Report":
     dataset = st.selectbox("Dataset", list(CUSTOM_DATASETS), key="custom_report_dataset")
     _method, _id, definitions = CUSTOM_DATASETS[dataset]
     labels = {field.label: field.source for field in definitions}
-    selected_labels = st.multiselect("Output columns", list(labels), default=list(labels)[:5], key="custom_report_columns")
+    default_columns = list(labels)[:5]
+    if dataset in {"Flocks", "Flock Transactions", "Production Records"}:
+        default_columns += ["Flock Account", "Facility Account", "Facility Name"]
+        if dataset == "Production Records":
+            default_columns += ["Producer Account", "Flock Facility ID", "Report Facility ID", "Facility Source", "Facility Reference Comparison"]
+    selected_labels = st.multiselect("Output columns", list(labels), default=default_columns, key="custom_report_columns")
     selected_fields = [labels[label] for label in selected_labels]
 
     accounts = repo.get_accounts(); farm_locations = repo.get_farm_locations(); facilities = repo.get_facilities(); flocks = repo.get_flocks()
@@ -157,12 +162,32 @@ elif section == "Customize Report":
     flock_options = {"All": None, **{f"{r.FLOCK_NUMBER} · {str(r.FLOCK_ID)[:8]}": r.FLOCK_ID for r in flocks.itertuples()}}
     filters = {}
     filter_cols = st.columns(4)
-    filters["account_id"] = account_options[filter_cols[0].selectbox("Account", list(account_options), key="custom_filter_account")]
+    account_label = "Producer Account" if dataset == "Production Records" else "Flock Account" if dataset in {"Flocks", "Flock Transactions"} else "Account"
+    filters["account_id"] = account_options[filter_cols[0].selectbox(account_label, list(account_options), key="custom_filter_account")]
     filters["facility_id"] = facility_options[filter_cols[1].selectbox("Facility", list(facility_options), key="custom_filter_facility")]
     filters["flock_id"] = flock_options[filter_cols[2].selectbox("Flock", list(flock_options), key="custom_filter_flock")]
     status_values = {"Accounts": ACCOUNT_STATUSES, "Farm Locations": FARM_LOCATION_STATUSES, "Facilities": FACILITY_STATUSES, "Facility Details": FACILITY_DETAIL_STATUSES, "Flocks": FLOCK_STATUSES, "Quota Registrations": QUOTA_STATUSES}.get(dataset, ())
     status = filter_cols[3].selectbox("Status", ["All", *status_values], disabled=not status_values, key="custom_filter_status")
     if status != "All": filters["statuses"] = (status,)
+    if dataset in {"Flocks", "Flock Transactions", "Production Records"}:
+        ownership = st.columns(2)
+        facility_account = ownership[0].selectbox("Facility Account", list(account_options), key="custom_filter_facility_account")
+        filters["facility_account_id"] = account_options[facility_account]
+        if dataset == "Production Records":
+            flock_account = ownership[1].selectbox("Flock Account", list(account_options), key="custom_filter_flock_account")
+            filters["flock_account_id"] = account_options[flock_account]
+    if dataset == "Production Records":
+        from data.source_scope import SOURCE_SCOPES
+        filters['source_scope'] = st.selectbox('Source scope', SOURCE_SCOPES, key='custom_filter_source_scope')
+        periods = repo.get_production_records()
+        period_columns = st.columns(2)
+        years = sorted(pd.to_numeric(periods.get("REPORTING_YEAR", pd.Series(dtype=float)), errors="coerce").dropna().astype(int).unique())
+        year = period_columns[0].selectbox("Reporting Year", ["All", *years], key="custom_filter_reporting_year")
+        year_rows = periods if year == "All" else periods[periods["REPORTING_YEAR"] == year]
+        weeks = sorted(pd.to_numeric(year_rows.get("REPORTING_WEEK", pd.Series(dtype=float)), errors="coerce").dropna().astype(int).unique())
+        week = period_columns[1].selectbox("Reporting Week", ["All", *weeks], key="custom_filter_reporting_week")
+        filters["reporting_year"] = None if year == "All" else int(year)
+        filters["reporting_week"] = None if week == "All" else int(week)
     extra = st.columns(4)
     farm_location_label = extra[0].selectbox("Farm Location", list(farm_location_options), disabled=dataset != "Farm Locations", key="custom_filter_farm_location")
     filters["farm_location_id"] = farm_location_options[farm_location_label] if dataset == "Farm Locations" else None
@@ -171,20 +196,34 @@ elif section == "Customize Report":
     transaction_values = FLOCK_TRANSACTION_TYPES if dataset == "Flock Transactions" else QUOTA_TRANSACTION_TYPES if dataset == "Quota Transactions" else ()
     transaction_value = extra[2].selectbox("Transaction Type", ["All", *transaction_values], disabled=not transaction_values, key="custom_filter_transaction")
     filters["transaction_type"] = None if transaction_value == "All" else transaction_value
-    use_dates = extra[3].checkbox("Use date range", key="custom_filter_use_dates")
-    date_range = st.date_input("Date range", value=(dt.date.today() - dt.timedelta(days=365), dt.date.today()), disabled=not use_dates, key="custom_filter_dates")
-    if use_dates and isinstance(date_range, (tuple, list)) and len(date_range) == 2:
+    use_dates = extra[3].checkbox("Use date range", disabled=dataset == "Production Records", key="custom_filter_use_dates")
+    date_range = st.date_input("Date range", value=(dt.date.today() - dt.timedelta(days=365), dt.date.today()), disabled=not use_dates or dataset == "Production Records", key="custom_filter_dates")
+    if dataset != "Production Records" and use_dates and isinstance(date_range, (tuple, list)) and len(date_range) == 2:
         filters["date_from"], filters["date_to"] = date_range
+        if dataset == 'Flocks':
+            flock_date_fields={'Hatch Date':'HATCH_DATE','Placement Date':'PLACEMENT_DATE','Estimated Disposal Date':'EST_DISPOSAL','Actual Disposal Date':'DISPOSAL_DATE'}
+            selected_date=st.selectbox('Flock date field',list(flock_date_fields),key='custom_filter_flock_date_field')
+            filters['date_field']=flock_date_fields[selected_date]
 
     group_labels = st.multiselect("Group by", selected_labels, key="custom_report_group")
     group_by = [labels[label] for label in group_labels]
     numeric = [field for field in definitions if field.source in selected_fields and field.aggregations]
-    aggregation_field = st.selectbox("Aggregation field", ["None", *[field.label for field in numeric]], key="custom_report_aggregate_field")
+    aggregation_options = ["None", *[field.label for field in numeric]]
+    if dataset == "Flocks" and group_by:
+        aggregation_options = [FLOCK_RECORD_COUNT_LABEL, *[field.label for field in numeric]]
+    if st.session_state.get("custom_report_aggregate_field") not in aggregation_options:
+        st.session_state.custom_report_aggregate_field = aggregation_options[0]
+    aggregation_field = st.selectbox("Aggregation field", aggregation_options, key="custom_report_aggregate_field")
+    count_records = aggregation_field == FLOCK_RECORD_COUNT_LABEL
     aggregations = {}
-    if aggregation_field != "None":
+    if aggregation_field != "None" and not count_records:
         field = next(field for field in numeric if field.label == aggregation_field)
         aggregations[field.source] = st.selectbox("Aggregation", field.aggregations, key="custom_report_aggregate")
-    sort_label = st.selectbox("Sort by", ["None", *selected_labels], key="custom_report_sort")
+    sort_options = ["None", *group_labels, FLOCK_RECORD_COUNT_LABEL] if count_records else ["None", *selected_labels]
+    if st.session_state.get("custom_report_sort") not in sort_options:
+        st.session_state.custom_report_sort = "None"
+    sort_label = st.selectbox("Sort by", sort_options, key="custom_report_sort")
+    sort_field = FLOCK_RECORD_COUNT if sort_label == FLOCK_RECORD_COUNT_LABEL else labels.get(sort_label)
     ascending = st.radio("Sort direction", ["Ascending", "Descending"], horizontal=True, key="custom_report_direction") == "Ascending"
     run, reset = st.columns(2)
     if reset.button("Reset configuration", icon=":material/restart_alt:", width="stretch"):
@@ -192,14 +231,16 @@ elif section == "Customize Report":
         st.session_state.pop("custom_report_result", None); st.rerun()
     if run.button("Run Report", type="primary", icon=":material/play_arrow:", width="stretch"):
         try:
-            result = build_custom_report(repo, user=user, dataset=dataset, selected_fields=selected_fields, filters=filters, sort_by=labels.get(sort_label), ascending=ascending, group_by=group_by, aggregations=aggregations)
+            result = build_custom_report(repo, user=user, dataset=dataset, selected_fields=selected_fields, filters=filters, sort_by=sort_field, ascending=ascending, group_by=group_by, aggregations=aggregations, count_records=count_records)
             st.session_state.custom_report_result = result
-            st.session_state.custom_report_configuration = {"dataset": dataset, "selected_fields": selected_fields, "filters": {key: value for key, value in filters.items() if value not in (None, "", ())}, "group_by": group_by, "aggregations": aggregations, "sort_by": labels.get(sort_label), "ascending": ascending}
+            st.session_state.custom_report_configuration = {"dataset": dataset, "selected_fields": selected_fields, "filters": {key: value for key, value in filters.items() if value not in (None, "", ())}, "group_by": group_by, "aggregations": aggregations, "sort_by": sort_field, "ascending": ascending, "count_records": count_records}
             audit("RUN_REPORT", "custom-builder", {"dataset": dataset, "row_count": len(result)})
         except Exception as exc: show_data_error(exc)
     result = st.session_state.get("custom_report_result")
     if isinstance(result, pd.DataFrame):
         section_intro("Preview", f"{len(result):,} result row(s); exports contain this exact filtered result and column order.")
+        if 'Source Total missing count' in result and result['Source Total missing count'].sum() > 0:
+            st.warning('Source Total sums known values only. Missing values remain unknown; these counts do not establish that all observations were reported or that units are uniform.')
         if result.empty: st.info("No records match the selected configuration.")
         else: st.dataframe(result, width="stretch", hide_index=True, column_config=timestamp_columns(result.columns))
         downloads(result, "efns_custom_report", "custom-builder")

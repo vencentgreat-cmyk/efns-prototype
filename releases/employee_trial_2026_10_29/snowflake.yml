@@ -1,0 +1,55 @@
+definition_version: 2
+entities:
+  efns_dev:
+    type: streamlit
+    identifier:
+      name: EFNS_INTERNAL_APP
+      database: EFNS_DEV
+      schema: APP
+    title: EFNS Internal Data System
+    comment: EFNS development application; operational schema remains provisional.
+    stage: EFNS_DEV.APP.EFNS_STREAMLIT_STAGE
+    query_warehouse: EFNS_DEV_WH
+    runtime_name: SYSTEM$WAREHOUSE_RUNTIME
+    main_file: streamlit_app.py
+    pages_dir: app/pages/
+    artifacts:
+      - streamlit_app.py
+      - environment.yml
+      - src: .streamlit/config.toml
+        dest: .streamlit/config.toml
+      - src: app/*.py
+        dest: app/
+      - src: app/pages/*.py
+        dest: app/pages/
+      - src: app/services/*.py
+        dest: app/services/
+      - src: data/*.py
+        dest: data/
+      - src: data/repositories/*.py
+        dest: data/repositories/
+      - src: config/eims_migration_mapping.json
+        dest: config/eims_migration_mapping.json
+      - src: config/eims_migration_mapping_v1.json
+        dest: config/eims_migration_mapping_v1.json
+      - src: config/eims_migration_mapping_v2.json
+        dest: config/eims_migration_mapping_v2.json
+      - src: config/eims_migration_mapping_v3.json
+        dest: config/eims_migration_mapping_v3.json
+      - src: config/eims_migration_mapping_v3_disposal_r1.json
+        dest: config/eims_migration_mapping_v3_disposal_r1.json
+      - src: config/eims_migration_mapping_v3_count_source_r1.json
+        dest: config/eims_migration_mapping_v3_count_source_r1.json
+      - src: config/source_provenance.json
+        dest: config/source_provenance.json
+      - src: config/account_relationship_supplement_v1.json
+        dest: config/account_relationship_supplement_v1.json
+    grants:
+      - privilege: USAGE
+        role: EFNS_DEV_ADMIN
+      - privilege: USAGE
+        role: EFNS_DEV_EDITOR
+      - privilege: USAGE
+        role: EFNS_DEV_DEVELOPER
+      - privilege: USAGE
+        role: EFNS_DEV_VIEWER

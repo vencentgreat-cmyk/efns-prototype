@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-15",
+  "timezone": "America/Halifax",
+  "branch": "codex/identity-history-archives",
+  "full_pytest": {
+    "tests": 481,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 56.277,
+    "command": ".venv/Scripts/python.exe -m pytest -q --junitxml=.local/v6-consistency-20261015/pytest.xml",
+    "warnings": "9 pandas/numpy deprecation/future warnings"
+  },
+  "readiness": "Passed: scripts/check_snowflake_readiness.py",
+  "diff_check": "Passed; existing LF/CRLF notices are not whitespace errors",
+  "verification_scope": [
+    "Local synthetic Mock tests",
+    "Local AppTest",
+    "Threaded optimistic-concurrency test",
+    "Transaction-aware SQL executor double; not a real Snowflake temporary table"
+  ],
+  "dev_connection_this_round": false,
+  "dev_dml": false,
+  "ddl": false,
+  "deployed": false,
+  "browser_acceptance_this_round": false,
+  "historical_rerun": false,
+  "commit_or_push": false,
+  "structure_changed": false,
+  "retained_snapshot": {
+    "captured_at_utc": "2026-10-14T16:59:48.154042+00:00",
+    "tables": 32,
+    "table_columns": 494,
+    "views": 4,
+    "view_outputs": 85,
+    "dictionary_entries": 579,
+    "foreign_key_relationships": 46
+  },
+  "generated_at_utc": "2026-10-15T12:43:23.728288+00:00"
+}

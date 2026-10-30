@@ -5,6 +5,21 @@
 A Streamlit-based prototype for the next-generation internal data system,
 targeting Snowflake as the cloud data platform.
 
+## Current employee-trial release and Claude review
+
+Read **[docs/CLAUDE_REVIEW_GUIDE.md](docs/CLAUDE_REVIEW_GUIDE.md)** first.
+The complete, independently testable published-source snapshot is
+**[releases/employee_trial_2026_10_29](releases/employee_trial_2026_10_29/README.md)**.
+It preserves production authentication and the verified 89-file employee release.
+The root application below is retained unmerged development work; it must not be
+mistaken for an exact copy of the currently deployed application. Older feature
+status tables and dated design snapshots are historical context.
+
+Prior execution records confirm the 13,556 label updates, nine new Flocks and
+1,991 new historical transactions; remaining holds and excluded rows were not
+released. This commit preparation performs no deployment or business import.
+Publication is blocked until the target GitHub repository is verified private.
+
 ---
 
 ## Quick Start

@@ -1,0 +1,16 @@
+﻿Rule implementation,Scope,Line,Description,Evidence
+normalize_optional_account_links,data/validation.py,19,Normalize explicit null placeholders; never invent a missing parent ID.,data/validation.py:19
+parse_optional_coordinate,data/validation.py,33,"Keep unknown coordinates null and accept finite coordinates, including zero.",data/validation.py:33
+validate_farm_location,data/validation.py,52,Validate the provisional Account-owned Farm Location contract.,data/validation.py:52
+normalize_flock_dates,data/validation.py,79,Return a copy whose Flock dates are Python ``date`` values or ``None``.,data/validation.py:79
+validate_flock,data/validation.py,118,"See function implementation; technical rule, not independent business confirmation.",data/validation.py:118
+validate_quota_registration,data/validation.py,169,"See function implementation; technical rule, not independent business confirmation.",data/validation.py:169
+validate_quota_transaction,data/validation.py,185,"See function implementation; technical rule, not independent business confirmation.",data/validation.py:185
+validate_salmonella_test,data/validation.py,205,"See function implementation; technical rule, not independent business confirmation.",data/validation.py:205
+normalize_eims_records,data/importing.py,65,Map source columns without inventing Dataverse relationships.,data/importing.py:65
+validate_eims_records,data/importing.py,110,Return blocking technical errors and non-blocking warnings.,data/importing.py:110
+parse_reporting_period,data/migration.py,193,Parse EIMS YYYYWW or legacy CYYWW production-week codes.,data/migration.py:193
+normalize_production_period_fields,data/migration.py,206,Derive target period fields while retaining the source week code.,data/migration.py:206
+normalize_migration_row,data/migration.py,257,Normalize one preserved RAW row without changing its stored lineage.,data/migration.py:257
+_required_errors,data/historical_corrections.py,133,"See function implementation; technical rule, not independent business confirmation.",data/historical_corrections.py:133
+_validate_row,data/operational_flock_quota_import.py,357,"See function implementation; technical rule, not independent business confirmation.",data/operational_flock_quota_import.py:357

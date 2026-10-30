@@ -1,5 +1,6 @@
 """Flock Transaction list and record workspace."""
 import datetime as dt
+import pandas as pd
 import streamlit as st
 
 from app.auth import require_operational_page
@@ -68,6 +69,8 @@ else:
             with st.container(border=True):
                 st.markdown(f"**Flock**  \n{flock_names.get(current['FLOCK_ID'], 'Unknown')}")
                 st.markdown(f"**Transaction Type**  \n{current['TRANSACTION_TYPE']}")
+                count_source = current.get("COUNT_SOURCE_LABEL")
+                st.markdown(f"**Count Source**  \n{count_source if pd.notna(count_source) else 'Not supplied'}")
                 st.markdown(f"**Quantity**  \n{current['QUANTITY']}")
                 st.markdown(f"**Transaction Date**  \n{current['TRANSACTION_DATE']}")
                 st.markdown(f"**Notes**  \n{current.get('NOTES') or '—'}")

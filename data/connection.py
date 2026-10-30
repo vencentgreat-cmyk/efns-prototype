@@ -12,6 +12,8 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass
 import os
+import io
+from pathlib import Path
 import re
 import tempfile
 import threading
@@ -292,6 +294,9 @@ class SqlExecutor(ABC):
             "The active Snowflake runtime does not support migration stage uploads."
         )
 
+    def get_stream(self, stage_path: str):
+        raise RepositoryConfigurationError("The active runtime cannot retrieve original files.")
+
 
 class ConnectorExecutor(SqlExecutor):
     runtime_name = "Connector"
@@ -423,6 +428,23 @@ class ConnectorExecutor(SqlExecutor):
         except Exception as exc:
             raise _operation_error(exc, "PUT_STREAM EIMS_MIGRATION_FILE") from exc
 
+    def get_stream(self, stage_path: str):
+        if not re.fullmatch(r"@[A-Za-z0-9_.$]+/[A-Za-z0-9_.$/-]+", stage_path):
+            raise RepositoryError("Invalid archive location.")
+        try:
+            with tempfile.TemporaryDirectory(prefix="efns-retrieve-") as directory:
+                destination = directory.replace("\\", "/").replace("'", "''")
+                with self._cursor() as cursor:
+                    cursor.execute(f"GET {stage_path} 'file://{destination}/'")
+                files = list(Path(directory).glob("*"))
+                if len(files) != 1:
+                    raise RepositoryError("The original file is not uniquely available in the archive.")
+                return io.BytesIO(files[0].read_bytes())
+        except RepositoryError:
+            raise
+        except Exception as exc:
+            raise _operation_error(exc, "GET_STREAM ORIGINAL_FILE") from exc
+
     @contextmanager
     def transaction(self) -> Iterator["ConnectorExecutor"]:
         with self._operation_lock:
@@ -462,7 +484,7 @@ def _literalize_null_bindings(
     """Render Python ``None`` as SQL NULL while keeping other values bound.
 
     Snowpark warehouse-runtime binding can serialize ``None`` as the text
-    ``"None"`` in an expanded multi-row statement. This scanner replaces only
+    ``"None"``. This scanner replaces only
     the corresponding unquoted bind marker with the SQL NULL literal. Values
     are never interpolated, and bind-looking text inside quoted SQL remains
     unchanged.
@@ -542,7 +564,8 @@ class SnowparkExecutor(SqlExecutor):
     def _collect(self, sql: str, params: Params = None) -> list:
         with self._execution_state.lock:
             try:
-                return list(self.session.sql(_qmark(sql), params=list(params or ())).collect())
+                statement, bound = _literalize_null_bindings(_qmark(sql), params or ())
+                return list(self.session.sql(statement, params=bound).collect())
             except RepositoryError:
                 raise
             except Exception as exc:
@@ -551,7 +574,8 @@ class SnowparkExecutor(SqlExecutor):
     def query(self, sql: str, params: Params = None) -> pd.DataFrame:
         with self._execution_state.lock:
             try:
-                statement = self.session.sql(_qmark(sql), params=list(params or ()))
+                null_safe_sql, bound = _literalize_null_bindings(_qmark(sql), params or ())
+                statement = self.session.sql(null_safe_sql, params=bound)
                 rows = list(statement.collect())
                 columns = [field.name for field in statement.schema.fields]
             except RepositoryError:
@@ -608,6 +632,16 @@ class SnowparkExecutor(SqlExecutor):
                 self.session.file.put_stream(stream, stage_path, auto_compress=False, overwrite=False)
             except Exception as exc:
                 raise _operation_error(exc, "PUT_STREAM EIMS_MIGRATION_FILE") from exc
+
+    def get_stream(self, stage_path: str):
+        if not re.fullmatch(r"@[A-Za-z0-9_.$]+/[A-Za-z0-9_.$/-]+", stage_path):
+            raise RepositoryError("Invalid archive location.")
+        with self._execution_state.lock:
+            try:
+                with self.session.file.get_stream(stage_path, decompress=False) as stream:
+                    return io.BytesIO(stream.read())
+            except Exception as exc:
+                raise _operation_error(exc, "GET_STREAM ORIGINAL_FILE") from exc
 
     @contextmanager
     def transaction(self) -> Iterator["SnowparkExecutor"]:
@@ -724,6 +758,8 @@ class LazySqlExecutor(SqlExecutor):
     def commit(self): self.resolved.commit()
     def rollback(self): self.resolved.rollback()
     def put_stream(self, stream, stage_path): return self.resolved.put_stream(stream, stage_path)
+
+    def get_stream(self, stage_path): return self.resolved.get_stream(stage_path)
 
     @contextmanager
     def transaction(self):

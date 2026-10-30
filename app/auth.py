@@ -192,7 +192,7 @@ def require_page_permission(permission: Permission) -> User:
             "SECURE ACCESS",
         )
         if st.button("Return to dashboard", icon=":material/home:"):
-            st.switch_page(os.getenv("EFNS_ENTRYPOINT", "Home.py"))
+            st.switch_page(st.session_state["_efns_dashboard_page"])
         st.stop()
     ensure_authorized_repository(user)
     return user

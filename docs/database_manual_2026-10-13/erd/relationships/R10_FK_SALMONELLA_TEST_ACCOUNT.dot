@@ -1,0 +1,7 @@
+digraph G { graph [rankdir=LR,bgcolor="white",pad=0.2,nodesep=0.35,ranksep=0.55,splines=polyline,label="R10 - FK_SALMONELLA_TEST_ACCOUNT
+Parent 1; child 0..many; one line per complete FK
+EFNS_DEV declarations | 13 October 2026
+Dashed: non-identifying | Solid: identifying
+Grey: repeated table | Rxx: exact relation sheet",labelloc=t,fontname="Arial",fontsize=15];node [shape=plain,fontname="Arial",fontsize=14];edge [fontname="Arial",fontcolor="#303a40"];CORE_ACCOUNT [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#eeeeee"><TR><TD ALIGN="LEFT" BGCOLOR="#dfe2e4"><B>CORE.ACCOUNT [repeated]</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">ACCOUNT_ID  [PK]</TD></TR></TABLE>>];
+CORE_SALMONELLA_TEST [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.SALMONELLA_TEST</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">SALMONELLA_TEST_ID  [PK]</TD></TR><TR><TD ALIGN="LEFT" PORT="p1">ACCOUNT_ID  [FK]</TD></TR></TABLE>>];CORE_ACCOUNT -> CORE_SALMONELLA_TEST [dir=both,arrowtail="teetee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="ACCOUNT_ID
+FK_SALMONELLA_TEST_ACCOUNT",fontsize=12];}
