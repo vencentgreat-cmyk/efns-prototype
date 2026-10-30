@@ -10,6 +10,7 @@ import pandas as pd
 
 from data.position_evidence import day, guid, inactive, known_sum, number, records
 from data.producer_identity import text
+from data.quota_types import quota_type_key
 
 EXCLUDED_TYPES = frozenset({'National Allocation', 'Provincial Allocation'})
 
@@ -48,7 +49,7 @@ def quota_position(registrations, transactions, account_id, quota_type, as_of, r
     account = guid(account_id)
     date = day(as_of)
     regs = [r for r in records(registrations) if guid(r.get('ACCOUNT_ID')) == account
-            and text(r.get('QUOTA_TYPE')) == quota_type]
+            and quota_type_key(r.get('QUOTA_TYPE')) == quota_type_key(quota_type)]
     ids = [guid(r.get('QUOTA_ID')) for r in regs]
     all_ids = [guid(r.get('QUOTA_ID')) for r in records(registrations)]
     if not account or not date:
@@ -82,10 +83,15 @@ def quota_position(registrations, transactions, account_id, quota_type, as_of, r
         reasons.append('Transaction identity missing or duplicate')
     buckets = {}
     active_leases = []
+    excluded_bases = []
+    absorbed_activity = []
+    closed = {}
     unknown = inactive_count = excluded = 0
     candidate = number(0)
+    eligible = []
     for row in selected:
         kind = text(row.get('TRANSACTION_TYPE'))
+        kind = {'Lease In':'Lease (In)', 'Lease Out':'Lease (Out)'}.get(kind, kind)
         if kind in EXCLUDED_TYPES:
             excluded += 1
             continue
@@ -96,8 +102,46 @@ def quota_position(registrations, transactions, account_id, quota_type, as_of, r
         if effective is None:
             reasons.append('Missing/invalid Effective Date')
             continue
-        if date is None or effective > date:
+        if date is not None and effective <= date:
+            eligible.append((row, kind, effective))
+    latest = {}
+    for registration in ids:
+        bases = [(r, d) for r, k, d in eligible if k == 'Base' and guid(r.get('QUOTA_ID')) == registration]
+        if not bases:
             continue
+        if rules.get('base_policy') != 'LATEST_SNAPSHOT_PER_REGISTRATION':
+            reasons.append('Latest Base snapshot policy not specified')
+        last_day = max(d for _, d in bases)
+        last = [r for r, d in bases if d == last_day]
+        if len(last) != 1:
+            reasons.append('Multiple latest Base snapshots on the same date; ordering unresolved')
+        # A tie has no selected Base; never pick an arbitrary GUID/row order.
+        latest[registration] = (last_day, guid(last[0].get('QUOTA_TRANSACTION_ID')) if len(last) == 1 else None)
+    totals = {}
+    for row, kind, effective in eligible:
+        registration = guid(row.get('QUOTA_ID'))
+        identity = guid(row.get('QUOTA_TRANSACTION_ID'))
+        base = latest.get(registration)
+        qty = number(row.get('QUOTA_COUNT'))
+        if kind == 'Terminate Quota':
+            if rules.get('terminate_policy') != 'ZERO_EFFECT_CLOSE_REGISTRATION' or qty != 0:
+                reasons.append('Terminate Quota must be a zero-effect closure with quantity zero')
+            else:
+                closed[registration] = max(closed.get(registration, effective), effective)
+            if base and effective < base[0]:
+                reasons.append('Base follows registration closure; reopening is unconfirmed')
+        if kind == 'Base' and base and identity != base[1]:
+            excluded_bases.append(dict(row))
+            continue
+        if kind != 'Base' and base and effective < base[0]:
+            if kind in {'Lease (In)', 'Lease (Out)'}:
+                end = day(row.get('END_DATE'))
+                if end is None or (date is not None and end >= date):
+                    reasons.append('Active/undated lease predates latest Base; snapshot inclusion unconfirmed')
+            absorbed_activity.append(dict(row))
+            continue
+        if kind != 'Base' and base and effective == base[0]:
+            reasons.append('Base and activity share a date; snapshot ordering unconfirmed')
         if kind in {'Lease (In)', 'Lease (Out)'}:
             end = day(row.get('END_DATE'))
             if rules.get('lease_active_rule') != 'EFFECTIVE_DATE<=as_of<=END_DATE':
@@ -108,7 +152,6 @@ def quota_position(registrations, transactions, account_id, quota_type, as_of, r
             if date > end:
                 continue
             active_leases.append(row)
-        qty = number(row.get('QUOTA_COUNT'))
         buckets.setdefault(kind or 'Unknown', []).append(qty)
         sign = signs.get(kind)
         if kind not in signs or sign not in {-1, 0, 1}:
@@ -119,9 +162,17 @@ def quota_position(registrations, transactions, account_id, quota_type, as_of, r
             continue
         if kind != 'Adjustment' and qty < 0:
             reasons.append('Negative quantity has unconfirmed direction for ' + str(kind))
-        if kind == 'Terminate Quota' and (rules.get('terminate_policy') != 'IGNORE_ZERO' or qty != 0):
-            reasons.append('Terminate Quota meaning unconfirmed')
-        candidate += qty * sign
+        effect = qty * sign
+        if kind == 'Terminate Quota':
+            effect = number(0)  # Closure never manufactures a balancing quantity.
+        candidate += effect
+        totals[registration] = totals.get(registration, number(0)) + effect
+    for registration, closed_day in closed.items():
+        if totals.get(registration, number(0)) != 0:
+            reasons.append('Closed Registration has non-zero candidate; reconcile sold/transferred quantity')
+        if any(guid(r.get('QUOTA_ID')) == registration and k != 'Terminate Quota' and d > closed_day
+               for r, k, d in eligible):
+            reasons.append('Activity follows registration closure; requires review')
     if unknown:
         reasons.append(f'{unknown} unknown transaction type rows')
     if inactive_count:
@@ -130,6 +181,9 @@ def quota_position(registrations, transactions, account_id, quota_type, as_of, r
     return {'account_id': account_id, 'quota_type': quota_type, 'as_of': date,
             'components': {k: known_sum(v) for k, v in buckets.items()},
             'active_leases': active_leases, 'unknown_type_count': unknown,
+            'excluded_base_rows': excluded_bases, 'excluded_base_count': len(excluded_bases),
+            'absorbed_activity_rows': absorbed_activity,
+            'closed_registrations': sorted(closed),
             'pending_rejected_count': pending_rejected_count,
             'missing_source_count': missing_source_rows,
             'inactive_count': inactive_count, 'excluded_allocation_count': excluded,

@@ -1,20 +1,39 @@
 {
   "status": "PENDING",
-  "type_sign": {"Base": 1, "Adjustment": 1, "Global Adjustment": 1, "Purchase": 1, "Sale": -1, "Lease (In)": 1, "Lease (Out)": -1, "Terminate Quota": 0},
-  "excluded_types": ["National Allocation", "Provincial Allocation"],
+  "type_sign": {
+    "Base": 1,
+    "Adjustment": 1,
+    "Global Adjustment": 1,
+    "Purchase": 1,
+    "Sale": -1,
+    "Lease (In)": 1,
+    "Lease (Out)": -1,
+    "Terminate Quota": 0
+  },
+  "excluded_types": [
+    "National Allocation",
+    "Provincial Allocation"
+  ],
   "lease_active_rule": "EFFECTIVE_DATE<=as_of<=END_DATE",
-  "terminate_policy": null,
+  "terminate_policy": "ZERO_EFFECT_CLOSE_REGISTRATION",
   "units_compatible": false,
   "confirmed_by": null,
   "confirmed_on": null,
   "evidence": [],
   "flock_stock": {
     "status": "PENDING",
-    "type_sign": {"Delivery": 1, "Removal": -1, "Sale": -1},
+    "type_sign": {
+      "Delivery": 1,
+      "Removal": -1,
+      "Sale": -1
+    },
     "count_source_priority": null,
     "lifecycle_rule": null,
     "confirmed_by": null,
     "confirmed_on": null,
     "evidence": []
-  }
+  },
+  "base_policy": "LATEST_SNAPSHOT_PER_REGISTRATION",
+  "confirmed_facts_source": "User-provided old-system UI and read-only findings, 2026-10-30; no query run in this task",
+  "global_adjustment_meaning": "Positive province-wide increase applied to producers; historical 2004-2012, later entered as Adjustment"
 }

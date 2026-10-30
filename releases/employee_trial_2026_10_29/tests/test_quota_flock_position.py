@@ -19,13 +19,13 @@ def regs():
 def tx(kind='Base', qty=100, **changes):
     return dict(QUOTA_TRANSACTION_ID='t', QUOTA_ID='q', OWNER_ACCOUNT_ID='owner',
                 RELATED_ACCOUNT_ID='other', TRANSACTION_TYPE=kind, QUOTA_COUNT=qty,
-                EFFECTIVE_DATE='2026-01-01', END_DATE='2026-12-31', **changes)
+                EFFECTIVE_DATE='2025-12-31' if kind == 'Base' else '2026-01-01', END_DATE='2026-12-31', **changes)
 
 
 def confirmed():
     rules = load_rules()
     rules['status'] = 'CONFIRMED'
-    rules['terminate_policy'] = 'IGNORE_ZERO'
+    rules['terminate_policy'] = 'ZERO_EFFECT_CLOSE_REGISTRATION'
     rules['flock_stock'].update(status='CONFIRMED', lifecycle_rule='EXPLICIT_SCOPE')
     return rules
 
