@@ -1,5 +1,6 @@
 """Provisional account Bird Count: no invented quota baseline or deltas."""
 from decimal import Decimal, InvalidOperation
+import logging
 import pandas as pd
 from data.producer_identity import text
 from data.quota_position import quota_position, load_rules
@@ -29,6 +30,7 @@ def account_usage_context(repo, account_id, *, rules=None, source_evidence=None,
     activity=repo.get_quota_transactions(account_id=account_id)
     if not activity.empty: activity=activity[activity.OWNER_ACCOUNT_ID==account_id]
     reasons=[]
+    draft_unavailable = False
     conflicting=set()
     if not flocks.empty:
         # Dedupe FLOCK_ID before grouping; never multiply by a Facility join.
@@ -63,7 +65,14 @@ def account_usage_context(repo, account_id, *, rules=None, source_evidence=None,
         missing=len(selected)-len(known)
         total=sum(known,Decimal(0)) if known else (Decimal(0) if not selected else None)
         evidence = (source_evidence or {}).get(kind, {})
-        position = quota_position(quotas, activity, account_id, kind, halifax_today(), rules, **evidence)
+        try:
+            position = quota_position(quotas, activity, account_id, kind, halifax_today(), rules, **evidence)
+            for required in ('net_position', 'components', 'reasons'):
+                position[required]
+        except Exception as exc:
+            logging.getLogger(__name__).warning('Quota draft unavailable (%s).', type(exc).__name__)
+            draft_unavailable = True
+            position = {'net_position': None, 'components': {}, 'reasons': []}
         stock = (stock_by_type or {}).get(kind, {})
         # Registered Bird Count totals are NOT a confirmed current stock input.
         can_use = (rules.get('status') == 'CONFIRMED'
@@ -83,7 +92,7 @@ def account_usage_context(repo, account_id, *, rules=None, source_evidence=None,
             details.append({'Quota type':kind,'Facility ID':fid,'Facility':group[0]['facility'],'Flock records':len(group),
                 'Known Bird Count':sum(values,Decimal(0)) if values else None,'Missing Bird Count':len(group)-len(values)})
     return dict(account_id=account_id,summaries=summaries,facility_details=pd.DataFrame(details),reasons=reasons,
-        quotas=quotas,transaction_count=len(activity),scope='Account-wide, including other Flocks; not a per-Flock or per-Facility allocation')
+        quotas=quotas,transaction_count=len(activity),draft_unavailable=draft_unavailable,scope='Account-wide, including other Flocks; not a per-Flock or per-Facility allocation')
 
 
 def quota_usage_context(repo, flock):
@@ -97,6 +106,8 @@ def quota_usage_context(repo, flock):
 def render_account_usage(repo, account_id, *, quota_type=None):
     import streamlit as st
     context=account_usage_context(repo,account_id)
+    if context.get('draft_unavailable'):
+        st.caption('Calculation draft unavailable for this record')
     st.subheader('Historical / registered Bird Count — not current inventory')
     st.caption('Account-wide, including other Flocks. Stored registration Bird Count is aggregated across all recorded statuses, including ended/Depopulated Flocks; it is not certified real-time inventory. Status/date do not clear counts. Lifecycle inclusion and quantity-correction policy remain to be confirmed. No usable real quota baseline or unit equivalence is inferred.')
     selected=[r for r in context['summaries'] if quota_type is None or r['quota_type']==quota_type_key(quota_type)]

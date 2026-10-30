@@ -130,7 +130,10 @@ if view.name == "list":
             display = display[display[columns].fillna("").astype(str).apply(lambda column: column.str.contains(keyword, case=False, regex=False)).any(axis=1)]
     st.metric("Filtered transactions", f"{len(display):,}")
     st.caption('Recorded owner-row quantities by type, not an available quota balance. Related Account is a counterparty, not an entitlement owner. RAW inactive/missing-source coverage is not established here. Allocation totals are excluded.')
-    st.dataframe(component_table(display, account_options.get(account_filter)), hide_index=True, width='stretch')
+    try:
+        st.dataframe(component_table(display, account_options.get(account_filter)), hide_index=True, width='stretch')
+    except Exception:
+        st.caption('Calculation draft unavailable for this record')
     if display.empty:
         st.info("No Quota Transactions match the current filters.")
     else:
