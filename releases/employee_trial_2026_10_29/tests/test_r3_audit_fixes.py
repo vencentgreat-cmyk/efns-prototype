@@ -84,3 +84,31 @@ def test_daily_failure_only_claims_no_write_with_explicit_evidence(chain,tmp_pat
 
     assert any('No business rows were committed' in e.value for e in app.error) is known_no_write
     assert ('daily_flock_quota_submitted_hash' not in app.session_state) is known_no_write
+
+
+def test_A02_producer_confirmation_is_cleared_on_record_switch(chain,tmp_path,monkeypatch):
+    repo,*_=chain
+    repo._production=pd.concat([repo._production,pd.DataFrame([dict(PRODUCTION_ID='DEV_TEST producer '+str(i),
+        PRODUCER_ACCOUNT_ID=None,MATCH_STATUS='NO_CANDIDATE',PRODUCER_NUMBER=str(i),
+        SOURCE_FILE_ID='DEV_TEST source',SOURCE_ROW_NUMBER=i+1) for i in range(2)])],ignore_index=True)
+    app=page(repo,tmp_path,monkeypatch,'21_Record_History.py')
+    assert not app.exception
+    checkbox=lambda:next(c for c in app.checkbox if c.label=='I verified this Account against source evidence.')
+    checkbox().check().run()
+    chosen=next(s for s in app.selectbox if s.label=='Production record to review')
+    chosen.select('DEV_TEST producer 1').run()
+    assert not app.exception
+    assert checkbox().value is False
+
+    account=next(w for w in app.selectbox if w.label=='Confirmed producer Account')
+    assert account.value=='Choose an Account'
+    assert next(w for w in app.text_area if w.label=='Evidence for this producer decision').value==''
+    button=lambda:next(b for b in app.button if b.label=='Confirm producer Account')
+    assert button().disabled
+    account.select(next(o for o in account.options if 'counterparty' in o))
+    next(w for w in app.text_area if w.label=='Evidence for this producer decision').input('DEV_TEST record-specific evidence')
+    app.run()
+    assert button().disabled
+    checkbox().check().run()
+    assert not button().disabled
+    assert repo.get_production_records().PRODUCER_ACCOUNT_ID.isna().all()

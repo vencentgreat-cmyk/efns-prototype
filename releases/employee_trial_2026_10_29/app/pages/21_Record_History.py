@@ -35,9 +35,15 @@ with producer:
                 result = repo.match_production_producer(chosen)
                 st.success(f"Matching result: {result['status']}. Automatic matching is not staff confirmation.")
             except Exception as exc: show_data_error(exc)
-        target = st.selectbox("Confirmed producer Account", ["Choose an Account", *account_options])
-        basis = st.text_area("Evidence for this producer decision")
-        confirmation = st.checkbox("I verified this Account against source evidence.")
+        decision_prefix = 'producer_decision_' + str(chosen) + '_'
+        if st.session_state.get('_producer_decision_record') != chosen:
+            for key in list(st.session_state):
+                if key.startswith('producer_decision_'):
+                    st.session_state.pop(key, None)
+            st.session_state['_producer_decision_record'] = chosen
+        target = st.selectbox("Confirmed producer Account", ["Choose an Account", *account_options], key=decision_prefix+'account')
+        basis = st.text_area("Evidence for this producer decision", key=decision_prefix+'evidence')
+        confirmation = st.checkbox("I verified this Account against source evidence.", key=decision_prefix+'confirmed')
         if st.button("Confirm producer Account", disabled=not can_current(Permission.UPDATE_DATA) or target not in account_options or not basis.strip() or not confirmation):
             try:
                 repo.match_production_producer(chosen, account_id=account_options[target], basis=basis)
