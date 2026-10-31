@@ -118,8 +118,13 @@ with maintain_tab:
             st.rerun()
         except Exception as exc:
             show_data_error(exc)
+    if st.session_state.get('_admin_delete_selected_user') != selected.user_id:
+        for key in list(st.session_state):
+            if key.startswith('admin_confirm_user_delete_'):
+                st.session_state.pop(key, None)
+        st.session_state['_admin_delete_selected_user'] = selected.user_id
     confirm_delete = actions.checkbox(
-        "Confirm deletion", key="admin_confirm_user_delete", disabled=selected.user_id == admin.user_id
+        "Confirm deletion", key="admin_confirm_user_delete_"+selected.user_id, disabled=selected.user_id == admin.user_id
     )
     if actions.button(
         "Delete user",

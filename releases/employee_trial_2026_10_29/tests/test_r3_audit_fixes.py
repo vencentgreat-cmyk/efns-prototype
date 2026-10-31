@@ -152,3 +152,26 @@ def test_event_confirmation_resets_when_reviewed_inputs_change(chain,tmp_path,mo
     confirm().check().run()
     assert not button().disabled
     assert repo.get_flock_events(chain[5]).empty
+
+
+def test_A04_user_delete_confirmation_is_bound_to_user(tmp_path,monkeypatch):
+    from app.security import SQLiteAuthStore
+    from tests.test_snowflake_security import user
+    app=authenticated_app(ROOT/'streamlit_app.py',tmp_path,monkeypatch)
+    store=SQLiteAuthStore(Path(os.environ['EFNS_AUTH_DB']),seeds=[])
+    admin=store.list_users(user())[0]
+    from app.security import Role
+    for label in ('One','Two'):
+        store.create_user(admin,'dev_test_'+label.lower()+'@nsegg.ca','DEV_TEST '+label,Role.DATA_EDITOR)
+    users_before={u.user_id for u in store.list_users(admin)}
+    app.switch_page('app/pages/15_User_Management.py').run()
+    select=app.selectbox(key='admin_selected_user')
+    select.select(next(o for o in select.options if 'DEV_TEST One' in o)).run()
+    next(c for c in app.checkbox if c.label=='Confirm deletion').check().run()
+    select=app.selectbox(key='admin_selected_user')
+    select.select(next(o for o in select.options if 'DEV_TEST Two' in o)).run()
+    assert not app.exception
+    assert next(c for c in app.checkbox if c.label=='Confirm deletion').value is False
+
+    assert next(b for b in app.button if b.label=='Delete user').disabled
+    assert {u.user_id for u in store.list_users(admin)}==users_before
