@@ -1,7 +1,7 @@
 # Deployment checklist — 30 October 2026
 
 **Preparation only; do not deploy from this checklist without separate approval.**
-Work tree: `releases/employee_trial_2026_10_29`, branch `delivery-candidate-r2-20261030`.
+Work tree: `releases/employee_trial_2026_10_29`, branch `delivery-candidate-r3-20261030`.
 Target declared by the existing package: `EFNS_DEV.APP.EFNS_INTERNAL_APP`, root
 `streamlit_app.py`, `SYSTEM$WAREHOUSE_RUNTIME`, warehouse `EFNS_DEV_WH`.
 Current live identity, drift, owner and grants are **to verify**; no company
@@ -14,16 +14,26 @@ Hashes compare LF-normalized bytes as documented by that manifest. Private live
 snapshots, credentials, real business exports and execution manifests are not
 included. `DELIVERY_RUNTIME_DIFF_20261030.json` records before/after hashes.
 
-Saved baseline: 89 runtime files. Candidate artifacts: 94. Changes: 14 modified, 5 new, 0 deleted.
+Saved baseline: 89 runtime files. Candidate artifacts: 95. Changes: 23 modified, 6 new, 0 deleted.
 
 | Runtime file | Status | Why |
 |---|---|---|
+| `app/pages/10_Salmonella_Report.py` | MODIFIED | R3 F5/F6: preserve distinct Account/Facility/Flock filter identities and include historical result values; existing report/export query unchanged. |
+| `app/pages/11_Facilities.py` | MODIFIED | R3 F6: current-first historical Facility-type filter union only; unchanged new-entry type choices and all save paths. |
+| `app/pages/13_Facility_Details.py` | MODIFIED | R3 F5: disambiguate colliding Facility selector labels; preserve distinct target IDs and existing save behavior. |
+| `app/pages/15_User_Management.py` | MODIFIED | R3 F4: deletion checkbox scoped to selected user and cleared on switch; auth-store and permission logic unchanged. |
+| `app/pages/16_Audit_Log.py` | MODIFIED | R3 F7: caption states filters apply to the latest 5,000 loaded events; no query or permission change. |
+| `app/pages/19_Daily_Flock_Quota_Import.py` | MODIFIED | R3 F1: distinguish explicit unknown COMMIT outcome, persist per-package resubmission guard; only claim no write for explicit pre-BEGIN marker; otherwise safe error rendering. |
+| `app/pages/21_Record_History.py` | MODIFIED | R3 F2/F3: producer evidence/confirmation scoped to selected record; Flock event confirmation scoped to Flock and reset on destination/type/business-time changes. Backend untouched. |
 | `app/pages/4_Reports.py` | MODIFIED | Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection. |
 | `app/pages/5_Flocks.py` | MODIFIED | Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. |
+| `app/pages/6_Flock_Transactions.py` | MODIFIED | R3 F5: disambiguate colliding Flock labels while preserving normal labels, current-quantity confirmation, CAS and save paths. |
 | `app/pages/8_Quota_Transactions.py` | MODIFIED | Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption. |
+| `app/pages/9_Salmonella_Tests.py` | MODIFIED | R3 F5/F6: disambiguate colliding Flock/Account labels and offer stored result filters; legacy edit preservation and new-entry choices unchanged. |
 | `app/services/quota_usage.py` | MODIFIED | PENDING Account-wide recorded Bird Count and guarded draft calculation; current stock/percentage remain unestablished; detailed limitations moved into expander. |
 | `app/services/report_builder.py` | MODIFIED | Credit Type display label in the older joined-field builder. |
 | `app/services/report_center.py` | MODIFIED | Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering. |
+| `app/services/selector_options.py` | NEW | R3 F5/F6: pure collision-only stable ID suffixes plus current-first, sorted historical filter labels; no relationship inference or input-policy expansion. |
 | `config/quota_rules.json` | NEW | PENDING rules and user-supplied F3-F5 meanings, not calculation approval. |
 | `data/constants.py` | MODIFIED | Three canonical quota types and six current transaction choices, plus legacy lease input compatibility. |
 | `data/flock_quota_import.py` | MODIFIED | Two daily-validation membership checks accept the known quota aliases; parser/normalization/identity untouched. |
@@ -112,3 +122,16 @@ Do not edit real historical records, clear references or force cleanup.
 15. Attempt deleting a marked parent still referenced by a marked child. Expect
     a blocked referenced-delete message and intact records/history. Cancel and
     log the result; arrange separately authorized cleanup without force-delete.
+
+
+## R3 required manual checks (not yet performed)
+
+- Record History: choose a production record, select Account, enter evidence and
+  tick confirmation; switch records. Account/evidence/confirmation must reset,
+  and Confirm producer Account stays disabled until that record is reviewed.
+- User Management: tick Confirm deletion for a marked synthetic user, then
+  select another user. Confirmation clears and Delete user is disabled. Do not
+  click Delete on real users during this check.
+- Salmonella report: verify Test Result offers an existing historical result
+  value as well as current choices; select it and compare page/CSV/XLSX scope.
+  Do not create or change a real historical test solely for this check.

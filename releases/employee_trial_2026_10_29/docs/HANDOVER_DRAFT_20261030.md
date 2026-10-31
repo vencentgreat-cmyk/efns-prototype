@@ -194,3 +194,11 @@ not independently queried or recalculated in this delivery task.
 Normal reports read corrected current business values; revision history must
 not be added as another business submission. Blank Price means unknown; explicit
 0 is zero. Saved results, draft conflicts and audit warnings are distinct states.
+
+
+## Known issues for later
+
+- A06: Admin access updates lack user-reviewed version/CAS protection; auth-store changes are deferred.
+- A07: The two-admin last-admin invariant has a check-before-transaction race; isolated engine validation and a backend design remain deferred.
+- A09: Salmonella report joins may multiply tests if parent IDs duplicate; run read-only data health Q01 from the audit-20261030 branch before deciding remediation.
+- A03 backend: Flock event submission CAS uses its submit-time origin, not a user-reviewed origin/version; UI resets do not close this backend gap.

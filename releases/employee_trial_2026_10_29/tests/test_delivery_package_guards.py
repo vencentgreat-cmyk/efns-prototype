@@ -32,7 +32,7 @@ def test_runtime_rules_file_is_shipped_and_stays_pending():
 def test_all_declared_runtime_changes_match_current_bytes():
     root=Path(__file__).resolve().parents[1]
     diff=json.loads((root/'DELIVERY_RUNTIME_DIFF_20261030.json').read_text(encoding='utf-8'))
-    assert diff['baseline_files']==89 and diff['candidate_artifacts']==94
+    assert diff['baseline_files']==89 and diff['candidate_artifacts']==95
     for row in diff['runtime_changes']:
         assert row['status']!='DELETED'
         actual=hashlib.sha256((root/row['path']).read_bytes().replace(b'\r\n',b'\n')).hexdigest()
