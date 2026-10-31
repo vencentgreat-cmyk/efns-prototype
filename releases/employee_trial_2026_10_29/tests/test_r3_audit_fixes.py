@@ -223,3 +223,45 @@ def test_collision_selectors_keep_both_targets(chain,tmp_path,monkeypatch,filena
         assert any(identity[:8] in label for label in selector.options)
     selector.select(selector.options[1]).run()
     assert not app.exception and app.selectbox(key=widget_key).value==selector.options[1]
+
+
+def test_A08_salmonella_historical_result_remains_filterable(chain,tmp_path,monkeypatch):
+    repo,account,other,facility,quota,flock,*_=chain
+    repo._salmonella_tests=pd.concat([repo._salmonella_tests,pd.DataFrame([dict(
+        SALMONELLA_TEST_ID='DEV_TEST legacy result',FLOCK_ID=flock,ACCOUNT_ID=account,
+        PERMIT_NUMBER='DEV_TEST permit',TEST_RESULT='DEV_TEST historical code',
+        TESTING_DATE='2026-01-01')])],ignore_index=True)
+    app=page(repo,tmp_path,monkeypatch,'10_Salmonella_Report.py')
+    assert not app.exception
+    assert 'DEV_TEST historical code' in app.selectbox(key='sal_rpt_result').options
+
+
+def test_historical_filter_union_is_ordered_and_null_safe():
+    from app.services.selector_options import historical_filter_options
+    assert historical_filter_options(('Pending','Negative'),[None,pd.NA,float('nan'),'z-old','A-old','Pending',''])==['Pending','Negative','A-old','z-old']
+
+
+@pytest.mark.parametrize('filename,key,entity,field',[
+ ('9_Salmonella_Tests.py','salmonella_filter_result','test','TEST_RESULT'),
+ ('11_Facilities.py','facility_filter_type','facility','FACILITY_TYPE')])
+def test_staff_filters_include_historical_values_without_changing_new_choices(chain,tmp_path,monkeypatch,filename,key,entity,field):
+    repo,account,other,facility,quota,flock,*_=chain
+    if entity=='test':
+        repo._salmonella_tests=pd.concat([repo._salmonella_tests,pd.DataFrame([dict(
+            SALMONELLA_TEST_ID='DEV_TEST historical result',FLOCK_ID=flock,ACCOUNT_ID=account,
+            PERMIT_NUMBER='DEV_TEST permit',TEST_RESULT='DEV_TEST historical result',TESTING_DATE='2026-01-01')])],ignore_index=True)
+        selected='DEV_TEST historical result'
+    else:
+        repo._facilities.loc[repo._facilities.FACILITY_ID==facility,'FACILITY_TYPE']='DEV_TEST historical type'
+        selected='DEV_TEST historical type'
+    app=page(repo,tmp_path,monkeypatch,filename)
+    assert not app.exception and selected in app.selectbox(key=key).options
+    app.selectbox(key=key).select(selected).run()
+    assert not app.exception
+    assert any(len(f.value)==1 for f in app.dataframe)
+    # Existing edit compatibility is retained; new-entry choices are unchanged.
+    view_key=filename[:-3]
+    app.session_state['_efns_record_'+view_key+'_view']='new'
+    app.run()
+    new_key='salmonella_form_result' if entity=='test' else 'facility_form_type'
+    assert selected not in app.selectbox(key=new_key).options

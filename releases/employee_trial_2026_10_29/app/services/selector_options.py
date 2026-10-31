@@ -35,3 +35,11 @@ def unique_identity_options(items, *, reserved_labels=()):
             labels[(label,identity)]=display
         occupied.update(proposed.values())
     return {labels[(label,identity)]:identity for label,identity in rows}
+
+
+def historical_filter_options(current_choices, stored_values):
+    """Current choices first, then sorted stored labels; never entry policy."""
+    from data.producer_identity import text
+    choices=list(dict.fromkeys(current_choices))
+    historical={text(value) for value in stored_values if text(value)}-set(choices)
+    return choices+sorted(historical,key=lambda value:(value.casefold(),value))

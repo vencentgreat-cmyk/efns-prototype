@@ -19,6 +19,7 @@ from app.ui import apply_theme, clear_widget_prefix, optional_form_date, page_he
 from data.repositories.base import RepositoryError
 from data.constants import FACILITY_STATUSES
 from data.repositories import get_repository
+from app.services.selector_options import historical_filter_options
 from app.services.facility_source_description import render_source_description
 
 
@@ -61,7 +62,7 @@ if view.name == "list":
     if action == "delete" and selected_id: st.session_state['facility_form___delete_pending']=selected_id
     filters = st.columns([2, 1])
     keyword = filters[0].text_input("Filter by keyword", placeholder="Facility or Account name", key="facility_filter_keyword")
-    facility_type = filters[1].selectbox("Facility type", ["All", *FACILITY_TYPES], key="facility_filter_type")
+    facility_type = filters[1].selectbox("Facility type", ["All", *historical_filter_options(FACILITY_TYPES, facilities.get("FACILITY_TYPE", []))], key="facility_filter_type")
     display = repo.get_facilities(statuses=statuses).copy()
     display["ACCOUNT_NAME"] = display["ACCOUNT_ID"].map(account_names)
     if keyword:

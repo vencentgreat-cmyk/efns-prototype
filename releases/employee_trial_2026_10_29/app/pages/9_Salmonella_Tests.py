@@ -15,7 +15,7 @@ from app.navigation import format_timestamp, list_command_bar, open_module, open
 from app.ui import apply_theme, clear_widget_prefix, optional_form_date, page_header, section_intro, show_data_error
 from data.constants import SALMONELLA_RESULTS, UNASSIGNED_LABEL
 from data.repositories import get_repository
-from app.services.selector_options import unique_identity_options
+from app.services.selector_options import unique_identity_options, historical_filter_options
 from data.repositories.base import RepositoryError
 from data.validation import validate_salmonella_test
 
@@ -60,7 +60,7 @@ if view.name == "list":
 
     filters = st.columns([2, 1, 1])
     keyword = filters[0].text_input("Filter by keyword", placeholder="Permit, flock, inspector or case number", key="salmonella_filter_keyword")
-    result_filter = filters[1].selectbox("Result", ["All", *SALMONELLA_RESULTS], key="salmonella_filter_result")
+    result_filter = filters[1].selectbox("Result", ["All", *historical_filter_options(SALMONELLA_RESULTS, tests.get("TEST_RESULT", []))], key="salmonella_filter_result")
     account_options = unique_identity_options(((account_names[row.ACCOUNT_ID], row.ACCOUNT_ID) for row in accounts.itertuples()), reserved_labels=('All',))
     account_filter = filters[2].selectbox("Account", ["All", *account_options], key="salmonella_filter_account")
     display = tests.copy()

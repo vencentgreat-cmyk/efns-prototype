@@ -12,7 +12,7 @@ from app.services.salmonella_reporting import build_salmonella_report
 from app.ui import apply_theme, page_header, section_intro
 from data.constants import SALMONELLA_RESULTS
 from data.repositories import get_repository
-from app.services.selector_options import unique_identity_options
+from app.services.selector_options import unique_identity_options, historical_filter_options
 
 require_page_permission(Permission.VIEW_REPORTS)
 apply_theme()
@@ -40,7 +40,7 @@ permit_values = sorted(tests["PERMIT_NUMBER"].dropna().astype(str).unique()) if 
 permit = row1[3].selectbox("Permit Number", ["All", *permit_values], key="sal_rpt_permit")
 row2 = st.columns(3)
 date_range = row2[0].date_input("Testing Date range", value=(), key="sal_rpt_dates")
-result = row2[1].selectbox("Test Result", ["All", *SALMONELLA_RESULTS], key="sal_rpt_result")
+result = row2[1].selectbox("Test Result", ["All", *historical_filter_options(SALMONELLA_RESULTS, tests.get("TEST_RESULT", []))], key="sal_rpt_result")
 inspectors = sorted(tests["INSPECTOR"].dropna().astype(str).unique()) if not tests.empty else []
 inspector = row2[2].selectbox("Inspector", ["All", *inspectors], key="sal_rpt_inspector")
 row3 = st.columns(2)
