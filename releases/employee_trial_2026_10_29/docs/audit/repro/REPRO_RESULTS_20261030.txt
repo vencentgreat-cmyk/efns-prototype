@@ -1,0 +1,20 @@
+Synthetic offline audit, frozen candidate 7b14864
+Command: python -m pytest docs/audit/repro -q --tb=short
+9 failed, 8 passed in 9.22s
+
+Failed safety assertions (not fixed / not xfailed):
+docs/audit/repro/test_staff_audit.py::test_A01_daily_commit_unknown_is_not_reported_as_rollback
+docs/audit/repro/test_staff_audit.py::test_A02_producer_confirmation_is_cleared_on_record_switch
+docs/audit/repro/test_staff_audit.py::test_A03_flock_event_confirmation_is_cleared_on_switch
+docs/audit/repro/test_staff_audit.py::test_A04_user_delete_confirmation_is_bound_to_user
+docs/audit/repro/test_staff_audit.py::test_A05_salmonella_facility_filter_keeps_same_name_identities
+docs/audit/repro/test_staff_audit.py::test_A06_user_update_has_review_version_predicate
+docs/audit/repro/test_staff_audit.py::test_A08_salmonella_historical_result_remains_filterable
+docs/audit/repro/test_staff_audit.py::test_A09_salmonella_report_cannot_multiply_on_duplicate_parent
+docs/audit/repro/test_staff_audit.py::test_A07_last_admin_check_is_inside_write_transaction
+
+SQL static tests: 8 passed. These are not engine syntax/execution tests.
+The daily-page repro substitutes a selectbox for the display-only segmented control
+because installed AppTest cannot serialize that control. Actual import handler
+and error branch remain unmodified; COMMIT-unknown error is injected.
+Raw traces remain local/ignored, not committed (may contain synthetic session details).
