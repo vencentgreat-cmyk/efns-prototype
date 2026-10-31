@@ -265,3 +265,9 @@ def test_staff_filters_include_historical_values_without_changing_new_choices(ch
     app.run()
     new_key='salmonella_form_result' if entity=='test' else 'facility_form_type'
     assert selected not in app.selectbox(key=new_key).options
+
+
+def test_audit_log_discloses_loaded_filter_scope(chain,tmp_path,monkeypatch):
+    app=page(chain[0],tmp_path,monkeypatch,'16_Audit_Log.py')
+    assert not app.exception
+    assert any(c.value=='Filters apply to the latest 5,000 audit events loaded.' for c in app.caption)

@@ -20,6 +20,7 @@ page_header(
     "ADMINISTRATION",
 )
 
+st.caption("Filters apply to the latest 5,000 audit events loaded.")
 events = store.list_audit(user, limit=5000)
 frame = pd.DataFrame(
     [
