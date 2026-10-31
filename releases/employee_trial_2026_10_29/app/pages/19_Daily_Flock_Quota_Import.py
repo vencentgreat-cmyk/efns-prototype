@@ -18,6 +18,7 @@ from data.operational_flock_quota_import import (
     analyze_operational_files,
 )
 from data.repositories import get_repository
+from data.repositories.base import RepositoryError
 
 
 require_page_permission(Permission.VIEW_DATA)
@@ -181,7 +182,10 @@ with st.container(border=True):
         key=f"daily_flock_quota_confirm_{report.package_hash[:16]}",
         disabled=not may_import or not prepared_for_commit or not report.ready_rows or already_committed,
     )
-    already_submitted = st.session_state.get("daily_flock_quota_submitted_hash") == report.package_hash
+    unknown_reference = st.session_state.get("daily_flock_quota_unknown_outcomes", {}).get(report.package_hash)
+    if unknown_reference:
+        st.error(f"The save outcome is unknown. Do not submit this file again. Ask an administrator to check the import history (reference: {unknown_reference}).")
+    already_submitted = bool(unknown_reference) or st.session_state.get("daily_flock_quota_submitted_hash") == report.package_hash
     if st.button(
         "Confirm import",
         type="primary",
@@ -200,10 +204,24 @@ with st.container(border=True):
                 f"Imported {result['total_count']:,} rows: "
                 f"{result['created_count']:,} created and {result['updated_count']:,} updated."
             )
-        except Exception:
-            st.session_state.pop("daily_flock_quota_submitted_hash", None)
-            reference = uuid.uuid4().hex[:12].upper()
-            st.error(f"No business rows were committed. Original files and staged source rows remain available. Error reference: {reference}")
+        except Exception as exc:
+            # The executor uses this explicit RepositoryError marker after a
+            # COMMIT acknowledgement fails; it is not proof of rollback.
+            if isinstance(exc, RepositoryError) and str(exc).startswith('COMMIT outcome is unknown.'):
+                reference = st.session_state.get('daily_prepared_import_id') or uuid.uuid4().hex[:12].upper()
+                pending = dict(st.session_state.get('daily_flock_quota_unknown_outcomes', {}))
+                pending[report.package_hash] = reference
+                st.session_state.daily_flock_quota_unknown_outcomes = pending
+                st.error(f"The save outcome is unknown. Do not submit this file again. Ask an administrator to check the import history (reference: {reference}).")
+            elif isinstance(exc, RepositoryError) and str(exc).startswith('System busy: no write transaction started'):
+                # Explicit executor evidence that BEGIN was never entered.
+                st.session_state.pop("daily_flock_quota_submitted_hash", None)
+                reference = uuid.uuid4().hex[:12].upper()
+                st.error(f"No business rows were committed. Original files and staged source rows remain available. Error reference: {reference}")
+            else:
+                # No typed rollback receipt exists at this boundary. Preserve
+                # the submission guard and show the ordinary safe error.
+                show_data_error(exc)
 
 result = st.session_state.get("daily_flock_quota_result")
 if result and result.get("file_hash") == report.package_hash:
