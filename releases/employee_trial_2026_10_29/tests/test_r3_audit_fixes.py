@@ -112,3 +112,43 @@ def test_A02_producer_confirmation_is_cleared_on_record_switch(chain,tmp_path,mo
     checkbox().check().run()
     assert not button().disabled
     assert repo.get_production_records().PRODUCER_ACCOUNT_ID.isna().all()
+
+
+def test_A03_flock_event_confirmation_is_cleared_on_switch(chain,tmp_path,monkeypatch):
+    repo,account,other,facility,quota,flock,record=chain
+    second=repo.upsert_flock(dict(record,FLOCK_NUMBER='DEV_TEST second',PERMIT_NUMBER='DEV_TEST second'))
+    app=page(repo,tmp_path,monkeypatch,'21_Record_History.py')
+    assert not app.exception
+    label='I checked the recorded original Facility, destination and business time against evidence. An unknown origin remains unknown.'
+    next(c for c in app.checkbox if c.label==label).check().run()
+    select=next(s for s in app.selectbox if s.label=='Flock')
+    select.select(next(o for o in select.options if second in o)).run()
+    assert not app.exception
+    assert next(c for c in app.checkbox if c.label==label).value is False
+
+
+@pytest.mark.parametrize('change',['destination','type','day','time'])
+def test_event_confirmation_resets_when_reviewed_inputs_change(chain,tmp_path,monkeypatch,change):
+    import datetime as dt
+    repo,account,*_=chain
+    repo.upsert_facility(dict(ACCOUNT_ID=account,FACILITY_NAME='DEV_TEST destination',FACILITY_TYPE='Layer',STATUS='Active'))
+    app=page(repo,tmp_path,monkeypatch,'21_Record_History.py')
+    confirm=lambda:next(c for c in app.checkbox if c.label.startswith('I checked the recorded original Facility'))
+    next(t for t in app.text_area if t.label=='Reason for the event').input('DEV_TEST movement evidence')
+    dest=next(s for s in app.selectbox if s.label=='Destination Facility')
+    dest.select(dest.options[1]).run()
+    confirm().check().run()
+    button=lambda:next(b for b in app.button if b.label=='Record business event')
+    assert not button().disabled
+    if change=='destination':
+        dest=next(s for s in app.selectbox if s.label=='Destination Facility')
+        dest.select(dest.options[2]).run()
+    elif change=='type':next(s for s in app.selectbox if s.label=='Business event').select('Actual lifecycle end').run()
+    elif change=='day':
+        widget=next(s for s in app.date_input if s.label=='Business date')
+        widget.set_value(widget.value-dt.timedelta(days=1)).run()
+    else:next(s for s in app.time_input if s.label=='Business time (Atlantic / Halifax)').set_value(dt.time(11)).run()
+    assert not app.exception and confirm().value is False and button().disabled
+    confirm().check().run()
+    assert not button().disabled
+    assert repo.get_flock_events(chain[5]).empty

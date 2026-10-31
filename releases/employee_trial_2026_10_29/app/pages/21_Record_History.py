@@ -78,23 +78,33 @@ with flock:
     if options:
         selected = st.selectbox("Flock", list(options))
         flock_id = options[selected]
+        event_prefix = 'flock_event_form_' + str(flock_id) + '_'
+        if st.session_state.get('_flock_event_form_record') != flock_id:
+            for key in list(st.session_state):
+                if key.startswith('flock_event_form_'):
+                    st.session_state.pop(key, None)
+            st.session_state['_flock_event_form_record'] = flock_id
         current = repo.get_flock(flock_id)
         st.caption("Current reference is a snapshot, not evidence of past movements. Estimated disposal does not end a Flock.")
         st.dataframe(repo.get_flock_events(flock_id), hide_index=True, width="stretch")
-        event_type = st.selectbox("Business event", ["Move to another Facility", "Actual lifecycle end"])
+        event_type = st.selectbox("Business event", ["Move to another Facility", "Actual lifecycle end"], key=event_prefix+"type")
         facilities = repo.get_facilities(account_id=current["ACCOUNT_ID"])
         destinations = {f"{row.FACILITY_NAME} | {row.FACILITY_ID}": row.FACILITY_ID for row in facilities.itertuples()}
-        destination = st.selectbox("Destination Facility", ["Choose a Facility", *destinations], disabled=event_type == "Actual lifecycle end")
-        day = st.date_input("Business date", value=halifax_today(), max_value=halifax_today())
-        clock = st.time_input("Business time (Atlantic / Halifax)", value=dt.time(12))
-        reason = st.text_area("Reason for the event")
+        destination = st.selectbox("Destination Facility", ["Choose a Facility", *destinations], disabled=event_type == "Actual lifecycle end", key=event_prefix+"destination")
+        day = st.date_input("Business date", value=halifax_today(), max_value=halifax_today(), key=event_prefix+"day")
+        clock = st.time_input("Business time (Atlantic / Halifax)", value=dt.time(12), key=event_prefix+"time")
+        reason = st.text_area("Reason for the event", key=event_prefix+"reason")
         st.write("Recorded original Facility:",current.get('FACILITY_ID') or 'Unknown')
-        position_confirmed=st.checkbox("I checked the recorded original Facility, destination and business time against evidence. An unknown origin remains unknown.")
+        confirmation_scope = (flock_id, event_type, destination, day.isoformat(), clock.isoformat())
+        if st.session_state.get('_flock_event_confirmation_scope') != confirmation_scope:
+            st.session_state[event_prefix+'confirmed'] = False
+            st.session_state['_flock_event_confirmation_scope'] = confirmation_scope
+        position_confirmed=st.checkbox("I checked the recorded original Facility, destination and business time against evidence. An unknown origin remains unknown.", key=event_prefix+'confirmed')
         events = repo.get_flock_events(flock_id)
         supersedes = st.selectbox("Correct a previous event", ["No correction", *(events.EVENT_ID.tolist() if not events.empty else [])])
         token_key = f"flock_event_request_{flock_id}"
         st.session_state.setdefault(token_key, uuid.uuid4().hex)
-        if st.button("Record business event", disabled=not can_current(Permission.UPDATE_DATA) or not reason.strip() or (event_type.startswith("Move") and (destination not in destinations or not position_confirmed))):
+        if st.button("Record business event", disabled=not can_current(Permission.UPDATE_DATA) or not reason.strip() or not position_confirmed or (event_type.startswith("Move") and destination not in destinations)):
             try:
                 saved = repo.record_flock_event(flock_id,"MOVE" if event_type.startswith("Move") else "END",dt.datetime.combine(day,clock,ZoneInfo("America/Halifax")),reason,st.session_state[token_key],to_facility_id=destinations.get(destination),supersedes_event_id=None if supersedes == "No correction" else supersedes,position_confirmed=position_confirmed)
                 st.success(f"Event {saved} recorded. Repeat submission reuses this request.")
