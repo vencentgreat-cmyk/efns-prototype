@@ -13,6 +13,7 @@ from app.navigation import format_timestamp, list_command_bar, open_module, open
 from app.ui import apply_theme, clear_widget_prefix, page_header, show_data_error, optional_form_date
 from data.constants import FLOCK_TRANSACTION_TYPES
 from data.repositories import get_repository
+from app.services.selector_options import unique_identity_options
 from data.repositories.base import RepositoryError
 
 require_operational_page()
@@ -25,7 +26,7 @@ transactions = repo.get_flock_transactions(); flocks = repo.get_flocks(); accoun
 account_names = {row.ACCOUNT_ID: row.ORGANIZATION_NAME for row in accounts.itertuples()}
 facility_names = {row.FACILITY_ID: row.FACILITY_NAME for row in facilities.itertuples()}
 flock_names = {row.FLOCK_ID: row.FLOCK_NUMBER for row in flocks.itertuples()}
-flock_options = {f"{row.FLOCK_NUMBER} · {account_names.get(row.ACCOUNT_ID, 'Unknown')}": row.FLOCK_ID for row in flocks.itertuples()}
+flock_options = unique_identity_options((f"{row.FLOCK_NUMBER} · {account_names.get(row.ACCOUNT_ID, 'Unknown')}", row.FLOCK_ID) for row in flocks.itertuples())
 
 def option_index(options, value): return options.index(value) if value in options else 0
 def label_for_id(mapping, value): return next((label for label, item_id in mapping.items() if item_id == value), next(iter(mapping), None))

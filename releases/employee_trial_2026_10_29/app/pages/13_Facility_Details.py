@@ -12,6 +12,7 @@ from app.auth import require_operational_page
 from app.navigation import ensure_record_form_state, format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, related_records_table, saved_view_selector, selected_row_index, timestamp_column, view_parameter
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.repositories import get_repository
+from app.services.selector_options import unique_identity_options
 from data.repositories.base import RepositoryError
 from data.constants import FACILITY_DETAIL_STATUSES
 
@@ -28,7 +29,7 @@ accounts = repo.get_accounts()
 account_names = {row.ACCOUNT_ID: row.ORGANIZATION_NAME for row in accounts.itertuples()}
 facility_names = {row.FACILITY_ID: row.FACILITY_NAME for row in facilities.itertuples()}
 facility_accounts = {row.FACILITY_ID: row.ACCOUNT_ID for row in facilities.itertuples()}
-facility_options = {f"{row.FACILITY_NAME} · {account_names.get(row.ACCOUNT_ID, 'Unknown')}": row.FACILITY_ID for row in facilities.itertuples()}
+facility_options = unique_identity_options(((f"{row.FACILITY_NAME} · {account_names.get(row.ACCOUNT_ID, 'Unknown')}", row.FACILITY_ID) for row in facilities.itertuples()), reserved_labels=('All',))
 
 
 def option_index(options, value):

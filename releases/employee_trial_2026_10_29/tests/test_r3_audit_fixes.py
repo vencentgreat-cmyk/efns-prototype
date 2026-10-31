@@ -175,3 +175,51 @@ def test_A04_user_delete_confirmation_is_bound_to_user(tmp_path,monkeypatch):
 
     assert next(b for b in app.button if b.label=='Delete user').disabled
     assert {u.user_id for u in store.list_users(admin)}==users_before
+
+
+def test_A05_salmonella_facility_filter_keeps_same_name_identities(chain,tmp_path,monkeypatch):
+    repo,account,other,facility,*_=chain
+    repo.upsert_facility(dict(ACCOUNT_ID=other,FACILITY_NAME=repo.get_facility(facility)['FACILITY_NAME'],
+        FACILITY_TYPE='Layer',STATUS='Active'))
+    assert len(repo.get_facilities())==2
+    app=page(repo,tmp_path,monkeypatch,'10_Salmonella_Report.py')
+    assert not app.exception
+    assert len(app.selectbox(key='sal_rpt_facility').options)-1==2
+
+
+def test_selector_ids_are_stable_even_with_common_prefixes_and_natural_suffixes():
+    from app.services.selector_options import unique_identity_options
+    pairs=[('Barn','12345678-a'),('Barn','12345678-b'),('Normal','other-id'),
+           ('Barn · 12345678-a','natural-id'),('All','all-id')]
+    options=unique_identity_options(pairs,reserved_labels=('All',))
+    assert options==unique_identity_options(reversed(pairs),reserved_labels=('All',))
+    assert len(options)==len(pairs) and set(options.values())=={i for _,i in pairs}
+    assert options['Normal']=='other-id' and options['Barn · 12345678-a']=='natural-id'
+    assert 'All' not in options
+
+
+@pytest.mark.parametrize('filename,view_key,widget_key,kind',[
+ ('6_Flock_Transactions.py','6_Flock_Transactions','flock_tx_form_flock','flock'),
+ ('9_Salmonella_Tests.py','9_Salmonella_Tests','salmonella_form_flock','flock'),
+ ('13_Facility_Details.py','13_Facility_Details','facility_detail_form_facility','facility')])
+def test_collision_selectors_keep_both_targets(chain,tmp_path,monkeypatch,filename,view_key,widget_key,kind):
+    repo,account,other,facility,quota,flock,record=chain
+    if kind=='flock':
+        second=repo.upsert_flock(dict(record))
+        ids={flock,second}
+    else:
+        first=repo.get_facility(facility)
+        first.pop('FACILITY_ID')
+        second=repo.upsert_facility(first)
+        ids={facility,second}
+    app=authenticated_app(ROOT/'streamlit_app.py',tmp_path,monkeypatch)
+    app.session_state['_base_repo']=repo
+    app.session_state['_efns_record_'+view_key+'_view']='new'
+    app.switch_page('app/pages/'+filename).run()
+    assert not app.exception
+    selector=app.selectbox(key=widget_key)
+    assert len(selector.options)==2 and len(set(selector.options))==2
+    for identity in ids:
+        assert any(identity[:8] in label for label in selector.options)
+    selector.select(selector.options[1]).run()
+    assert not app.exception and app.selectbox(key=widget_key).value==selector.options[1]

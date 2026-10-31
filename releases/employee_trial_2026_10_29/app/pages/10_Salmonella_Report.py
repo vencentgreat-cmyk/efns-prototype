@@ -12,6 +12,7 @@ from app.services.salmonella_reporting import build_salmonella_report
 from app.ui import apply_theme, page_header, section_intro
 from data.constants import SALMONELLA_RESULTS
 from data.repositories import get_repository
+from app.services.selector_options import unique_identity_options
 
 require_page_permission(Permission.VIEW_REPORTS)
 apply_theme()
@@ -26,9 +27,9 @@ def reset_filters():
         st.session_state.pop(key, None)
 
 accounts, facilities, flocks, tests = repo.get_accounts(), repo.get_facilities(), repo.get_flocks(), repo.get_salmonella_tests()
-account_labels = {row.ORGANIZATION_NAME: row.ACCOUNT_ID for row in accounts.itertuples()}
-facility_labels = {row.FACILITY_NAME: row.FACILITY_ID for row in facilities.itertuples()}
-flock_labels = {row.FLOCK_NUMBER: row.FLOCK_ID for row in flocks.itertuples()}
+account_labels = unique_identity_options(((row.ORGANIZATION_NAME, row.ACCOUNT_ID) for row in accounts.itertuples()), reserved_labels=('All',))
+facility_labels = unique_identity_options(((row.FACILITY_NAME, row.FACILITY_ID) for row in facilities.itertuples()), reserved_labels=('All',))
+flock_labels = unique_identity_options(((row.FLOCK_NUMBER, row.FLOCK_ID) for row in flocks.itertuples()), reserved_labels=('All',))
 section_intro("Report filters", "Use one or more fields; all filters are combined.")
 st.button("Reset Filters", on_click=reset_filters, key="sal_rpt_reset")
 row1 = st.columns(4)
