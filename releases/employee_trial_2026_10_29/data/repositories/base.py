@@ -124,6 +124,10 @@ class BaseRepository(ABC):
     def get_record_revisions(self):
         raise NotImplementedError
 
+    def get_record_revisions_for(self, entity_type, entity_id, limit=50):
+        """Read bounded history for one business record, never the full table."""
+        raise NotImplementedError
+
     def stage_production_upload(self, batch, raw_rows, actor=None, review_again=False):
         raise NotImplementedError
 

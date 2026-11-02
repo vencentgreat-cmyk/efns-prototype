@@ -2,7 +2,7 @@
   "status": "LOCAL ONLY; no live query/deployment",
   "baseline": "RELEASE_SOURCE_MANIFEST.json saved deployment, LF-normalized review comparison",
   "baseline_files": 89,
-  "candidate_artifacts": 95,
+  "candidate_artifacts": 96,
   "runtime_changes": [
     {
       "path": "app/pages/10_Salmonella_Report.py",
@@ -49,9 +49,9 @@
     {
       "path": "app/pages/21_Record_History.py",
       "status": "MODIFIED",
-      "reason": "R3 F2/F3: producer evidence/confirmation scoped to selected record; Flock event confirmation scoped to Flock and reset on destination/type/business-time changes. Backend untouched.",
+      "reason": "R3 confirmation protections retained; 2026-11-02 adds selected-record Change history and replaces global revision display with bounded flattened changes.",
       "baseline_lf_sha256": "cf9bd6b2bae4e2a90a4ad6891c6ed83bc811f300e2bafd0610cb99f5cae5d5d0",
-      "candidate_lf_sha256": "fed89d5e89ef9c20b882a9f3784a16b46369ec36a5b1e138e4500b673c75774e"
+      "candidate_lf_sha256": "f999d94d4ad01663bf0173e861e43d31c497b6caac1655338807ebf0ff12cb33"
     },
     {
       "path": "app/pages/4_Reports.py",
@@ -108,6 +108,13 @@
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
       "candidate_lf_sha256": "ab7bd7e905be801c8e93cd39b0370abb185b518840c73b56ca4484add4c2e71d"
+    },
+    {
+      "path": "app/services/revision_history.py",
+      "status": "NEW",
+      "reason": "2026-11-02: pure per-field history display projection with Halifax timestamps; ignores technical metadata and never returns raw VARIANT columns.",
+      "baseline_lf_sha256": null,
+      "candidate_lf_sha256": "1be8e2a16ee6986bab95c6ee64106224a7b1e09271bffdf09748c64171945221"
     },
     {
       "path": "app/services/selector_options.py",
@@ -185,6 +192,20 @@
       "reason": "Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained.",
       "baseline_lf_sha256": "814cc38fb0fba545d419a49e4132d3a5e10fe7d4f5ac6707725df04831e80579",
       "candidate_lf_sha256": "6abda45d67e9bb83394652584c37a150f41427efe8c0abf00484cc66220793e4"
+    },
+    {
+      "path": "data/repositories/base.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-02: declare bounded per-record history read interface; existing unfiltered history contract unchanged.",
+      "baseline_lf_sha256": "cc19f4dc9f73d814331f1a63862419d2e4e277217008e1d27ff8fcafc0a0bf09",
+      "candidate_lf_sha256": "2ddcfa80b65a652d5c321323142a1f29fc8c19fd3ca29a9c5ad82936794f3d61"
+    },
+    {
+      "path": "data/repositories/continuity.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-02: parameterized entity/ID-filtered, ordered, limited revision read; equivalent bounded memory path. No transaction/write logic changes.",
+      "baseline_lf_sha256": "2d542fd6d12a2ac9acab51b2ac55bb7c29dfe64364d2a42f80b4312f569e7b7d",
+      "candidate_lf_sha256": "53dddf0bbd47d60b37857f34869c9f43b09c163decb4454024505b5d5b23baac"
     },
     {
       "path": "data/repositories/mock.py",

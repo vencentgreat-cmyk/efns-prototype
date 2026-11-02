@@ -1,7 +1,7 @@
 # Deployment checklist — 30 October 2026
 
 **Preparation only; do not deploy from this checklist without separate approval.**
-Work tree: `releases/employee_trial_2026_10_29`, branch `delivery-candidate-r3-20261030`.
+Work tree: `releases/employee_trial_2026_10_29`, branch `history-view-fix-20261102`.
 Target declared by the existing package: `EFNS_DEV.APP.EFNS_INTERNAL_APP`, root
 `streamlit_app.py`, `SYSTEM$WAREHOUSE_RUNTIME`, warehouse `EFNS_DEV_WH`.
 Current live identity, drift, owner and grants are **to verify**; no company
@@ -14,7 +14,7 @@ Hashes compare LF-normalized bytes as documented by that manifest. Private live
 snapshots, credentials, real business exports and execution manifests are not
 included. `DELIVERY_RUNTIME_DIFF_20261030.json` records before/after hashes.
 
-Saved baseline: 89 runtime files. Candidate artifacts: 95. Changes: 23 modified, 6 new, 0 deleted.
+Saved baseline: 89 runtime files. Candidate artifacts: 96. Changes: 25 modified, 7 new, 0 deleted.
 
 | Runtime file | Status | Why |
 |---|---|---|
@@ -24,7 +24,7 @@ Saved baseline: 89 runtime files. Candidate artifacts: 95. Changes: 23 modified,
 | `app/pages/15_User_Management.py` | MODIFIED | R3 F4: deletion checkbox scoped to selected user and cleared on switch; auth-store and permission logic unchanged. |
 | `app/pages/16_Audit_Log.py` | MODIFIED | R3 F7: caption states filters apply to the latest 5,000 loaded events; no query or permission change. |
 | `app/pages/19_Daily_Flock_Quota_Import.py` | MODIFIED | R3 F1: distinguish explicit unknown COMMIT outcome, persist per-package resubmission guard; only claim no write for explicit pre-BEGIN marker; otherwise safe error rendering. |
-| `app/pages/21_Record_History.py` | MODIFIED | R3 F2/F3: producer evidence/confirmation scoped to selected record; Flock event confirmation scoped to Flock and reset on destination/type/business-time changes. Backend untouched. |
+| `app/pages/21_Record_History.py` | MODIFIED | R3 confirmation protections retained; 2026-11-02 adds selected-record Change history and replaces global revision display with bounded flattened changes. |
 | `app/pages/4_Reports.py` | MODIFIED | Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection. |
 | `app/pages/5_Flocks.py` | MODIFIED | Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. |
 | `app/pages/6_Flock_Transactions.py` | MODIFIED | R3 F5: disambiguate colliding Flock labels while preserving normal labels, current-quantity confirmation, CAS and save paths. |
@@ -33,6 +33,7 @@ Saved baseline: 89 runtime files. Candidate artifacts: 95. Changes: 23 modified,
 | `app/services/quota_usage.py` | MODIFIED | PENDING Account-wide recorded Bird Count and guarded draft calculation; current stock/percentage remain unestablished; detailed limitations moved into expander. |
 | `app/services/report_builder.py` | MODIFIED | Credit Type display label in the older joined-field builder. |
 | `app/services/report_center.py` | MODIFIED | Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering. |
+| `app/services/revision_history.py` | NEW | 2026-11-02: pure per-field history display projection with Halifax timestamps; ignores technical metadata and never returns raw VARIANT columns. |
 | `app/services/selector_options.py` | NEW | R3 F5/F6: pure collision-only stable ID suffixes plus current-first, sorted historical filter labels; no relationship inference or input-policy expansion. |
 | `config/quota_rules.json` | NEW | PENDING rules and user-supplied F3-F5 meanings, not calculation approval. |
 | `data/constants.py` | MODIFIED | Three canonical quota types and six current transaction choices, plus legacy lease input compatibility. |
@@ -44,6 +45,8 @@ Saved baseline: 89 runtime files. Candidate artifacts: 95. Changes: 23 modified,
 | `data/quota_position.py` | NEW | PENDING owner component/latest-Base draft plus logged built-in PENDING fallback for missing/invalid rules. |
 | `data/quota_types.py` | NEW | Read/comparison compatibility for canonical and legacy labels, without write-time relabeling. |
 | `data/record_safety.py` | MODIFIED | Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained. |
+| `data/repositories/base.py` | MODIFIED | 2026-11-02: declare bounded per-record history read interface; existing unfiltered history contract unchanged. |
+| `data/repositories/continuity.py` | MODIFIED | 2026-11-02: parameterized entity/ID-filtered, ordered, limited revision read; equivalent bounded memory path. No transaction/write logic changes. |
 | `data/repositories/mock.py` | MODIFIED | Existing alias-compatible reads plus shared daily quota validation at commit, before writer, preserving rollback behavior. |
 | `data/repositories/snowflake.py` | MODIFIED | Existing alias-compatible reads plus shared daily quota validation and unique parent checks inside existing commit transaction; no executor/transaction implementation change. |
 | `data/validation.py` | MODIFIED | Shared finite signed nonzero Adjustment, optional Price/counterparty/date rules and changed-field daily quota review helper; historical unchanged values retained. |

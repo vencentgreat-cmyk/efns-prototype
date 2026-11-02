@@ -15,13 +15,15 @@ from data.business_time import halifax_today
 from data.repositories import get_repository
 from data.producer_identity import production_identities
 from data.source_trace import trace_summary
+from app.services.revision_history import revision_changes
+from data.repositories.snowflake import MODEL, PRODUCTION_COLUMNS
 
 require_page_permission(Permission.VIEW_DATA)
 apply_theme()
 if "repo" not in st.session_state: st.session_state.repo = get_repository()
 repo = st.session_state.repo
 page_header("Record Review & History", "Original evidence, producer decisions and recorded Flock movements.", "REVIEW")
-producer, flock, correction, originals = st.tabs(["Producer matching", "Flock history", "Attribute corrections", "Original files"])
+producer, flock, correction, originals, change_history = st.tabs(["Producer matching", "Flock history", "Attribute corrections", "Original files", "Change history"])
 accounts = repo.get_accounts()
 account_options = {f"{row.ORGANIZATION_NAME} | {row.ACCOUNT_ID}": row.ACCOUNT_ID for row in accounts.itertuples()}
 with producer:
@@ -166,7 +168,14 @@ with correction:
             st.session_state.revision_request = uuid.uuid4().hex
             st.session_state.pop('_efns_request_attribute_revision',None)
             st.rerun()
-    st.dataframe(repo.get_record_revisions(), hide_index=True, width="stretch")
+        try:
+            selected_history = repo.get_record_revisions_for(entity, record_id)
+            if selected_history.empty:
+                st.info("No recorded changes for this record yet.")
+            else:
+                st.dataframe(revision_changes(selected_history), hide_index=True, width="stretch")
+        except Exception as exc:
+            show_data_error(exc)
 with originals:
     files = repo.get_source_files()
     st.dataframe(files, hide_index=True, width="stretch")
@@ -196,3 +205,40 @@ with originals:
                 st.success("Retrieved original bytes match the saved SHA-256 checksum.")
                 st.download_button("Download original file", content,file_name=metadata.ORIGINAL_FILENAME)
             except Exception as exc: show_data_error(exc)
+
+
+with change_history:
+    # Production uses a dedicated writer, rather than the ordinary MODEL dict.
+    supported = (
+        ('Account', 'ACCOUNT', 'get_accounts', 'ACCOUNT_ID', 'ORGANIZATION_NAME'),
+        ('Facility', 'FACILITY', 'get_facilities', 'FACILITY_ID', 'FACILITY_NAME'),
+        ('Facility Detail', 'FACILITY_DETAIL', 'get_facility_details', 'FACILITY_DETAIL_ID', None),
+        ('Flock', 'FLOCK', 'get_flocks', 'FLOCK_ID', 'FLOCK_NUMBER'),
+        ('Flock Transaction', 'FLOCK_TRANSACTION', 'get_flock_transactions', 'FLOCK_TRANSACTION_ID', None),
+        ('Quota Registration', 'QUOTA_REGISTRATION', 'get_quota_registrations', 'QUOTA_ID', None),
+        ('Quota Transaction', 'QUOTA_TRANSACTION', 'get_quota_transactions', 'QUOTA_TRANSACTION_ID', None),
+        ('Salmonella Test', 'SALMONELLA_TEST', 'get_salmonella_tests', 'SALMONELLA_TEST_ID', None),
+        ('Production record', 'PRODUCTION_RECORD', 'get_production_records', 'PRODUCTION_ID', None),
+    )
+    available = {label:(kind, method, key, name) for label,kind,method,key,name in supported
+                 if (kind in MODEL or (kind == 'PRODUCTION_RECORD' and PRODUCTION_COLUMNS))
+                 and callable(getattr(repo, method, None))}
+    chosen_type = st.selectbox('Record type', list(available), key='history_record_type')
+    kind, method, key, name = available[chosen_type]
+    try:
+        candidates = getattr(repo, method)()
+        if candidates.empty:
+            st.info('No records available for this type.')
+        else:
+            # The complete ID keeps same-name records distinct and searchable.
+            options = {f"{row.get(name) if name and pd.notna(row.get(name)) else row[key]} | {row[key]}":str(row[key])
+                       for row in candidates.to_dict('records')}
+            label = st.selectbox('Record', list(options), key='history_record_'+kind)
+            revisions = repo.get_record_revisions_for(kind, options[label])
+            st.caption('Latest 50 recorded changes for the selected record.')
+            if revisions.empty:
+                st.info('No recorded changes for this record yet.')
+            else:
+                st.dataframe(revision_changes(revisions), hide_index=True, width='stretch')
+    except Exception as exc:
+        show_data_error(exc)

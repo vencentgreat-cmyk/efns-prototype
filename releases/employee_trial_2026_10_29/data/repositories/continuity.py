@@ -523,6 +523,35 @@ class ContinuityRepository:
     def get_record_revisions(self):
         return self._history_rows("RECORD_REVISION")
 
+    def get_record_revisions_for(self, entity_type, entity_id, limit=50):
+        """Latest revisions for one record; cap requests at 200 snapshots."""
+        from operator import index
+        try:
+            safe_limit = index(limit)
+        except TypeError:
+            raise RepositoryError('History limit must be a whole number from 1 to 200.') from None
+        if isinstance(limit, bool) or not 1 <= safe_limit <= 200:
+            raise RepositoryError('History limit must be a whole number from 1 to 200.')
+        if not isinstance(entity_type, str) or not entity_type.strip() or not isinstance(entity_id, str) or not entity_id.strip():
+            raise RepositoryError('Select one record type and record ID to view history.')
+        entity_type, entity_id = entity_type.strip().upper(), entity_id.strip()
+        if self._is_memory:
+            selected = [row for row in self._continuity_rows['RECORD_REVISION']
+                        if row.get('ENTITY_TYPE') == entity_type and row.get('ENTITY_ID') == entity_id]
+            def order(row):
+                recorded = pd.to_datetime(row.get('RECORDED_AT'), utc=True, errors='coerce')
+                return (recorded.value if pd.notna(recorded) else pd.Timestamp.min.value,
+                        str(row.get('REVISION_ID') or ''))
+            return pd.DataFrame(copy.deepcopy(sorted(selected, key=order, reverse=True)[:safe_limit]))
+        return self._executor().query(
+            f"SELECT REVISION_ID, ENTITY_TYPE, ENTITY_ID, CHANGE_KIND, RECORDED_AT, "
+            f"RECORDED_BY, REASON, BEFORE_DATA, AFTER_DATA "
+            f"FROM {self._continuity_table('RECORD_REVISION')} "
+            f"WHERE ENTITY_TYPE=%s AND ENTITY_ID=%s "
+            f"ORDER BY RECORDED_AT DESC, REVISION_ID DESC LIMIT {safe_limit}",
+            (entity_type, entity_id),
+        )
+
     def get_flock_position(self, flock_id, as_of):
         events = self.get_flock_events(flock_id)
         if events.empty:
