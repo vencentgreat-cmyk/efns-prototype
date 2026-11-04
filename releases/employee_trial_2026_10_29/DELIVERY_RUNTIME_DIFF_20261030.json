@@ -5,6 +5,12 @@
   "candidate_artifacts": 96,
   "runtime_changes": [
     {
+      "path": "data/producer_identity.py",
+      "status": "MODIFIED",
+      "reason": "Disambiguate duplicate exact registration matches only when exactly one candidate is Active; preserve GUID and missing-STATUS behavior.",
+      "candidate_lf_sha256": "955f61f15814b276d34935f8fd1cb85109afe65513be852cf50c33ea52accd0b"
+    },
+    {
       "path": "app/pages/10_Salmonella_Report.py",
       "status": "MODIFIED",
       "reason": "R3 F5/F6: preserve distinct Account/Facility/Flock filter identities and include historical result values; existing report/export query unchanged.",
