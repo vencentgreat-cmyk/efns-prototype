@@ -5,7 +5,9 @@ from decimal import Decimal
 from pathlib import Path
 import pandas as pd
 import pytest
-from app.services.revision_history import revision_changes,COLUMNS
+from app.services.revision_history import (
+    COLUMNS, record_options, revision_actor_labels, revision_changes,
+)
 from app.services.authorized_repository import AuthorizedRepository
 from app.security import Role,User
 from data.repositories.mock import MockRepository
@@ -88,6 +90,42 @@ def test_changes_ignore_metadata_preserve_null_zero_and_blank(encoded):
     assert frame.iloc[0].to_dict()==original
 
 
+def test_changed_by_resolves_only_page_actor_ids_and_falls_back_to_stored_id():
+    known='11111111-1111-1111-1111-111111111111'
+    missing='22222222-2222-2222-2222-222222222222'
+    frame=pd.DataFrame([
+        dict(RECORDED_BY=known,BEFORE_DATA={'COMMENTS':'a'},AFTER_DATA={'COMMENTS':'b'}),
+        dict(RECORDED_BY=known,BEFORE_DATA={'COMMENTS':'b'},AFTER_DATA={'COMMENTS':'c'}),
+        dict(RECORDED_BY=missing,BEFORE_DATA={'COMMENTS':'c'},AFTER_DATA={'COMMENTS':'d'}),
+    ])
+    calls=[]
+    user=User(known,'known@nsegg.ca','Known Staff',Role.DATA_EDITOR,True,False,'','',None)
+    def lookup(user_id):
+        calls.append(user_id)
+        return user if user_id == known else None
+    labels=revision_actor_labels(frame,lookup)
+    result=revision_changes(frame,labels)
+    assert calls==[known,missing]
+    assert labels=={known:'Known Staff',missing:missing}
+    assert result['Changed by'].tolist()==['Known Staff','Known Staff',missing]
+
+
+def test_record_dropdown_labels_are_type_specific_and_values_remain_full_ids():
+    account_id='12345678-1111-2222-3333-444444444444'
+    transaction_id='421FEF51-AAAA-BBBB-CCCC-DDDDDDDDDDDD'
+    accounts=pd.DataFrame([dict(ACCOUNT_ID=account_id,ORGANIZATION_NAME='Example Eggs',
+                                REGISTRATION_NUMBER='A-17')])
+    transactions=pd.DataFrame([dict(QUOTA_TRANSACTION_ID=transaction_id,
+        TRANSACTION_TYPE='Lease (In)',EFFECTIVE_DATE='2012-09-27',QUOTA_ID='quota-1')])
+    account_options=record_options('ACCOUNT',accounts,'ACCOUNT_ID')
+    transaction_options=record_options('QUOTA_TRANSACTION',transactions,'QUOTA_TRANSACTION_ID',
+                                       {'quota-1':'QR-204'})
+    assert account_options=={'Example Eggs · A-17 · 12345678':account_id}
+    assert transaction_options=={
+        'Lease (In) · 421FEF51 · 2012-09-27 · QR-204':transaction_id,
+    }
+
+
 @pytest.mark.parametrize('before,after',[(None,None),('null','null'),({},{}),({'UPDATED_AT':'a'},{'UPDATED_AT':'b'})])
 def test_empty_or_metadata_only_revision_has_placeholder_row(before,after):
     result=revision_changes(pd.DataFrame([dict(BEFORE_DATA=before,AFTER_DATA=after,CHANGE_KIND='CREATE')]))
@@ -128,7 +166,7 @@ def test_account_revision_visible_in_actual_history_page_without_global_payload(
     assert 'Change history' in [tab.label for tab in app.tabs]
     app.selectbox(key='history_record_type').select('Account').run()
     selector=app.selectbox(key='history_record_ACCOUNT')
-    selector.select(next(label for label in selector.options if account in label)).run()
+    selector.select(next(label for label in selector.options if account[:8].upper() in label)).run()
     assert not app.exception and not app.error
     history=[f.value for f in app.dataframe if list(f.value)==COLUMNS]
     assert any('DEV_TEST reviewed account evidence' in f.Reason.tolist() for f in history)

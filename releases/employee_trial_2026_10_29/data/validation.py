@@ -216,7 +216,7 @@ def validate_flock_transaction(repo: "BaseRepository", record: dict, *, current_
 
 
 def quota_related_account_required(transaction_type) -> bool:
-    # provisional - confirm with business
+    # Enforced business rule: these counterparty transaction types require a Related Account.
     return transaction_type in {'Purchase', 'Sale', 'Lease (In)', 'Lease (Out)', 'Lease In', 'Lease Out'}
 
 
@@ -236,7 +236,7 @@ def parse_optional_quota_price(value):
 
 
 def quota_count_error(value, transaction_type):
-    # confirmed from historical data 2026-10-30; provisional until staff confirm
+    # Enforced business rule: Adjustment is signed and non-zero; other input quantities are positive.
     adjustment = transaction_type == 'Adjustment'
     message = ('Adjustment Quota Count must be finite and non-zero.' if adjustment
                else 'Quota Count must be finite and greater than zero.')

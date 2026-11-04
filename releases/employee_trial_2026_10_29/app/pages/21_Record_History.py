@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
-from app.auth import can_current, require_page_permission
+from app.auth import can_current, get_auth_store, require_page_permission
 from app.security import Permission
 from app.ui import apply_theme, page_header, show_data_error
 from app.services.form_safety import request_for,finish_request
@@ -15,13 +15,21 @@ from data.business_time import halifax_today
 from data.repositories import get_repository
 from data.producer_identity import production_identities
 from data.source_trace import trace_summary
-from app.services.revision_history import revision_changes
+from app.services.revision_history import record_options, revision_actor_labels, revision_changes
 from data.repositories.snowflake import MODEL, PRODUCTION_COLUMNS
 
 require_page_permission(Permission.VIEW_DATA)
 apply_theme()
 if "repo" not in st.session_state: st.session_state.repo = get_repository()
 repo = st.session_state.repo
+auth_store = get_auth_store()
+
+
+def display_revision_changes(revisions):
+    labels = revision_actor_labels(revisions, auth_store.get_user)
+    return revision_changes(revisions, labels)
+
+
 page_header("Record Review & History", "Original evidence, producer decisions and recorded Flock movements.", "REVIEW")
 producer, flock, correction, originals, change_history = st.tabs(["Producer matching", "Flock history", "Attribute corrections", "Original files", "Change history"])
 accounts = repo.get_accounts()
@@ -173,7 +181,7 @@ with correction:
             if selected_history.empty:
                 st.info("No recorded changes for this record yet.")
             else:
-                st.dataframe(revision_changes(selected_history), hide_index=True, width="stretch")
+                st.dataframe(display_revision_changes(selected_history), hide_index=True, width="stretch")
         except Exception as exc:
             show_data_error(exc)
 with originals:
@@ -230,15 +238,17 @@ with change_history:
         if candidates.empty:
             st.info('No records available for this type.')
         else:
-            # The complete ID keeps same-name records distinct and searchable.
-            options = {f"{row.get(name) if name and pd.notna(row.get(name)) else row[key]} | {row[key]}":str(row[key])
-                       for row in candidates.to_dict('records')}
+            quota_numbers = {}
+            if kind == 'QUOTA_TRANSACTION':
+                quotas = repo.get_quota_registrations()
+                quota_numbers = {str(row.QUOTA_ID): row.REGISTRATION_NUMBER for row in quotas.itertuples()}
+            options = record_options(kind, candidates, key, quota_numbers)
             label = st.selectbox('Record', list(options), key='history_record_'+kind)
             revisions = repo.get_record_revisions_for(kind, options[label])
             st.caption('Latest 50 recorded changes for the selected record.')
             if revisions.empty:
                 st.info('No recorded changes for this record yet.')
             else:
-                st.dataframe(revision_changes(revisions), hide_index=True, width='stretch')
+                st.dataframe(display_revision_changes(revisions), hide_index=True, width='stretch')
     except Exception as exc:
         show_data_error(exc)

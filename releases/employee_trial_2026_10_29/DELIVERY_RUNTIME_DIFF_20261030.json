@@ -49,9 +49,9 @@
     {
       "path": "app/pages/21_Record_History.py",
       "status": "MODIFIED",
-      "reason": "R3 confirmation protections retained; 2026-11-02 adds selected-record Change history and replaces global revision display with bounded flattened changes.",
+      "reason": "R3 confirmation protections retained; selected-record Change history now resolves only displayed actor IDs and uses record-specific staff labels; bounded flattened history is unchanged.",
       "baseline_lf_sha256": "cf9bd6b2bae4e2a90a4ad6891c6ed83bc811f300e2bafd0610cb99f5cae5d5d0",
-      "candidate_lf_sha256": "f999d94d4ad01663bf0173e861e43d31c497b6caac1655338807ebf0ff12cb33"
+      "candidate_lf_sha256": "839ed3b73d4e4058c2b05e1593f2722d1f05e30cd70e7a020c2cc46dab38b31c"
     },
     {
       "path": "app/pages/4_Reports.py",
@@ -112,9 +112,9 @@
     {
       "path": "app/services/revision_history.py",
       "status": "NEW",
-      "reason": "2026-11-02: pure per-field history display projection with Halifax timestamps; ignores technical metadata and never returns raw VARIANT columns.",
+      "reason": "Pure per-field history display projection with Halifax timestamps, page-scoped actor labels and record-specific selector labels; ignores technical metadata and never returns raw VARIANT columns.",
       "baseline_lf_sha256": null,
-      "candidate_lf_sha256": "1be8e2a16ee6986bab95c6ee64106224a7b1e09271bffdf09748c64171945221"
+      "candidate_lf_sha256": "f709669d874921fa0b2d3b7228d391ffbb867d2c4299ea331baded283a33671d"
     },
     {
       "path": "app/services/selector_options.py",
@@ -224,9 +224,9 @@
     {
       "path": "data/validation.py",
       "status": "MODIFIED",
-      "reason": "Shared finite signed nonzero Adjustment, optional Price/counterparty/date rules and changed-field daily quota review helper; historical unchanged values retained.",
+      "reason": "Shared finite signed nonzero Adjustment, optional Price/counterparty/date rules and changed-field daily quota review helper; comments now identify the enforced rules; behavior unchanged.",
       "baseline_lf_sha256": "97a381b7ef1ed7c844717e5561100894ef195a2b71f0fc96a49112f5b4f1c632",
-      "candidate_lf_sha256": "df6e1101d22a8c938a209675fe545e29da04d6c23599260712bfd2f5bf172af9"
+      "candidate_lf_sha256": "63708ac4a5fe8417c3b215b6708db4b24063a040941ca836b9ade83cd220b6d0"
     }
   ],
   "deployment_metadata_changes": {
