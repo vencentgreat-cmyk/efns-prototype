@@ -42,7 +42,7 @@ def flock_is_in_current_report(flock, report_date, quota_type):
 
 def build_flock_current_report(flocks, transactions, accounts, report_date,
                                mortality='0.4', quota_type='Egg Production'):
-    """Return only report rows. Missing measures propagate to subtotals."""
+    """Return only report rows. Subtotals sum known measures and disclose gaps."""
     report_date = day(report_date)
     if report_date is None:
         raise ValueError('Report date is required.')
@@ -105,10 +105,13 @@ def build_flock_current_report(flocks, transactions, accounts, report_date,
         result = {column: None for column in COLUMNS}
         result.update({'Account': label, 'Quota Type': kind, 'Notes': ''})
         for column in MEASURES:
-            values = [row[column] for row in rows]
-            result[column] = sum(values) if all(v is not None for v in values) else None
-        if any(result[column] is None for column in MEASURES):
-            result['Notes'] = 'Incomplete subtotal: unknown values'
+            values = [row[column] for row in rows if row[column] is not None]
+            result[column] = sum(values) if values else None
+        missing_count = sum(row['Counted'] is None for row in rows)
+        result['Notes'] = f'Excludes {missing_count} flock(s) without usable Count'
+        missing_placement = sum(row['Counted'] is not None and row['Inventory'] is None for row in rows)
+        if missing_placement:
+            result['Notes'] += f'; Inventory/Up. Flocks exclude {missing_placement} flock(s) without placement date'
         return result
 
     output, quota_rows = [], {}

@@ -79,6 +79,7 @@ def test_latest_count_conflict_does_not_select_an_observation(change):
     assert result.iloc[0]['Notes']=='Count conflict'
     assert result.iloc[0]['Counted']==result.iloc[0]['Inventory']=='—'
     assert result.iloc[-1]['Inventory']=='—'
+    assert result.iloc[-1]['Notes']=='Excludes 1 flock(s) without usable Count'
 
 
 def test_no_count_and_missing_placement_remain_visible():
@@ -91,6 +92,39 @@ def test_no_count_and_missing_placement_remain_visible():
     result=build_flock_current_report(f,t,a,DAY)
     assert result.iloc[0]['Inventory']=='—'
     assert 'Placement date unavailable' in result.iloc[0]['Notes']
+
+
+def test_mixed_subtotals_sum_known_values_and_count_exclusions_per_group():
+    f,t,a=sources(FIXTURES[:3])
+    f.loc[2,'ACCOUNT_ID']='other'
+    a=pd.concat([a,pd.DataFrame([dict(ACCOUNT_ID='other',ORGANIZATION_NAME='Other',REGISTRATION_NUMBER='456')])])
+    t=t.iloc[:1]  # Only 40390 has a usable Count.
+    result=build_flock_current_report(f,t,a,DAY)
+    totals=result.loc[result.Account=='Account Total']
+    assert totals.iloc[0]['Counted']==12439
+    assert totals.iloc[0]['Inventory']==12385
+    assert totals.iloc[0]['Up. Flocks']==0
+    assert totals.iloc[0]['Notes']=='Excludes 1 flock(s) without usable Count'
+    assert all(totals.iloc[1][c]=='—' for c in ('Counted','Inventory','Up. Flocks'))
+    assert totals.iloc[1]['Notes']=='Excludes 1 flock(s) without usable Count'
+    quota=result.loc[result.Account=='Quota Total'].iloc[0]
+    assert (quota['Counted'],quota['Inventory'],quota['Up. Flocks'])==(12439,12385,0)
+    assert quota['Notes']=='Excludes 2 flock(s) without usable Count'
+    # Detail projection is identical whether rendered alone or in the mixed group.
+    expected=build_flock_current_report(*sources([FIXTURES[0]]),DAY).iloc[0]
+    actual=result.loc[result['Permit No']=='40390'].iloc[0].rename(expected.name)
+    pd.testing.assert_series_equal(actual,expected)
+
+
+def test_known_count_with_missing_placement_contributes_only_known_measures():
+    f,t,a=sources(FIXTURES[:2])
+    f.loc[1,'PLACEMENT_DATE']=None
+    result=build_flock_current_report(f,t,a,DAY)
+    for label in ('Account Total','Quota Total'):
+        total=result.loc[result.Account==label].iloc[0]
+        assert (total['Counted'],total['Inventory'],total['Up. Flocks'])==(19279,12385,0)
+        assert total['Notes'].startswith('Excludes 0 flock(s) without usable Count')
+        assert 'without placement date' in total['Notes']
 
 
 @pytest.mark.parametrize('mortality',['NaN','Infinity','-1','abc'])
