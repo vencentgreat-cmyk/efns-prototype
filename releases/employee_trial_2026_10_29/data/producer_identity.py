@@ -16,6 +16,14 @@ def resolve_producer(record,accounts):
     ids=accounts.ACCOUNT_ID.astype(str).str.casefold()==source.casefold()
     numbers=accounts.get('REGISTRATION_NUMBER',pd.Series(None,index=accounts.index,dtype=object)).map(text).map(lambda v:v is not None and v.casefold()==source.casefold())
     found=accounts[ids|numbers].drop_duplicates('ACCOUNT_ID')
+    if len(found)>1 and not ids.any() and 'STATUS' in found:
+        active=found.STATUS.map(lambda value:(text(value) or '').casefold()=='active')
+        if active.sum()==1:
+            ignored=sorted(found.loc[~active,'ACCOUNT_ID'].astype(str))
+            return {'status':'UNIQUE_MATCHED','account_id':str(found.loc[active].iloc[0].ACCOUNT_ID),
+                    'method':'EXACT_REGISTRATION_NUMBER_ACTIVE_ONLY',
+                    'basis':'Exact registration number; exactly one Active Account; ignored inactive/non-active Account IDs: '+', '.join(ignored),
+                    'source_number':source}
     return {'status':'UNIQUE_MATCHED' if len(found)==1 else 'MULTIPLE_CANDIDATES' if len(found)>1 else 'NO_CANDIDATE',
             'account_id':str(found.iloc[0].ACCOUNT_ID) if len(found)==1 else None,
             'method':'EXACT_ACCOUNT_ID' if ids.any() else 'EXACT_REGISTRATION_NUMBER',

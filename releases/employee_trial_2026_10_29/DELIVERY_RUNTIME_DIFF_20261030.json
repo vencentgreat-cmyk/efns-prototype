@@ -11,6 +11,12 @@
       "candidate_lf_sha256": "d27db19ea752b972150da174c5696cda1f3f9c83c5a9cf02c3daa5c0beef89c1"
     },
     {
+      "path": "data/producer_identity.py",
+      "status": "MODIFIED",
+      "reason": "Disambiguate duplicate exact registration matches only when exactly one candidate is Active; preserve GUID and missing-STATUS behavior.",
+      "candidate_lf_sha256": "955f61f15814b276d34935f8fd1cb85109afe65513be852cf50c33ea52accd0b"
+    },
+    {
       "path": "app/pages/10_Salmonella_Report.py",
       "status": "MODIFIED",
       "reason": "R3 F5/F6: preserve distinct Account/Facility/Flock filter identities and include historical result values; existing report/export query unchanged.",
