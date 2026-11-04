@@ -55,7 +55,12 @@ def read_eims_workbook(file: BinaryIO) -> pd.DataFrame:
         dtype=object,
     )
     frame.columns = [str(column).strip() for column in frame.columns]
-    frame = frame.dropna(how="all").copy()
+    empty_cells = frame.apply(
+        lambda column: column.map(
+            lambda value: pd.isna(value) or (isinstance(value, str) and not value.strip())
+        )
+    )
+    frame = frame.loc[~empty_cells.all(axis=1)].copy()
     frame["SOURCE_ROW_NUMBER"] = frame.index + 11
     return frame.reset_index(drop=True)
 

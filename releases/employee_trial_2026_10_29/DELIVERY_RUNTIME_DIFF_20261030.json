@@ -5,6 +5,12 @@
   "candidate_artifacts": 96,
   "runtime_changes": [
     {
+      "path": "data/importing.py",
+      "status": "MODIFIED",
+      "reason": "Drop all-blank or whitespace-only workbook rows before validation while retaining original source row numbers and populated invalid rows.",
+      "candidate_lf_sha256": "d27db19ea752b972150da174c5696cda1f3f9c83c5a9cf02c3daa5c0beef89c1"
+    },
+    {
       "path": "app/pages/10_Salmonella_Report.py",
       "status": "MODIFIED",
       "reason": "R3 F5/F6: preserve distinct Account/Facility/Flock filter identities and include historical result values; existing report/export query unchanged.",
