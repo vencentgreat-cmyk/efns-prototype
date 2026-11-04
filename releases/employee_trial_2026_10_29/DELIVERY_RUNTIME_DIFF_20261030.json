@@ -114,7 +114,7 @@
       "status": "NEW",
       "reason": "Pure per-field history display projection with Halifax timestamps, page-scoped actor labels and record-specific selector labels; ignores technical metadata and never returns raw VARIANT columns.",
       "baseline_lf_sha256": null,
-      "candidate_lf_sha256": "f709669d874921fa0b2d3b7228d391ffbb867d2c4299ea331baded283a33671d"
+      "candidate_lf_sha256": "872a0bf1e5eff89b9c1944f823c1dfc19330f97c4268663f2fcdf7b4db1a9c56"
     },
     {
       "path": "app/services/selector_options.py",

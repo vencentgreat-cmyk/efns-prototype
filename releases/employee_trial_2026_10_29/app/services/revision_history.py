@@ -61,7 +61,11 @@ def revision_actor_labels(df, user_lookup):
         actor_id = str(value).strip()
         if not actor_id or actor_id in labels:
             continue
-        user = user_lookup(actor_id)
+        try:
+            user = user_lookup(actor_id)
+        except Exception:
+            labels[actor_id] = actor_id
+            continue
         if user is None:
             labels[actor_id] = actor_id
             continue

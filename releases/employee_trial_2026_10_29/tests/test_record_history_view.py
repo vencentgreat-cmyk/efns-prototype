@@ -110,6 +110,26 @@ def test_changed_by_resolves_only_page_actor_ids_and_falls_back_to_stored_id():
     assert result['Changed by'].tolist()==['Known Staff','Known Staff',missing]
 
 
+def test_failed_actor_lookup_keeps_history_and_resolves_other_actors():
+    failed='22222222-2222-2222-2222-222222222222'
+    known='11111111-1111-1111-1111-111111111111'
+    frame=pd.DataFrame([
+        dict(RECORDED_BY=failed,BEFORE_DATA={'COMMENTS':'old'},AFTER_DATA={'COMMENTS':'first'}),
+        dict(RECORDED_BY=known,BEFORE_DATA={'COMMENTS':'first'},AFTER_DATA={'COMMENTS':'second'}),
+    ])
+    calls=[]
+    def lookup(user_id):
+        calls.append(user_id)
+        if user_id == failed:
+            raise RuntimeError('Synthetic lookup failure')
+        return User(known,'known@nsegg.ca','Known Staff',Role.DATA_EDITOR,True,False,'','',None)
+    result=revision_changes(frame,revision_actor_labels(frame,lookup))
+    assert calls==[failed,known]
+    assert result['Changed by'].tolist()==[failed,'Known Staff']
+    assert result['Old value'].tolist()==['old','first']
+    assert result['New value'].tolist()==['first','second']
+
+
 def test_record_dropdown_labels_are_type_specific_and_values_remain_full_ids():
     account_id='12345678-1111-2222-3333-444444444444'
     transaction_id='421FEF51-AAAA-BBBB-CCCC-DDDDDDDDDDDD'
