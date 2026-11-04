@@ -15,6 +15,7 @@ from app.services.report_center import (
     CUSTOM_DATASETS, build_custom_report, build_quota_summary, report_csv,
     report_definition, report_xlsx, visible_catalog, FLOCK_RECORD_COUNT, FLOCK_RECORD_COUNT_LABEL, transaction_type_options,
 )
+from app.services.flock_current_report import build_flock_current_report
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.constants import (
     ACCOUNT_STATUSES, FACILITY_DETAIL_STATUSES, FACILITY_STATUSES,
@@ -136,6 +137,33 @@ if section == "Report Library":
                 if result.empty: st.info("No Quota Registrations match the selected parameters.")
                 else: st.dataframe(result, width="stretch", hide_index=True)
                 downloads(result, "quota_summary_report", definition.report_id)
+        elif definition.handler == "flock_current":
+            source_flocks = repo.get_flocks()
+            kinds = sorted({str(value).strip() for value in source_flocks.get('FLOCK_QUOTA_TYPE', pd.Series(dtype=object)).dropna() if str(value).strip()})
+            options = ['All', *kinds]
+            params = st.columns(3)
+            report_date = params[0].date_input('Report date', value=halifax_today(), key='flock_current_date')
+            mortality = params[1].text_input('Mortality (% per month)', value='0.4', key='flock_current_mortality')
+            selected_type = params[2].selectbox('Quota Type', options, index=options.index('Egg Production') if 'Egg Production' in options else 0, key='flock_current_type')
+            st.caption('Provisional inclusion: Active Flocks only, before estimated/actual disposal. Egg Production includes Special Permit. Unknown quantities leave subtotals incomplete.')
+            if st.button('Run Report', type='primary', key='run_flock_current'):
+                st.session_state.pop('flock_current_result', None)
+                try:
+                    result = build_flock_current_report(source_flocks, repo.get_flock_transactions(), repo.get_accounts(), report_date, mortality, selected_type)
+                    st.session_state.flock_current_result = result
+                    st.session_state.flock_current_parameters = f'Report date: {report_date} · Mortality: {mortality}% per month · Quota Type: {selected_type}'
+                except ValueError as exc:
+                    show_data_error(exc)
+            result = st.session_state.get('flock_current_result')
+            if isinstance(result, pd.DataFrame):
+                st.caption(st.session_state.flock_current_parameters)
+                if result.empty:
+                    st.info('No Flocks match the report parameters.')
+                else:
+                    st.dataframe(result, hide_index=True, width='stretch')
+                if can_current(Permission.EXPORT_REPORT):
+                    st.download_button('Export CSV', report_csv(user, result), 'flock_current_report.csv', 'text/csv', key='flock_current_csv')
+                    st.download_button('Export XLSX', report_xlsx(user, result), 'flock_current_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key='flock_current_xlsx')
         elif definition.handler == "salmonella_report":
             st.info("Use the registered Salmonella Test Report page for the existing filterable report.")
             if st.button("Open Salmonella Test Report", icon=":material/lab_profile:"):
