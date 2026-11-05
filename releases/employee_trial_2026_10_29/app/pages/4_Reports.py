@@ -18,6 +18,10 @@ from app.services.report_center import (
 from app.services.flock_current_report import build_flock_current_report
 from app.services.flock_age_report import build_flock_age_report, build_flock_age_quotas
 from app.services.quota_state import get_inactive_quota_transaction_ids
+from app.services.flock_reports import (
+    build_flock_status_report, build_flocks_counted_report,
+    build_flocks_needing_counts_report, build_flock_disposals_report,
+)
 from data.quota_position import load_rules
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.constants import (
@@ -51,6 +55,16 @@ def downloads(frame: pd.DataFrame, stem: str, report_id: str):
         audit("EXPORT", report_id, {"format": "CSV", "row_count": len(frame)})
     if right.download_button("Export XLSX", report_xlsx(user, frame), f"{stem}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch"):
         audit("EXPORT", report_id, {"format": "XLSX", "row_count": len(frame)})
+
+
+def load_flock_report_quotas(accounts, as_of):
+    registrations = repo.get_quota_registrations()
+    transactions = repo.get_quota_transactions()
+    inactive_ids = get_inactive_quota_transaction_ids(repo,
+        transactions.get('QUOTA_TRANSACTION_ID', pd.Series(dtype=object)).tolist(), user=user)
+    quotas, _count, reasons = build_flock_age_quotas(
+        registrations, transactions, accounts, as_of, inactive_ids, load_rules())
+    return quotas, sorted({reason for values in reasons.values() for reason in values})
 
 
 def template_record_selector(entity: str):
@@ -140,6 +154,78 @@ if section == "Report Library":
                 if result.empty: st.info("No Quota Registrations match the selected parameters.")
                 else: st.dataframe(result, width="stretch", hide_index=True)
                 downloads(result, "quota_summary_report", definition.report_id)
+        elif definition.handler in {'flock_status', 'flocks_counted', 'flocks_needing_counts', 'flock_disposals'}:
+            handler = definition.handler
+            source_flocks, source_accounts = repo.get_flocks(), repo.get_accounts()
+            params = st.columns(3)
+            if handler in {'flocks_counted', 'flock_disposals'}:
+                start_label = 'Flock Count Start Date' if handler == 'flocks_counted' else 'Flock Disposal Start Date'
+                end_label = 'Flocks Counted End Date' if handler == 'flocks_counted' else 'Flock Disposal End Date'
+                start = params[0].date_input(start_label, value=halifax_today().replace(day=1), key=handler+'_start')
+                as_of = params[1].date_input(end_label, value=halifax_today(), key=handler+'_end')
+            else:
+                as_of = params[0].date_input('As of Date' if handler == 'flock_status' else 'Report Date', value=halifax_today(), key=handler+'_date')
+            mortality = params[1].text_input('Mortality (% per month)', value='0.4', key=handler+'_mortality') if handler == 'flock_status' else None
+            kinds = {str(value).strip() for value in source_flocks.get('FLOCK_QUOTA_TYPE', pd.Series(dtype=object)).dropna() if str(value).strip()}
+            if handler in {'flock_status', 'flocks_needing_counts'}:
+                kinds.discard('Special Permit')
+            options = ['Egg Production', 'All', *sorted(kinds - {'Egg Production', 'All'})]
+            selected_type = params[2].selectbox('Quota Type', options, key=handler+'_type')
+            from_age, to_age, count_type = 19, 299, 'All'
+            if handler == 'flocks_needing_counts':
+                extra = st.columns(3)
+                from_age = extra[0].number_input('From Age', min_value=0, value=19, step=1, key=handler+'_from_age')
+                to_age = extra[1].number_input('To Age', min_value=0, value=299, step=1, key=handler+'_to_age')
+                count_type = extra[2].selectbox('Count Type', ['All', 'Board', 'Producer', 'EFC/CEMA'], key=handler+'_count_type')
+                st.caption('Uses placed Flock Age inclusion; Delivery is not a Count. EFC/CEMA means labels other than Producer or Board, including blank labels.')
+            elif handler == 'flock_disposals':
+                st.warning('PROVISIONAL Disposal Age: whole weeks from Hatch Date to actual Disposal Date. This has not been validated against legacy Disposal Age.')
+            if handler != 'flocks_needing_counts':
+                st.caption('Quota uses confirmed Account Egg Production positions at the report/end date. Unavailable state evidence leaves quota unknown. Totals sum known values.')
+            if st.button('Run Report', type='primary', key='run_'+handler):
+                st.session_state.pop(handler+'_result', None)
+                try:
+                    quotas, reasons = load_flock_report_quotas(source_accounts, as_of) if handler != 'flocks_needing_counts' else ({}, [])
+                    summary = None
+                    if handler == 'flock_status':
+                        result, summary = build_flock_status_report(source_flocks, repo.get_flock_transactions(), source_accounts, repo.get_facilities(), quotas, as_of, mortality, selected_type)
+                    elif handler == 'flocks_counted':
+                        result = build_flocks_counted_report(source_flocks, repo.get_flock_transactions(), source_accounts, quotas, start, as_of, selected_type)
+                    elif handler == 'flocks_needing_counts':
+                        result = build_flocks_needing_counts_report(source_flocks, repo.get_flock_transactions(), source_accounts, as_of, selected_type, from_age, to_age, count_type)
+                    else:
+                        result = build_flock_disposals_report(source_flocks, source_accounts, quotas, start, as_of, selected_type)
+                    st.session_state[handler+'_result'] = result
+                    st.session_state[handler+'_summary'] = summary
+                    st.session_state[handler+'_reasons'] = reasons
+                    applied = f'As of/end date: {as_of} · Quota Type: {selected_type}'
+                    if handler in {'flocks_counted', 'flock_disposals'}:
+                        applied += f' · Start date: {start}'
+                    elif handler == 'flock_status':
+                        applied += f' · Mortality: {mortality}% per month'
+                    else:
+                        applied += f' · Age: {from_age}–{to_age} · Count Type: {count_type}'
+                    st.session_state[handler+'_parameters'] = applied
+                except ValueError as exc:
+                    show_data_error(exc)
+            result = st.session_state.get(handler+'_result')
+            if isinstance(result, pd.DataFrame):
+                st.caption(st.session_state[handler+'_parameters'])
+                summary = st.session_state.get(handler+'_summary')
+                if summary is not None:
+                    for label in ('Inventory Birds', 'NFPMC Allocation', 'Provincial Utilization', 'Issuance for Province', 'Producers with Quota'):
+                        st.metric(label, str(summary[label]) if summary[label] is not None else '—')
+                    st.caption(summary['Notes'])
+                for reason in st.session_state.get(handler+'_reasons', []):
+                    st.caption(reason)
+                if result.empty:
+                    st.info('No flocks disposed in this range.' if handler == 'flock_disposals' else 'No records match the selected parameters.')
+                else:
+                    st.caption(f'{len(result):,} report row(s), including totals where applicable.')
+                    st.dataframe(result, hide_index=True, width='stretch')
+                if can_current(Permission.EXPORT_REPORT):
+                    st.download_button('Export CSV', report_csv(user, result), handler+'_report.csv', 'text/csv', key=handler+'_csv')
+                    st.download_button('Export XLSX', report_xlsx(user, result), handler+'_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key=handler+'_xlsx')
         elif definition.handler == 'flock_age':
             age_flocks = repo.get_flocks()
             age_accounts = repo.get_accounts()
@@ -153,16 +239,11 @@ if section == "Report Library":
             if st.button('Run Report', type='primary', key='run_flock_age'):
                 st.session_state.pop('flock_age_result', None)
                 try:
-                    quota_registrations = repo.get_quota_registrations()
-                    quota_transactions = repo.get_quota_transactions()
-                    inactive_ids = get_inactive_quota_transaction_ids(repo,
-                        quota_transactions.get('QUOTA_TRANSACTION_ID', pd.Series(dtype=object)).tolist(), user=user)
-                    quotas, _producer_count, quota_reasons = build_flock_age_quotas(
-                        quota_registrations, quota_transactions, age_accounts, age_date, inactive_ids, load_rules())
+                    quotas, quota_reasons = load_flock_report_quotas(age_accounts, age_date)
                     result, summary = build_flock_age_report(age_flocks, repo.get_flock_transactions(), age_accounts, repo.get_facilities(), quotas, age_date, age_mortality, age_type)
                     st.session_state.flock_age_result = result
                     st.session_state.flock_age_summary = summary
-                    st.session_state.flock_age_quota_reasons = sorted({reason for reasons in quota_reasons.values() for reason in reasons})
+                    st.session_state.flock_age_quota_reasons = quota_reasons
                     st.session_state.flock_age_parameters = f'As of: {age_date} · Mortality: {age_mortality}% · Quota Type: {age_type}'
                 except ValueError as exc:
                     show_data_error(exc)
