@@ -264,7 +264,7 @@
       "path": "app/services/flock_current_report.py",
       "status": "NEW",
       "reason": "Read-only pure Flock Current report; exact mortality arithmetic and provisional inclusion; no PENDING rule changes.",
-      "candidate_lf_sha256": "c0b8249235f97dd9f022475ec117dbc1b4e0fd64ea72e103fd689d579d1ae6b3"
+      "candidate_lf_sha256": "3a2269cf1bb8da59dfb54c4629bfc8526ea2df4363263e1aabf96b5b35ec48db"
     }
   ],
   "deployment_metadata_changes": {

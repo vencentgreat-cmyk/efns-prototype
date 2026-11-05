@@ -189,3 +189,66 @@ def test_follow_up_module_integrity():
     manifest=json.loads((root/'DELIVERY_RUNTIME_DIFF_20261030.json').read_text())
     for entry in manifest['follow_up_runtime_changes']:
         assert hashlib.sha256((root/entry['path']).read_bytes().replace(b'\r\n',b'\n')).hexdigest()==entry['candidate_lf_sha256']
+
+
+@pytest.mark.parametrize('fixture,report_date',[
+    (('40402','2026-06-18','2026-10-29','2026-06-18',1979,20,1942,0),'2026-11-05'),
+    # Placement not supplied for 30369; hatch is a synthetic placed-date input.
+    (('30369','2025-07-21','2025-07-21','2025-07-21',1979,67,1856,0),'2026-11-03'),
+    (('40407','2026-09-08','2027-01-19','2026-09-08',11000,8,0,11000),'2026-11-05'),
+])
+def test_legacy_delivery_observations_and_age_report_reuse(fixture,report_date):
+    from app.services.flock_age_report import build_flock_age_report
+    f,t,a=sources([fixture])
+    t['TRANSACTION_TYPE']='Delivery'
+    result=build_flock_current_report(f,t,a,report_date)
+    row=result.iloc[0]
+    assert row['Counted']==fixture[4]
+    assert row['Count Date']==fixture[3]
+    assert (row['Flock Age'],row['Inventory'],row['Up. Flocks'])==fixture[5:]
+    assert row['Notes']=='Initial Delivery quantity used (no later Count)'
+    assert result.iloc[-1]['Inventory']==fixture[6]
+    age,_=build_flock_age_report(f,t,a,pd.DataFrame(),{'bayview':10000},report_date)
+    assert age.iloc[0]['Inventory']==row['Inventory']
+    assert age.iloc[0]['Up. Flocks']==row['Up. Flocks']
+    assert 'Initial Delivery quantity used (no later Count)' in age.iloc[0].Notes
+
+
+def test_40366_later_count_wins_over_initial_delivery():
+    f,t,a=sources([('40366','2025-07-21','2025-10-01','2025-07-21',5100,0,0,0)])
+    t['TRANSACTION_TYPE']='Delivery'
+    t=pd.concat([t,pd.DataFrame([dict(t.iloc[0],TRANSACTION_TYPE='Count',
+        TRANSACTION_DATE='2026-09-04',QUANTITY=5220)])])
+    row=build_flock_current_report(f,t,a,'2026-11-05').iloc[0]
+    assert row['Counted']==5220 and row['Count Date']=='2026-09-04'
+    assert row['Notes']==''
+
+
+def test_same_day_count_wins_but_conflicting_counts_remain_a_conflict():
+    f,t,a=sources([FIXTURES[0]])
+    t=pd.concat([t,pd.DataFrame([dict(t.iloc[0],TRANSACTION_TYPE='Delivery',QUANTITY=999)])])
+    row=build_flock_current_report(f,t,a,DAY).iloc[0]
+    assert row['Counted']==12439 and row['Notes']==''
+    t=pd.concat([t,pd.DataFrame([dict(t.iloc[0],QUANTITY=12440)])])
+    row=build_flock_current_report(f,t,a,DAY).iloc[0]
+    assert row['Counted']==row['Inventory']=='—'
+    assert row['Notes']=='Count conflict'
+
+
+def test_latest_delivery_can_follow_older_count_and_future_delivery_is_ignored():
+    f,t,a=sources([FIXTURES[0]])
+    t=pd.concat([t,pd.DataFrame([
+        dict(t.iloc[0],TRANSACTION_TYPE='Delivery',TRANSACTION_DATE='2026-11-01',QUANTITY=1000),
+        dict(t.iloc[0],TRANSACTION_TYPE='Delivery',TRANSACTION_DATE='2026-11-06',QUANTITY=99999)])])
+    row=build_flock_current_report(f,t,a,DAY).iloc[0]
+    assert row['Counted']==1000 and row['Count Date']=='2026-11-01'
+    assert row['Notes']=='Initial Delivery quantity used (no later Count)'
+
+
+def test_conflicting_deliveries_do_not_select_an_arbitrary_quantity():
+    f,t,a=sources([FIXTURES[0]])
+    t['TRANSACTION_TYPE']='Delivery'
+    t=pd.concat([t,pd.DataFrame([dict(t.iloc[0],QUANTITY=1)])])
+    row=build_flock_current_report(f,t,a,DAY).iloc[0]
+    assert row['Counted']==row['Inventory']=='—'
+    assert row['Notes']=='Delivery conflict'

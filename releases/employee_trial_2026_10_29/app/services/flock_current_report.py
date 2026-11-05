@@ -64,7 +64,7 @@ def build_flock_current_report(flocks, transactions, accounts, report_date,
     counts = {}
     for row in transactions.to_dict('records'):
         when = day(row.get('TRANSACTION_DATE'))
-        if text(row.get('TRANSACTION_TYPE')) == 'Count' and when and when <= report_date:
+        if text(row.get('TRANSACTION_TYPE')) in {'Count', 'Delivery'} and when and when <= report_date:
             counts.setdefault(str(row.get('FLOCK_ID')), []).append(row)
     groups = {}
     for flock in flocks.to_dict('records'):
@@ -76,17 +76,23 @@ def build_flock_current_report(flocks, transactions, accounts, report_date,
         observations = counts.get(str(flock['FLOCK_ID']), [])
         latest_day = max((day(r['TRANSACTION_DATE']) for r in observations), default=None)
         latest = [r for r in observations if day(r['TRANSACTION_DATE']) == latest_day]
+        latest_counts = [r for r in latest if text(r.get('TRANSACTION_TYPE')) == 'Count']
+        if latest_counts:
+            latest = latest_counts  # Count wins only when both types share the latest date.
+        observation_type = text(latest[0].get('TRANSACTION_TYPE')) if latest else None
         notes = []
         counted = None
         if not latest:
-            notes.append('No Count on or before report date')
+            notes.append('No Count or Delivery on or before report date')
         elif (len({quantity(r.get('QUANTITY')) for r in latest}) > 1
               or len({text(r.get('COUNT_SOURCE_LABEL')) or 'Unknown' for r in latest}) > 1):
-            notes.append('Count conflict')
+            notes.append(f'{observation_type} conflict')
         else:
             counted = quantity(latest[0].get('QUANTITY'))
             if counted is None:
-                notes.append('Invalid Count quantity')
+                notes.append(f'Invalid {observation_type} quantity')
+            elif observation_type == 'Delivery':
+                notes.append('Initial Delivery quantity used (no later Count)')
         placement, hatch = day(flock.get('PLACEMENT_DATE')), day(flock.get('HATCH_DATE'))
         inventory = upcoming = None
         if placement is None:
