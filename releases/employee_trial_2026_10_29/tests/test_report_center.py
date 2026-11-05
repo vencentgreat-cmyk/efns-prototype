@@ -40,6 +40,8 @@ def test_catalog_contains_only_confirmed_and_existing_report_names():
         "Flocks Counted Report",
         "Flocks Needing Counts Report",
         "Flock Disposals Report",
+        "Flock Salmonella Testing Schedule",
+        "Scheduled Flock Placements",
         "Flock Current Report",
         "Flock Current Report by Producer",
         "Quota Summary Report",

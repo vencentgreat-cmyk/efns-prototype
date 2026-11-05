@@ -54,6 +54,8 @@ def test_status_reuses_age_summary_and_puts_account_totals_first_by_registration
     assert summary == expected_summary
     assert status['Reg No'].tolist() == ['7065', '7065', '7107', '7107', '7107']
     assert status['Permit No'].tolist() == ['Total', '40350', 'Total', '40370', '40371']
+    assert list(status)[:2] == ['Reg No', 'Account']
+    assert status.Account.tolist() == ['Alpha', 'Alpha', 'Zulu', 'Zulu', 'Zulu']
     assert status.Sold.tolist() == [''] * 5
     assert status.iloc[3]['Facility Name'] == 'Synthetic barn'
     for permit in ('40350', '40370', '40371'):
