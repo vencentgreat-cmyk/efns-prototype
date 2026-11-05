@@ -30,14 +30,19 @@ def quantity(value):
         return None
 
 
+def effective_disposal_date(flock):
+    """Actual disposal takes precedence over the estimate when supplied."""
+    return day(flock.get('DISPOSAL_DATE')) or day(flock.get('EST_DISPOSAL'))
+
+
 def flock_is_in_current_report(flock, report_date, quota_type):
     """PROVISIONAL inclusion policy; isolate pending lifecycle/type decisions here."""
     kind = text(flock.get('FLOCK_QUOTA_TYPE'))
     matches = (quota_type == 'All' or kind == quota_type
                or (quota_type == 'Egg Production' and kind == 'Special Permit'))
+    disposal = effective_disposal_date(flock)
     return (text(flock.get('STATUS')) == 'Active' and matches
-            and all(day(flock.get(field)) is None or day(flock.get(field)) > report_date
-                    for field in ('EST_DISPOSAL', 'DISPOSAL_DATE')))
+            and (disposal is None or disposal > report_date))
 
 
 def build_flock_current_report(flocks, transactions, accounts, report_date,
@@ -98,7 +103,7 @@ def build_flock_current_report(flocks, transactions, accounts, report_date,
             text(flock.get('PERMIT_NUMBER')) or '—', latest_day, placement,
             (report_date - hatch).days // 7 if hatch else None,
             int(counted) if counted is not None else None, inventory, hatch,
-            day(flock.get('EST_DISPOSAL')), upcoming, '; '.join(notes)]))
+            effective_disposal_date(flock), upcoming, '; '.join(notes)]))
         groups.setdefault((owner_id, kind), []).append((text(flock.get('FLOCK_NUMBER')), row))
 
     def subtotal(rows, label, kind=''):

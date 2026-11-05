@@ -16,6 +16,7 @@ from app.services.report_center import (
     report_definition, report_xlsx, visible_catalog, FLOCK_RECORD_COUNT, FLOCK_RECORD_COUNT_LABEL, transaction_type_options,
 )
 from app.services.flock_current_report import build_flock_current_report
+from app.services.flock_age_report import build_flock_age_report, quota_from_summary
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.constants import (
     ACCOUNT_STATUSES, FACILITY_DETAIL_STATUSES, FACILITY_STATUSES,
@@ -137,33 +138,77 @@ if section == "Report Library":
                 if result.empty: st.info("No Quota Registrations match the selected parameters.")
                 else: st.dataframe(result, width="stretch", hide_index=True)
                 downloads(result, "quota_summary_report", definition.report_id)
-        elif definition.handler == "flock_current":
+        elif definition.handler == 'flock_age':
+            age_flocks = repo.get_flocks()
+            age_accounts = repo.get_accounts()
+            kinds = sorted({str(v).strip() for v in age_flocks.get('FLOCK_QUOTA_TYPE', pd.Series(dtype=object)).dropna() if str(v).strip() and str(v).strip() != 'Special Permit'})
+            options = ['All', *kinds]
+            params = st.columns(3)
+            age_date = params[0].date_input('As of Date', value=halifax_today(), key='flock_age_date')
+            age_mortality = params[1].text_input('Mortality (% per month)', value='0.4', key='flock_age_mortality')
+            age_type = params[2].selectbox('Quota Type', options, index=options.index('Egg Production') if 'Egg Production' in options else 0, key='flock_age_type')
+            st.caption('Special Permit excluded. Quota uses existing Egg Production Quota Summary; unavailable quota leaves allocation and utilization unknown. Inclusion remains provisional.')
+            if st.button('Run Report', type='primary', key='run_flock_age'):
+                st.session_state.pop('flock_age_result', None)
+                try:
+                    quotas = {}
+                    producer_count = 0
+                    for account_id in age_accounts.ACCOUNT_ID:
+                        quota_frame, metrics = build_quota_summary(repo, user=user, as_of_date=age_date, quota_type='Egg Production', account_id=account_id)
+                        if not quota_frame.empty:
+                            quotas[str(account_id)] = quota_from_summary(quota_frame, metrics)
+                            producer_count += metrics['producer_count']
+                    result, summary = build_flock_age_report(age_flocks, repo.get_flock_transactions(), age_accounts, repo.get_facilities(), quotas, age_date, age_mortality, age_type, producer_count=producer_count)
+                    st.session_state.flock_age_result = result
+                    st.session_state.flock_age_summary = summary
+                    st.session_state.flock_age_parameters = f'As of: {age_date} · Mortality: {age_mortality}% · Quota Type: {age_type}'
+                except ValueError as exc:
+                    show_data_error(exc)
+            result = st.session_state.get('flock_age_result')
+            if isinstance(result, pd.DataFrame):
+                st.caption(st.session_state.flock_age_parameters)
+                summary = st.session_state.flock_age_summary
+                for label in ('Inventory Birds', 'NFPMC Allocation', 'Provincial Utilization', 'Issuance for Province', 'Producers with Quota'):
+                    st.metric(label, str(summary[label]) if summary[label] is not None else '—')
+                st.caption(summary['Notes'])
+                st.dataframe(result, hide_index=True, width='stretch')
+                if can_current(Permission.EXPORT_REPORT):
+                    st.download_button('Export CSV', report_csv(user, result), 'flock_age_report.csv', 'text/csv', key='flock_age_csv')
+                    st.download_button('Export XLSX', report_xlsx(user, result), 'flock_age_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key='flock_age_xlsx')
+        elif definition.handler in ('flock_current', 'flock_current_producer'):
             source_flocks = repo.get_flocks()
+            prefix = 'flock_current_producer' if definition.handler == 'flock_current_producer' else 'flock_current'
+            selected_account = None
+            if definition.handler == 'flock_current_producer':
+                producer_accounts = repo.get_accounts()
+                account_labels = {str(r.ACCOUNT_ID): f'{r.ORGANIZATION_NAME} · {r.REGISTRATION_NUMBER} · {r.ACCOUNT_ID}' for r in producer_accounts.itertuples()}
+                selected_account = st.selectbox('Account', list(account_labels), format_func=account_labels.get, key=prefix+'_account') if account_labels else None
+                source_flocks = source_flocks.loc[source_flocks.ACCOUNT_ID.eq(selected_account)]
             kinds = sorted({str(value).strip() for value in source_flocks.get('FLOCK_QUOTA_TYPE', pd.Series(dtype=object)).dropna() if str(value).strip()})
             options = ['All', *kinds]
             params = st.columns(3)
-            report_date = params[0].date_input('Report date', value=halifax_today(), key='flock_current_date')
-            mortality = params[1].text_input('Mortality (% per month)', value='0.4', key='flock_current_mortality')
-            selected_type = params[2].selectbox('Quota Type', options, index=options.index('Egg Production') if 'Egg Production' in options else 0, key='flock_current_type')
-            st.caption('Provisional inclusion: Active Flocks only, before estimated/actual disposal. Egg Production includes Special Permit. Unknown quantities leave subtotals incomplete.')
-            if st.button('Run Report', type='primary', key='run_flock_current'):
-                st.session_state.pop('flock_current_result', None)
+            report_date = params[0].date_input('As of Date' if selected_account is not None else 'Report date', value=halifax_today(), key=prefix+'_date')
+            mortality = params[1].text_input('Mortality (% per month)', value='0.4', key=prefix+'_mortality')
+            selected_type = params[2].selectbox('Quota Type', options, index=options.index('Egg Production') if 'Egg Production' in options else 0, key=prefix+'_type')
+            st.caption('Provisional inclusion: Active Flocks only, before actual disposal when present, otherwise estimated disposal. Egg Production includes Special Permit. Subtotals sum known values and disclose exclusions.')
+            if st.button('Run Report', type='primary', key='run_'+prefix):
+                st.session_state.pop(prefix+'_result', None)
                 try:
                     result = build_flock_current_report(source_flocks, repo.get_flock_transactions(), repo.get_accounts(), report_date, mortality, selected_type)
-                    st.session_state.flock_current_result = result
-                    st.session_state.flock_current_parameters = f'Report date: {report_date} · Mortality: {mortality}% per month · Quota Type: {selected_type}'
+                    st.session_state[prefix+'_result'] = result
+                    st.session_state[prefix+'_parameters'] = f'Report date: {report_date} · Mortality: {mortality}% per month · Quota Type: {selected_type}' + (f' · Account: {account_labels[selected_account]}' if selected_account is not None else '')
                 except ValueError as exc:
                     show_data_error(exc)
-            result = st.session_state.get('flock_current_result')
+            result = st.session_state.get(prefix+'_result')
             if isinstance(result, pd.DataFrame):
-                st.caption(st.session_state.flock_current_parameters)
+                st.caption(st.session_state[prefix+'_parameters'])
                 if result.empty:
                     st.info('No Flocks match the report parameters.')
                 else:
                     st.dataframe(result, hide_index=True, width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
-                    st.download_button('Export CSV', report_csv(user, result), 'flock_current_report.csv', 'text/csv', key='flock_current_csv')
-                    st.download_button('Export XLSX', report_xlsx(user, result), 'flock_current_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key='flock_current_xlsx')
+                    st.download_button('Export CSV', report_csv(user, result), prefix+'_report.csv', 'text/csv', key=prefix+'_csv')
+                    st.download_button('Export XLSX', report_xlsx(user, result), prefix+'_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key=prefix+'_xlsx')
         elif definition.handler == "salmonella_report":
             st.info("Use the registered Salmonella Test Report page for the existing filterable report.")
             if st.button("Open Salmonella Test Report", icon=":material/lab_profile:"):

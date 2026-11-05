@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "211140dae21c1c7b84681b3ccce2125c5fde5c58b8362175cf969e4fe9d08f94"
+      "candidate_lf_sha256": "1c56cd104fdc6910f8cfaf52f9b9a47f333745b5d7a86db9ef37f5f3f5da9c3a"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "fa81da142c0beef0ff577af2eedf249d5c164bbfa3bfd751b7cfa091aa049776"
+      "candidate_lf_sha256": "623188f7f28ed3d60c9a845a902a8e0a7d7afe69643826c8a3168227b5cd05bc"
     },
     {
       "path": "app/services/revision_history.py",
@@ -243,10 +243,16 @@
   ],
   "follow_up_runtime_changes": [
     {
+      "path": "app/services/flock_age_report.py",
+      "status": "NEW",
+      "reason": "Pure Flock Age projection using shared current calculations and supplied existing Quota Summary values; unavailable quota stays unknown.",
+      "candidate_lf_sha256": "b8d7d847d486c484ff14c6ddfb19565144cb9cb86136110b5ca6cb85899d0c71"
+    },
+    {
       "path": "app/services/flock_current_report.py",
       "status": "NEW",
       "reason": "Read-only pure Flock Current report; exact mortality arithmetic and provisional inclusion; no PENDING rule changes.",
-      "candidate_lf_sha256": "9d21d7214b76170dd24f59f69c9a6879e0ef012d11ee1356e59b36fa0d0e5468"
+      "candidate_lf_sha256": "c0b8249235f97dd9f022475ec117dbc1b4e0fd64ea72e103fd689d579d1ae6b3"
     }
   ],
   "deployment_metadata_changes": {
