@@ -85,6 +85,7 @@ def test_24_supplied_quota_values_are_inputs_not_claimed_repository_calculations
     f,t,a=sources([NEW[1]])
     a.loc[0,'ACCOUNT_ID']='7107'
     f.loc[0,'ACCOUNT_ID']='7107'
+    a=pd.DataFrame([dict(ACCOUNT_ID=n,ORGANIZATION_NAME=n,REGISTRATION_NUMBER=n,PRODUCER_ROLE=True) for n in QUOTAS])
     result,summary=build_flock_age_report(f,t,a,pd.DataFrame(),quotas,DAY)
     assert summary['NFPMC Allocation']==sum(QUOTAS.values())
     assert summary['Issuance for Province']==sum(QUOTAS.values())
@@ -114,7 +115,7 @@ def test_quota_once_per_account_unknowns_special_permit_and_exports():
     assert result['Quota'].tolist()==['—','—']
     assert result['Util.'].tolist()==['—','—']
     assert summary['NFPMC Allocation'] is None
-    assert summary['Producers with Quota']==1
+    assert summary['Producers with Quota']==0
     f.loc[1,'FLOCK_QUOTA_TYPE']='Egg Production'
     a.loc[0,'ORGANIZATION_NAME']='=1+1'
     result,summary=build_flock_age_report(f,t,a,pd.DataFrame(),{'bayview':77862},DAY)
@@ -123,6 +124,16 @@ def test_quota_once_per_account_unknowns_special_permit_and_exports():
     assert result.iloc[-1].Inventory==sum(result.iloc[:-1].Inventory)
     assert pd.read_csv(BytesIO(report_csv(user(),result))).iloc[0].Account=="'=1+1"
     assert pd.read_excel(BytesIO(report_xlsx(user(),result))).iloc[0].Account=="'=1+1"
+
+
+def test_total_notes_omit_zero_exclusions_but_keep_missing_quota_and_inventory():
+    f,t,a=sources([NEW[0]])
+    result,_=build_flock_age_report(f,t,a,pd.DataFrame(),{'bayview':100},DAY)
+    assert result.iloc[-1].Notes==''
+    result,_=build_flock_age_report(f,t,a,pd.DataFrame(),{'bayview':None},DAY)
+    assert result.iloc[-1].Notes=='Quota position unavailable'
+    result,_=build_flock_age_report(f,t.iloc[:0],a,pd.DataFrame(),{'bayview':100},DAY)
+    assert result.iloc[-1].Notes=='Excludes 1 flock(s) without known Inventory'
 
 
 @pytest.mark.parametrize('report_id',['flock-age','flock-current-producer'])

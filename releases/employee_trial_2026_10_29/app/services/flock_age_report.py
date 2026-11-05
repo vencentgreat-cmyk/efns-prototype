@@ -12,6 +12,13 @@ from data.confirmed_quota_position import confirmed_quota_position
 from data.quota_types import quota_type_key
 
 
+def producers_with_positive_quota(accounts, quotas):
+    producer_ids = {str(r['ACCOUNT_ID']) for r in accounts.to_dict('records')
+                    if r.get('PRODUCER_ROLE') is True or str(r.get('PRODUCER_ROLE')).lower() == 'true'}
+    return sum(value is not None and value > 0
+               for identity, value in quotas.items() if str(identity) in producer_ids)
+
+
 def build_flock_age_quotas(registrations, transactions, accounts, report_date,
                           inactive_transaction_ids, rules):
     """Use confirmed Egg Production positions once per active owning Account."""
@@ -24,9 +31,7 @@ def build_flock_age_quotas(registrations, transactions, accounts, report_date,
             'Egg Production', report_date, inactive_transaction_ids, rules)
         quotas[str(account_id)] = position['net_position']
         reasons[str(account_id)] = position['reasons']
-    producer_ids = {str(r['ACCOUNT_ID']) for r in accounts.to_dict('records')
-                    if r.get('PRODUCER_ROLE') is True or str(r.get('PRODUCER_ROLE')).lower() == 'true'}
-    return quotas, len(set(quotas) & producer_ids), reasons
+    return quotas, producers_with_positive_quota(accounts, quotas), reasons
 
 COLUMNS = ['Reg No', 'Account', 'Permit No', 'Facility name', 'Placement Date',
            'Flock Age', 'Inventory', 'Quota', 'Hatch Date', 'Disp. Date',
@@ -56,8 +61,7 @@ def quota_from_summary(frame, metrics):
 
 
 def build_flock_age_report(flocks, transactions, accounts, facilities, quotas,
-                           report_date, mortality='0.4', quota_type='Egg Production',
-                           *, producer_count=None):
+                           report_date, mortality='0.4', quota_type='Egg Production'):
     """Return (result, summary); quotas maps Account IDs to confirmed positions.
 
     Special Permit is excluded even for All. Inventory/upcoming subtotals sum
@@ -99,12 +103,16 @@ def build_flock_age_report(flocks, transactions, accounts, facilities, quotas,
         total = {column: None for column in COLUMNS}
         quota = quantity(quotas.get(owner_id))
         inventory = known_total(values)
+        notes = []
+        if values.count(None):
+            notes.append(f'Excludes {values.count(None)} flock(s) without known Inventory')
+        if quota is None:
+            notes.append('Quota position unavailable')
         total.update({'Reg No': rows[0]['Reg No'], 'Account': 'Total',
             'Inventory': inventory, 'Quota': quota,
             'Up. Flocks': known_total([r['Up. Flocks'] if r['Up. Flocks'] != '—' else None for r in rows]),
             'Util.': utilization(inventory, quota),
-            'Notes': f'Excludes {values.count(None)} flock(s) without known Inventory'
-                     + ('; Quota position unavailable' if quota is None else '')})
+            'Notes': '; '.join(notes)})
         output.append(total)
     quota_scope = {**{owner_id: None for owner_id in groups}, **quotas}
     quota_values = [quantity(v) for v in quota_scope.values()]
@@ -113,7 +121,7 @@ def build_flock_age_report(flocks, transactions, accounts, facilities, quotas,
     summary = {'Inventory Birds': inventory, 'NFPMC Allocation': allocation,
         'Provincial Utilization': utilization(inventory, allocation),
         'Issuance for Province': allocation,
-        'Producers with Quota': len(quotas) if producer_count is None else producer_count,
+        'Producers with Quota': producers_with_positive_quota(accounts, quotas),
         'Notes': f'{quota_values.count(None)} Account quota(s) unavailable; {inventories.count(None)} flock Inventory value(s) excluded'}
     result = pd.DataFrame(output, columns=COLUMNS, dtype=object)
     return result.where(result.notna(), '—'), summary

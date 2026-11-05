@@ -14,8 +14,8 @@ def confirmed_quota_position(registrations, transactions, account_id, quota_type
                              as_of, inactive_transaction_ids, rules):
     """None evidence means unavailable; a verified empty set means all Active.
 
-    With no Base, invalid required dates/quantities or an unresolved Base tie,
-    return unknown rather than inventing a starting balance or ordering.
+    Without an Active Base, sum all eligible Active activity. Invalid required
+    dates/quantities or an unresolved Base tie still produce unknown.
     """
     reasons = []
     if rules.get('status') != 'CONFIRMED':
@@ -53,25 +53,24 @@ def confirmed_quota_position(registrations, transactions, account_id, quota_type
     for registration in ids:
         scoped = [(r, k, d) for r, k, d in eligible if guid(r.get('QUOTA_ID')) == registration]
         bases = [(r, d) for r, k, d in scoped if k == 'Base']
-        if not bases:
-            reasons.append('No Active Base for registration ' + str(registration))
-            continue
-        latest_day = max(d for _, d in bases)
-        latest = [r for r, d in bases if d == latest_day]
-        if len(latest) > 1:
-            stamps = pd.to_datetime([r.get('CREATED_AT') for r in latest], utc=True, errors='coerce')
-            if stamps.isna().any():
-                reasons.append('Base tie has missing/invalid Created At')
+        latest_day, selected = None, None
+        if bases:
+            latest_day = max(d for _, d in bases)
+            latest = [r for r, d in bases if d == latest_day]
+            if len(latest) > 1:
+                stamps = pd.to_datetime([r.get('CREATED_AT') for r in latest], utc=True, errors='coerce')
+                if stamps.isna().any():
+                    reasons.append('Base tie has missing/invalid Created At')
+                    continue
+                latest = [r for r, stamp in zip(latest, stamps) if stamp == stamps.max()]
+            if len(latest) != 1:
+                reasons.append('Base ordering tie unresolved')
                 continue
-            latest = [r for r, stamp in zip(latest, stamps) if stamp == stamps.max()]
-        if len(latest) != 1:
-            reasons.append('Base ordering tie unresolved')
-            continue
-        selected = guid(latest[0]['QUOTA_TRANSACTION_ID'])
-        selected_bases[registration] = selected
+            selected = guid(latest[0]['QUOTA_TRANSACTION_ID'])
+            selected_bases[registration] = selected
         total = number(0)
         for row, kind, effective in scoped:
-            if effective < latest_day or (kind == 'Base' and guid(row['QUOTA_TRANSACTION_ID']) != selected):
+            if latest_day is not None and (effective < latest_day or (kind == 'Base' and guid(row['QUOTA_TRANSACTION_ID']) != selected)):
                 continue
             if kind not in SIGNS:
                 reasons.append('Unknown quota transaction type: ' + str(kind))

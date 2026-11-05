@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "ee9d180740cf904c9d89c76850999012c625ca9df4305641eea162ead645d961"
+      "candidate_lf_sha256": "c60f3d5dc58f8b78a4d30d8cd3164848bb042233c28eff2fd50429784fad8b72"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -140,7 +140,7 @@
       "status": "NEW",
       "reason": "User-confirmed quota-position rule dated 2026-11-05; flock_stock remains PENDING and units_compatible remains false.",
       "baseline_lf_sha256": null,
-      "candidate_lf_sha256": "99bb5b417ea4f99a83ea8bd533686768cb7e9763d641d97998cfa966563aacdb"
+      "candidate_lf_sha256": "6ba9aea7dafb4f86b1512fb7d768b3abd7d14f3d86071a003db0791b519035fa"
     },
     {
       "path": "data/constants.py",
@@ -246,7 +246,7 @@
       "path": "data/confirmed_quota_position.py",
       "status": "NEW",
       "reason": "Pure confirmed owner quota calculation with Active state evidence, latest Base/Created At ordering and active lease bounds.",
-      "candidate_lf_sha256": "ff9a6dcb4010d9e141e1995cb37395d5811f88c2283386650e9cef9533395f8a"
+      "candidate_lf_sha256": "b12fa6474cdea53066c0efde11a232a8073999063443b4be084092bd0ba8c857"
     },
     {
       "path": "app/services/quota_state.py",
@@ -258,7 +258,7 @@
       "path": "app/services/flock_age_report.py",
       "status": "NEW",
       "reason": "Pure Flock Age projection using shared current calculations and supplied existing Quota Summary values; unavailable quota stays unknown.",
-      "candidate_lf_sha256": "7ff292fc24326a43faea85b67425255da6460a64f8ae49291ad63c63c4c8e688"
+      "candidate_lf_sha256": "7d81f18f2204eeeca4af0fd6e5833e703bbdb0e9ebd23dd85939ffca9ce7b626"
     },
     {
       "path": "app/services/flock_current_report.py",

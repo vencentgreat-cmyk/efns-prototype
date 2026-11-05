@@ -77,6 +77,38 @@ def test_base_tiebreaker_and_same_day_activity():
     assert position(rows)['net_position'] is None
 
 
+@pytest.mark.parametrize('number,components,expected',[
+    ('7172',[('Adjustment',15343),('Purchase',45659)],61002),
+    ('7173',[('Adjustment',62406),('Purchase',172507)],234913),
+    ('7174',[('Adjustment',4178),('Purchase',12557)],16735),
+    ('7177',[('Adjustment',2680),('Purchase',24466),('Lease (In)',3452)],30598),
+    ('7178',[('Purchase',45495)],45495),
+    # Remaining subtotal is synthetic: only duplicate +1 and net were supplied.
+    ('7176',[('Adjustment',1318),('Adjustment',1)],1319),
+])
+def test_legacy_cases_without_active_base(number,components,expected):
+    rows=[tx(number+'-'+str(i),kind,value) for i,(kind,value) in enumerate(components)]
+    inactive=set()
+    if number=='7176':
+        rows.append(tx('inactive-duplicate','Adjustment',1))
+        inactive.add('inactive-duplicate')
+    result=position(rows,inactive)
+    assert result['net_position']==expected
+    assert not result['reasons'] and result['selected_bases']=={}
+
+
+def test_no_active_base_still_applies_signs_dates_and_inactive_exclusion():
+    rows=[tx('inactive-base','Base',9999,'2019-01-01'),
+          tx('future-base','Base',9999,'2027-01-01'),
+          tx('adjustment','Adjustment',10),tx('global','Global Adjustment',2),
+          tx('purchase','Purchase',20),tx('sale','Sale',3),
+          tx('lease-in','Lease (In)',7),tx('lease-out','Lease (Out)',4),
+          dict(tx('expired','Lease (In)',999),END_DATE='2026-11-04'),
+          tx('terminate','Terminate Quota',999),tx('allocation','National Allocation',999)]
+    assert position(rows,{'inactive-base'})['net_position']==32
+    assert position([])['net_position']==0
+
+
 def test_lease_boundaries_signs_allocation_exclusions_and_future_rows():
     rows=[tx('base','Base',100,'2019-01-01'),tx('global','Global Adjustment',5),
           tx('adjustment','Adjustment',-2),tx('in','Lease (In)',7),
@@ -94,7 +126,7 @@ def test_only_active_registrations_and_owner_transactions_count():
           dict(tx('inactive','Base',999),QUOTA_ID='inactive-q')]
     assert position(rows,registrations=registrations)['net_position']==100
     assert position(rows,None)['net_position'] is None
-    assert position([tx('no-base','Purchase',100)])['net_position'] is None
+    assert position([tx('no-base','Purchase',100)])['net_position']==100
 
 
 def test_missing_evidence_unconfirmed_rules_or_bad_quantity_stays_unknown():
@@ -150,7 +182,7 @@ def test_age_report_uses_confirmed_quota_and_unknown_state_stays_unknown():
     a['PRODUCER_ROLE']=True
     quotas,count,reasons=build_flock_age_quotas(pd.DataFrame(regs()),pd.DataFrame(rows),a,DAY,inactive,load_rules())
     assert quotas=={'owner':expected} and count==1 and not reasons['owner']
-    report,summary=build_flock_age_report(f,t,a,pd.DataFrame(),quotas,DAY,producer_count=count)
+    report,summary=build_flock_age_report(f,t,a,pd.DataFrame(),quotas,DAY)
     assert report.iloc[0].Quota==1790 and report.iloc[0]['Util.']!='—'
     assert summary['NFPMC Allocation']==1790
     quotas,_,_=build_flock_age_quotas(pd.DataFrame(regs()),pd.DataFrame(rows),a,DAY,None,load_rules())
@@ -165,6 +197,20 @@ def test_inactive_viewer_cannot_read_raw_state():
     with pytest.raises(AuthorizationError):
         get_inactive_quota_transaction_ids(repo,['A'],user=user(active=False))
     assert repo.calls==[]
+
+
+def test_producer_count_excludes_zero_negative_unknown_and_non_producer_positions():
+    identities=['positive','zero','negative','unknown','not-producer']
+    registrations=pd.DataFrame([dict(QUOTA_ID=n,ACCOUNT_ID=n,QUOTA_TYPE='Egg Production',STATUS='Active') for n in identities])
+    rows=[]
+    for identity,value in zip(identities,[10,0,-2,None,20]):
+        rows.append(dict(tx(identity,'Adjustment',value),QUOTA_ID=identity,OWNER_ACCOUNT_ID=identity))
+    accounts=pd.DataFrame([dict(ACCOUNT_ID=n,PRODUCER_ROLE=n!='not-producer') for n in identities])
+    quotas,count,_=build_flock_age_quotas(registrations,pd.DataFrame(rows),accounts,DAY,set(),load_rules())
+    assert quotas=={'positive':10,'zero':0,'negative':-2,'unknown':None,'not-producer':20}
+    assert count==1
+    _,summary=build_flock_age_report(pd.DataFrame(),pd.DataFrame(),accounts,pd.DataFrame(),quotas,DAY)
+    assert summary['Producers with Quota']==1
 
 
 def test_flock_age_ui_computes_quota_from_transactions(tmp_path,monkeypatch):

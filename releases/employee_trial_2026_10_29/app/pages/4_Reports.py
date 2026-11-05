@@ -157,9 +157,9 @@ if section == "Report Library":
                     quota_transactions = repo.get_quota_transactions()
                     inactive_ids = get_inactive_quota_transaction_ids(repo,
                         quota_transactions.get('QUOTA_TRANSACTION_ID', pd.Series(dtype=object)).tolist(), user=user)
-                    quotas, producer_count, quota_reasons = build_flock_age_quotas(
+                    quotas, _producer_count, quota_reasons = build_flock_age_quotas(
                         quota_registrations, quota_transactions, age_accounts, age_date, inactive_ids, load_rules())
-                    result, summary = build_flock_age_report(age_flocks, repo.get_flock_transactions(), age_accounts, repo.get_facilities(), quotas, age_date, age_mortality, age_type, producer_count=producer_count)
+                    result, summary = build_flock_age_report(age_flocks, repo.get_flock_transactions(), age_accounts, repo.get_facilities(), quotas, age_date, age_mortality, age_type)
                     st.session_state.flock_age_result = result
                     st.session_state.flock_age_summary = summary
                     st.session_state.flock_age_quota_reasons = sorted({reason for reasons in quota_reasons.values() for reason in reasons})

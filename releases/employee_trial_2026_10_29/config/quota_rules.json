@@ -22,6 +22,7 @@
   "evidence": ["User validation: all 24 Egg Production quota bird counts total 1,027,985 as of 2026-11-05; no database query run in this task"],
   "confirmed_calculation": "data.confirmed_quota_position.confirmed_quota_position",
   "base_tiebreaker": "CREATED_AT_DESC",
+  "no_active_base_policy": "SUM_ALL_ELIGIBLE_ACTIVE_TRANSACTIONS",
   "allow_empty_lease_end_date": true,
   "transaction_state_source": "RAW.MIGRATION_RAW_ROW.RAW_DATA:STATECODE_DISPLAYNAME; absent RAW row is Active",
   "flock_stock": {
