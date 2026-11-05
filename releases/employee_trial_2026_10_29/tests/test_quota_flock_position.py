@@ -38,7 +38,9 @@ def position(rows, rules=None, **kwargs):
 
 
 def test_pending_never_becomes_capacity_or_percentage():
-    p = position([tx()], load_rules())
+    rules = load_rules()
+    rules['status'] = 'PENDING'
+    p = position([tx()], rules)
     assert p['net_position'] is None and 'Quota rules UNCONFIRMED' in p['reasons']
     assert usage_numbers(10, 0, p['net_position'], compatible_units=True)['usage_percent'] is None
     assert load_rules()['flock_stock']['status'] == 'PENDING'

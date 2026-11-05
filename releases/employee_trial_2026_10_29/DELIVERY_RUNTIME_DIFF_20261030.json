@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "1c56cd104fdc6910f8cfaf52f9b9a47f333745b5d7a86db9ef37f5f3f5da9c3a"
+      "candidate_lf_sha256": "ee9d180740cf904c9d89c76850999012c625ca9df4305641eea162ead645d961"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "623188f7f28ed3d60c9a845a902a8e0a7d7afe69643826c8a3168227b5cd05bc"
+      "candidate_lf_sha256": "1e15d65503453437f8a4aa9fe5e6f709a9993cf2d679ba0f6f23d0bbc675c56e"
     },
     {
       "path": "app/services/revision_history.py",
@@ -138,9 +138,9 @@
     {
       "path": "config/quota_rules.json",
       "status": "NEW",
-      "reason": "PENDING rules and user-supplied F3-F5 meanings, not calculation approval.",
+      "reason": "User-confirmed quota-position rule dated 2026-11-05; flock_stock remains PENDING and units_compatible remains false.",
       "baseline_lf_sha256": null,
-      "candidate_lf_sha256": "40952d5eb86fd3c2456275c6c14aa11048af9e2ac2ea64290b2f338cc5ec43e2"
+      "candidate_lf_sha256": "99bb5b417ea4f99a83ea8bd533686768cb7e9763d641d97998cfa966563aacdb"
     },
     {
       "path": "data/constants.py",
@@ -243,10 +243,22 @@
   ],
   "follow_up_runtime_changes": [
     {
+      "path": "data/confirmed_quota_position.py",
+      "status": "NEW",
+      "reason": "Pure confirmed owner quota calculation with Active state evidence, latest Base/Created At ordering and active lease bounds.",
+      "candidate_lf_sha256": "ff9a6dcb4010d9e141e1995cb37395d5811f88c2283386650e9cef9533395f8a"
+    },
+    {
+      "path": "app/services/quota_state.py",
+      "status": "NEW",
+      "reason": "Read-only ID-scoped RAW transaction state evidence using existing query interface; Mock empty set and unavailable evidence unknown.",
+      "candidate_lf_sha256": "2abb2f0fc9525d209b06654aa56e235135ac95d5cf292fadb0413878f2b2f3d2"
+    },
+    {
       "path": "app/services/flock_age_report.py",
       "status": "NEW",
       "reason": "Pure Flock Age projection using shared current calculations and supplied existing Quota Summary values; unavailable quota stays unknown.",
-      "candidate_lf_sha256": "b8d7d847d486c484ff14c6ddfb19565144cb9cb86136110b5ca6cb85899d0c71"
+      "candidate_lf_sha256": "7ff292fc24326a43faea85b67425255da6460a64f8ae49291ad63c63c4c8e688"
     },
     {
       "path": "app/services/flock_current_report.py",

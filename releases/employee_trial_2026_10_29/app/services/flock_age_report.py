@@ -1,6 +1,6 @@
-"""Pure Flock Age projection; quotas must come from existing Quota Summary.
+"""Pure Flock Age projection and confirmed owner quota calculation.
 
-No quota formula or repository access is implemented here. Missing quotas stay
+No repository access is implemented here. Missing state evidence keeps quotas
 unknown, including provincial totals when any supplied quota is unknown.
 """
 from decimal import Decimal, ROUND_HALF_UP
@@ -8,6 +8,25 @@ from decimal import Decimal, ROUND_HALF_UP
 import pandas as pd
 
 from app.services.flock_current_report import build_flock_current_report, quantity, text
+from data.confirmed_quota_position import confirmed_quota_position
+from data.quota_types import quota_type_key
+
+
+def build_flock_age_quotas(registrations, transactions, accounts, report_date,
+                          inactive_transaction_ids, rules):
+    """Use confirmed Egg Production positions once per active owning Account."""
+    active = registrations.loc[
+        registrations.get('STATUS', pd.Series(index=registrations.index, dtype=object)).map(text).str.casefold().eq('active')
+        & registrations.get('QUOTA_TYPE', pd.Series(index=registrations.index, dtype=object)).map(quota_type_key).eq('Egg Production')]
+    quotas, reasons = {}, {}
+    for account_id in active.get('ACCOUNT_ID', pd.Series(dtype=object)).dropna().unique():
+        position = confirmed_quota_position(registrations, transactions, account_id,
+            'Egg Production', report_date, inactive_transaction_ids, rules)
+        quotas[str(account_id)] = position['net_position']
+        reasons[str(account_id)] = position['reasons']
+    producer_ids = {str(r['ACCOUNT_ID']) for r in accounts.to_dict('records')
+                    if r.get('PRODUCER_ROLE') is True or str(r.get('PRODUCER_ROLE')).lower() == 'true'}
+    return quotas, len(set(quotas) & producer_ids), reasons
 
 COLUMNS = ['Reg No', 'Account', 'Permit No', 'Facility name', 'Placement Date',
            'Flock Age', 'Inventory', 'Quota', 'Hatch Date', 'Disp. Date',
@@ -39,7 +58,7 @@ def quota_from_summary(frame, metrics):
 def build_flock_age_report(flocks, transactions, accounts, facilities, quotas,
                            report_date, mortality='0.4', quota_type='Egg Production',
                            *, producer_count=None):
-    """Return (result, summary); quotas maps Account IDs to summary-derived values.
+    """Return (result, summary); quotas maps Account IDs to confirmed positions.
 
     Special Permit is excluded even for All. Inventory/upcoming subtotals sum
     known measures, with missing detail values disclosed in Notes.
@@ -68,7 +87,7 @@ def build_flock_age_report(flocks, transactions, accounts, facilities, quotas,
         row.update({'Facility name': names.get(str(flock.get('FACILITY_ID'))) or '—',
                     'Quota': quota, 'Util.': utilization(row['Inventory'] if row['Inventory'] != '—' else None, quota)})
         if quota is None:
-            row['Notes'] = '; '.join(filter(None, [row['Notes'], 'Quota unavailable from Quota Summary']))
+            row['Notes'] = '; '.join(filter(None, [row['Notes'], 'Quota position unavailable']))
         groups.setdefault(owner_id, []).append(row)
     output, inventories = [], []
     for owner_id in sorted(groups, key=lambda key: (text(owners.get(key, {}).get('ORGANIZATION_NAME')), key)):
@@ -85,7 +104,7 @@ def build_flock_age_report(flocks, transactions, accounts, facilities, quotas,
             'Up. Flocks': known_total([r['Up. Flocks'] if r['Up. Flocks'] != '—' else None for r in rows]),
             'Util.': utilization(inventory, quota),
             'Notes': f'Excludes {values.count(None)} flock(s) without known Inventory'
-                     + ('; Quota unavailable from Quota Summary' if quota is None else '')})
+                     + ('; Quota position unavailable' if quota is None else '')})
         output.append(total)
     quota_scope = {**{owner_id: None for owner_id in groups}, **quotas}
     quota_values = [quantity(v) for v in quota_scope.values()]

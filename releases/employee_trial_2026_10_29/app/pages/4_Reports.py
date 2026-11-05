@@ -16,7 +16,9 @@ from app.services.report_center import (
     report_definition, report_xlsx, visible_catalog, FLOCK_RECORD_COUNT, FLOCK_RECORD_COUNT_LABEL, transaction_type_options,
 )
 from app.services.flock_current_report import build_flock_current_report
-from app.services.flock_age_report import build_flock_age_report, quota_from_summary
+from app.services.flock_age_report import build_flock_age_report, build_flock_age_quotas
+from app.services.quota_state import get_inactive_quota_transaction_ids
+from data.quota_position import load_rules
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.constants import (
     ACCOUNT_STATUSES, FACILITY_DETAIL_STATUSES, FACILITY_STATUSES,
@@ -147,20 +149,20 @@ if section == "Report Library":
             age_date = params[0].date_input('As of Date', value=halifax_today(), key='flock_age_date')
             age_mortality = params[1].text_input('Mortality (% per month)', value='0.4', key='flock_age_mortality')
             age_type = params[2].selectbox('Quota Type', options, index=options.index('Egg Production') if 'Egg Production' in options else 0, key='flock_age_type')
-            st.caption('Special Permit excluded. Quota uses existing Egg Production Quota Summary; unavailable quota leaves allocation and utilization unknown. Inclusion remains provisional.')
+            st.caption('Special Permit excluded. Quota uses confirmed owner Egg Production positions; unavailable transaction-state evidence leaves allocation and utilization unknown. Flock inclusion remains provisional.')
             if st.button('Run Report', type='primary', key='run_flock_age'):
                 st.session_state.pop('flock_age_result', None)
                 try:
-                    quotas = {}
-                    producer_count = 0
-                    for account_id in age_accounts.ACCOUNT_ID:
-                        quota_frame, metrics = build_quota_summary(repo, user=user, as_of_date=age_date, quota_type='Egg Production', account_id=account_id)
-                        if not quota_frame.empty:
-                            quotas[str(account_id)] = quota_from_summary(quota_frame, metrics)
-                            producer_count += metrics['producer_count']
+                    quota_registrations = repo.get_quota_registrations()
+                    quota_transactions = repo.get_quota_transactions()
+                    inactive_ids = get_inactive_quota_transaction_ids(repo,
+                        quota_transactions.get('QUOTA_TRANSACTION_ID', pd.Series(dtype=object)).tolist(), user=user)
+                    quotas, producer_count, quota_reasons = build_flock_age_quotas(
+                        quota_registrations, quota_transactions, age_accounts, age_date, inactive_ids, load_rules())
                     result, summary = build_flock_age_report(age_flocks, repo.get_flock_transactions(), age_accounts, repo.get_facilities(), quotas, age_date, age_mortality, age_type, producer_count=producer_count)
                     st.session_state.flock_age_result = result
                     st.session_state.flock_age_summary = summary
+                    st.session_state.flock_age_quota_reasons = sorted({reason for reasons in quota_reasons.values() for reason in reasons})
                     st.session_state.flock_age_parameters = f'As of: {age_date} · Mortality: {age_mortality}% · Quota Type: {age_type}'
                 except ValueError as exc:
                     show_data_error(exc)
@@ -171,6 +173,8 @@ if section == "Report Library":
                 for label in ('Inventory Birds', 'NFPMC Allocation', 'Provincial Utilization', 'Issuance for Province', 'Producers with Quota'):
                     st.metric(label, str(summary[label]) if summary[label] is not None else '—')
                 st.caption(summary['Notes'])
+                for reason in st.session_state.get('flock_age_quota_reasons', []):
+                    st.caption(reason)
                 st.dataframe(result, hide_index=True, width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
                     st.download_button('Export CSV', report_csv(user, result), 'flock_age_report.csv', 'text/csv', key='flock_age_csv')

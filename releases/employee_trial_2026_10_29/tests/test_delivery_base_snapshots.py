@@ -12,6 +12,8 @@ def transaction(identity, kind, quantity, date, quota='q', **extra):
 
 def position(rows, *, pending=False, as_of='2026-10-30'):
     rules = load_rules()
+    if pending:
+        rules['status'] = 'PENDING'
     if not pending:
         rules['status'] = 'CONFIRMED'  # Synthetic gate exercise, not persisted approval.
     registrations = [dict(QUOTA_ID='q',ACCOUNT_ID='owner',QUOTA_TYPE='Non-Commercial Pullet'),
@@ -31,7 +33,7 @@ def test_latest_base_absorbs_earlier_sale_and_base_without_double_deduction():
     assert [r['QUOTA_TRANSACTION_ID'] for r in result['absorbed_activity_rows']]==['s']
     assert rows==before
     assert position(rows,pending=True)['net_position'] is None
-    assert load_rules()['status']=='PENDING' and load_rules()['flock_stock']['status']=='PENDING'
+    assert load_rules()['status']=='CONFIRMED' and load_rules()['flock_stock']['status']=='PENDING'
 
 
 def test_latest_base_is_per_registration_and_asof_not_global():

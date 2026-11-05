@@ -25,7 +25,8 @@ def test_runtime_rules_file_is_shipped_and_stays_pending():
     assert 'config/quota_rules.json' in sources
     assert 'data/*.py' in sources
     rules=load_rules()
-    assert rules['status']=='PENDING' and rules['units_compatible'] is False
+    assert rules['status']=='CONFIRMED' and rules['units_compatible'] is False
+    assert rules['confirmed_by']=='Yuxin Yang / validated against legacy Flock Age report 2026-11-05'
     assert rules['flock_stock']['status']=='PENDING'
 
 
