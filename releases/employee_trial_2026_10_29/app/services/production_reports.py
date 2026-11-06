@@ -17,6 +17,36 @@ AMOUNTS = ['J','J2',*[key for key in COMPONENTS if key != 'J'],'NonLevy','Levy',
 NEST_FIELDS = {'NR':'NEST_RUN', **{f'NR{n}':f'NEST_RUN_{n}_PLUS' for n in range(25,16,-1)},
                'FG':'FARM_GATE_SALES','FC':'ON_FARM_CONSUMPTION'}
 DISPLAY = ['Row Type','Week','Reg No','Account Name','Marketing Type','Specialty','Housing System','Colour','Grading Station']
+PRODUCTION_CAPTION = ('In Dozens. Fractional component rounding is provisional HALF_UP per stored row. '
+    'J2 repeats J and is excluded from Levy. Totals sum displayed rows. Explicit DEV_TEST records excluded.')
+
+
+def production_rounding_summary(metadata):
+    differences = metadata.get('rounding_differences', [])
+    if not differences:
+        return ''
+    largest = max(abs(item['Difference']) for item in differences)
+    display = format(largest, ',f')
+    if '.' in display:
+        display = display.rstrip('0').rstrip('.')
+    return (f'{len(differences):,} source rows have a stored TOTAL that differs from the displayed '
+            f'component sum by rounding (largest difference {display} dozens).')
+
+
+def production_compact_caption(metadata):
+    return ' '.join([PRODUCTION_CAPTION, *dict.fromkeys(metadata.get('notes', []))])
+
+
+def production_notes_frame(metadata):
+    """Notes-only XLSX sheet; keep diagnostics outside the report/CSV rows."""
+    rows = [{'Section':'Report notes', 'Note':production_compact_caption(metadata)}]
+    rows.append({'Section':'Rounding summary', 'Note':production_rounding_summary(metadata) or 'No stored TOTAL rounding differences.'})
+    for item in metadata.get('rounding_differences', []):
+        rows.append({'Section':'Rounding differences', 'Note':
+            f"{item['Production ID']}: stored TOTAL {item['Stored TOTAL']} versus displayed "
+            f"{item['Displayed Total']} (difference {item['Difference']})"})
+    rows.extend({'Section':'Source notes', 'Note':note} for note in metadata.get('record_notes', []))
+    return pd.DataFrame(rows, columns=['Section','Note'])
 
 
 def safe_text(value):
@@ -101,7 +131,7 @@ def prepare_production(records,accounts,start_week,end_week,marketing_types=None
     if selected == set(MARKETING_TYPES.values()):
         selected = None  # All legacy types: retain unrecognized/blank stored codes with a note.
     selected_accounts = {guid(value) for value in account_ids} if account_ids is not None else None
-    rows,notes = [],[]
+    rows,notes,record_notes,differences = [],[],[],[]
     for (_,raw),(_,grader_identity) in zip(source.iterrows(),graders.iterrows()):
         row = raw.to_dict()
         week = production_week(row)
@@ -112,7 +142,8 @@ def prepare_production(records,accounts,start_week,end_week,marketing_types=None
         if any(safe_text(value).upper().startswith('DEV_TEST') for value in markers):
             continue
         if week is None:
-            notes.append(f"{safe_text(row.get('PRODUCTION_ID'))}: invalid/unknown Week excluded")
+            record_notes.append(f"{safe_text(row.get('PRODUCTION_ID'))}: invalid/unknown Week excluded")
+            notes.append('Records with invalid or unknown Week were excluded.')
             continue
         kind = _code(row.get('MARKETING_TYPE'))
         if not start <= week <= end or (selected is not None and kind not in selected):
@@ -122,7 +153,8 @@ def prepare_production(records,accounts,start_week,end_week,marketing_types=None
         if grader_key is not None and grader_identity['PRODUCER_IDENTITY_KEY'] != grader_key:
             continue
         if kind not in MARKETING_TYPES.values():
-            notes.append(f"{safe_text(row.get('PRODUCTION_ID'))}: unrecognized/blank Marketing Type retained in All Types scope")
+            record_notes.append(f"{safe_text(row.get('PRODUCTION_ID'))}: unrecognized/blank Marketing Type retained in All Types scope")
+            notes.append('Unrecognized or blank Marketing Types retained in All Types scope.')
         if kind in {'BB','HA'}:
             notes.append('PROVISIONAL type mapping: BB = Broiler Breeder; HA = Hatchery. These codes are not present in the supplied CSVs.')
         measures = {key:_rounded(row.get(field)) for key,field in COMPONENTS.items()}
@@ -132,9 +164,11 @@ def prepare_production(records,accounts,start_week,end_week,marketing_types=None
         measures['Total'] = _complete_sum([measures['Levy'],measures['NonLevy']])
         stored = number(row.get('TOTAL'))
         if stored is not None and measures['Total'] is not None and stored != measures['Total']:
-            notes.append(f"{safe_text(row.get('PRODUCTION_ID'))}: stored TOTAL {stored} versus displayed {measures['Total']} (difference {measures['Total']-stored})")
+            differences.append({'Production ID':safe_text(row.get('PRODUCTION_ID')),
+                'Stored TOTAL':stored, 'Displayed Total':measures['Total'], 'Difference':measures['Total']-stored})
         if any(measures[key] is None for key in COMPONENTS):
-            notes.append(f"{safe_text(row.get('PRODUCTION_ID'))}: unknown components; totals sum known displayed values only")
+            record_notes.append(f"{safe_text(row.get('PRODUCTION_ID'))}: unknown components; totals sum known displayed values only")
+            notes.append('Some components are unknown; totals sum known displayed values only.')
         record = dict(measures, **{'Row Type':'Data','Week':week,
             'Reg No':safe_text(producer.get('REGISTRATION_NUMBER')) or safe_text(row.get('PRODUCER_NUMBER')),
             'Account Name':safe_text(producer.get('ORGANIZATION_NAME')) if guid(row.get('PRODUCER_ACCOUNT_ID')) else row['PRODUCER_IDENTITY_LABEL'],
@@ -147,6 +181,7 @@ def prepare_production(records,accounts,start_week,end_week,marketing_types=None
         record.update({key:_rounded(row.get(field)) for key,field in NEST_FIELDS.items()})
         rows.append(record)
     return rows, {'notes':list(dict.fromkeys(notes)),
+        'record_notes':list(dict.fromkeys(record_notes)), 'rounding_differences':differences,
         'headers':[f'Production Week: {start} to {end}','Type: '+', '.join(marketing_types if marketing_types is not None else MARKETING_TYPES),'In Dozens'],
         'rounding':'PROVISIONAL: round each stored component HALF_UP to whole dozens; sum displayed components; J2 excluded from Levy.'}
 
@@ -207,6 +242,8 @@ def build_nest_run_report(records,accounts,year,start_week,end_week):
     # marketing type, retaining zero-valued Leghorn Breeder rows in the screenshot.
     rows = [row for row in rows if row['Marketing Type'] not in {'RE','UN',''} or
             any(row.get(key) is not None and row[key] != 0 for key in NEST_FIELDS)]
+    included = {row['_id'] for row in rows}
+    meta['rounding_differences'] = [item for item in meta['rounding_differences'] if item['Production ID'] in included]
     groups={}
     for row in rows: groups.setdefault((row['Marketing Type'],row['Week'],row['_producer']),[]).append(row)
     details = [dict(_total(group,'Data',keys=NEST_FIELDS),**{'Marketing Type':kind,'Week':week,

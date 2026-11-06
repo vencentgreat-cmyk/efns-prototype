@@ -71,7 +71,8 @@ def test_7022_rounding_stored_total_mismatch_and_half_up_is_provisional():
     rows,meta=prepare_production(records,accounts,202601,202610)
     row=next(row for row in rows if row['Reg No']=='7022' and row['Week']==202602)
     assert row['Levy']==24502 and row['NonLevy']==442 and row['Total']==24944
-    assert len(meta['notes'])==1 and 'difference -1' in meta['notes'][0]
+    assert meta['notes']==[]
+    assert len(meta['rounding_differences'])==1 and meta['rounding_differences'][0]['Difference']==-1
     one=records.loc[target].copy()
     one.loc[:,list(COMPONENTS.values())]=Decimal('0.5')
     rows,meta=prepare_production(one,accounts,202601,202610)

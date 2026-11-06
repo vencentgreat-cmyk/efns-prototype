@@ -405,9 +405,11 @@ def report_csv(user: User, frame: pd.DataFrame) -> bytes:
     return spreadsheet_safe(frame).to_csv(index=False).encode("utf-8-sig")
 
 
-def report_xlsx(user: User, frame: pd.DataFrame, sheet_name="EFNS Report") -> bytes:
+def report_xlsx(user: User, frame: pd.DataFrame, sheet_name="EFNS Report", *, notes=None) -> bytes:
     require_permission(user, Permission.EXPORT_REPORT)
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         spreadsheet_safe(frame).to_excel(writer, index=False, sheet_name=sheet_name[:31])
+        if notes is not None:
+            spreadsheet_safe(notes).to_excel(writer, index=False, sheet_name='Notes')
     return buffer.getvalue()

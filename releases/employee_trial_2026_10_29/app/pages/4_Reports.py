@@ -21,7 +21,8 @@ from app.services.quota_reports import (build_quota_transactions_report,
     build_quota_leases_report, build_quota_history_report)
 from data.position_evidence import number as quota_number
 from app.services.production_reports import (build_production_report, build_nest_run_report,
-    production_grader_options, week_range, MARKETING_TYPES, AMOUNTS, NEST_FIELDS)
+    production_grader_options, week_range, MARKETING_TYPES, AMOUNTS, NEST_FIELDS,
+    PRODUCTION_CAPTION, production_rounding_summary, production_compact_caption, production_notes_frame)
 from app.services.flock_age_report import build_flock_age_report, build_flock_age_quotas
 from app.services.quota_state import get_inactive_quota_transaction_ids
 from app.services.flock_reports import (
@@ -148,7 +149,7 @@ if section == "Report Library":
                     st.session_state.pop(prefix+'_result',None)
             elif prefix != 'production_nest_run':
                 types = st.multiselect('Type',list(MARKETING_TYPES),default=list(MARKETING_TYPES),key=prefix+'_types')
-            st.caption('In Dozens. Fractional component rounding is provisional HALF_UP per stored row. J2 repeats J and is excluded from Levy. Totals sum displayed rows; stored TOTAL differences are listed. Explicit DEV_TEST records excluded.')
+            notes_caption = st.empty()
             if st.button('Run Report',type='primary',key='run_'+prefix,disabled=prefix=='production_management_grader' and grader_key is None):
                 st.session_state.pop(prefix+'_result',None)
                 try:
@@ -167,14 +168,24 @@ if section == "Report Library":
             if isinstance(result,pd.DataFrame):
                 metadata = st.session_state[prefix+'_metadata']
                 for header in metadata['headers']: st.markdown(header)
-                for note in metadata['notes']: st.caption(note)
+                notes_caption.caption(production_compact_caption(metadata))
+                rounding_summary = production_rounding_summary(metadata)
+                if rounding_summary:
+                    st.info(rounding_summary)
+                    with st.expander('Rounding differences', expanded=False):
+                        st.dataframe(pd.DataFrame(metadata['rounding_differences']), hide_index=True, width='stretch')
+                if metadata.get('record_notes'):
+                    with st.expander('Source notes', expanded=False):
+                        st.text('\n'.join(metadata['record_notes']))
                 if result.empty: st.info('No production records match the selected parameters.')
                 else:
                     formats = {column:lambda value:'' if quota_number(value) is None else f'{quota_number(value):,}' for column in [*AMOUNTS,*NEST_FIELDS] if column in result}
                     st.dataframe(result.style.format(formats),hide_index=True,width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
                     st.download_button('Export CSV',report_csv(user,result),prefix+'.csv','text/csv',key=prefix+'_csv')
-                    st.download_button('Export XLSX',report_xlsx(user,result),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
+                    st.download_button('Export XLSX',report_xlsx(user,result,notes=production_notes_frame(metadata)),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
+            else:
+                notes_caption.caption(PRODUCTION_CAPTION)
         elif definition.handler in {'quota_transactions', 'quota_leases', 'quota_leases_by_end_date', 'quota_history'}:
             prefix = definition.handler
             source_accounts, source_registrations = repo.get_accounts(), repo.get_quota_registrations()
