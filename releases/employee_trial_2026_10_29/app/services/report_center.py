@@ -32,6 +32,7 @@ class ReportDefinition:
 
 
 REPORT_CATALOG = (
+    ReportDefinition("flock-status-producer", "Flock Status Report by Producer", "Flock", "Operational Report", "Selected Account Flock Status with province-wide allocation and Account issuance.", ("Report Date", "Mortality", "Quota Type", "Account"), Permission.VIEW_REPORTS, "Available", "flock_status_producer", ("CSV", "XLSX")),
     ReportDefinition("flock-salmonella-schedule", "Flock Salmonella Testing Schedule", "Flock", "Operational Report", "Current Flock Age inventory within inclusive age bounds; unknown inventory excluded.", ("Report Date", "Mortality", "Quota Type", "Flock Minimum Age", "Flock Maximum Age"), Permission.VIEW_REPORTS, "Available", "flock_salmonella_schedule", ("CSV", "XLSX")),
     ReportDefinition("scheduled-flock-placements", "Scheduled Flock Placements", "Flock", "Operational Report", "Upcoming placements with initial Delivery quantities and confirmed Account quota at the start date. Mortality is unused.", ("Mortality", "Quota Type", "Scheduled Placements Date Start", "Scheduled Placements End Date"), Permission.VIEW_REPORTS, "Available", "scheduled_flock_placements", ("CSV", "XLSX")),
     ReportDefinition("quota-summary", "Quota Summary Report", "Quota", "Summary Report", "Account and quota registration summary at a selected date. Issuance awaits a confirmed rule.", ("As of Date", "Quota Type", "Account", "Status"), Permission.VIEW_REPORTS, "Available · provisional calculations", "quota_summary", ("CSV", "XLSX")),

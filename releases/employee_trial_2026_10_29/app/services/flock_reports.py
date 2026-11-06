@@ -1,5 +1,5 @@
 """Pure legacy flock report projections; no repository or Streamlit access."""
-from app.services.flock_age_report import build_flock_age_report, known_total
+from app.services.flock_age_report import build_flock_age_report, known_total, utilization
 from app.services.flock_current_report import day, effective_disposal_date, flock_is_in_current_report, quantity, text
 from data.quota_types import quota_type_key
 from decimal import Decimal, InvalidOperation
@@ -103,6 +103,34 @@ def build_flock_salmonella_schedule(flocks, transactions, accounts, facilities,
         output.append(dict(row, **{'Account Name': row['Account']}))
     output.sort(key=lambda row: (-row['Flock Age'], _order(row['Reg No']), _order(row['Permit No'])))
     return _frame(output, SALMONELLA_SCHEDULE_COLUMNS)
+
+
+def build_flock_status_by_producer_report(flocks, transactions, accounts, facilities,
+                                          quotas, report_date, account_id,
+                                          mortality='0.4', quota_type='Egg Production'):
+    """Shared Status rows for one Account, retaining province-wide allocation.
+
+    Select by stable Account ID, never by organization name or registration.
+    Missing selection returns an empty result and no summary.
+    """
+    identity = text(account_id)
+    selected_accounts = accounts.loc[accounts.get('ACCOUNT_ID', pd.Series(index=accounts.index, dtype=object)).map(text).eq(identity)]
+    if not identity or selected_accounts.empty:
+        return _frame([], STATUS_COLUMNS), None
+    _province, province_summary = build_flock_status_report(
+        flocks, transactions, accounts, facilities, quotas, report_date, mortality, quota_type)
+    selected_flocks = flocks.loc[flocks.get('ACCOUNT_ID', pd.Series(index=flocks.index, dtype=object)).map(text).eq(identity)]
+    own_quota = quantity(quotas.get(identity))
+    result, summary = build_flock_status_report(selected_flocks, transactions,
+        selected_accounts, facilities, {identity: own_quota}, report_date, mortality, quota_type)
+    allocation = province_summary['NFPMC Allocation']
+    summary.update({'NFPMC Allocation': allocation,
+        'Provincial Utilization': utilization(summary['Inventory Birds'], allocation),
+        'Issuance for Province': own_quota,
+        'Producers with Quota': int(own_quota is not None and own_quota > 0)})
+    summary['Notes'] = '; '.join(filter(None, [summary['Notes'],
+        'Province allocation unavailable' if allocation is None else '']))
+    return result, summary
 
 
 def _age_bounds(lower, upper):

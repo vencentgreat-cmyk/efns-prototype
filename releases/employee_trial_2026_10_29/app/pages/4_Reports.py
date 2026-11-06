@@ -22,6 +22,7 @@ from app.services.flock_reports import (
     build_flock_status_report, build_flocks_counted_report,
     build_flocks_needing_counts_report, build_flock_disposals_report,
     build_flock_salmonella_schedule, build_scheduled_flock_placements,
+    build_flock_status_by_producer_report,
 )
 from data.quota_position import load_rules
 from app.ui import apply_theme, page_header, section_intro, show_data_error
@@ -155,7 +156,7 @@ if section == "Report Library":
                 if result.empty: st.info("No Quota Registrations match the selected parameters.")
                 else: st.dataframe(result, width="stretch", hide_index=True)
                 downloads(result, "quota_summary_report", definition.report_id)
-        elif definition.handler in {'flock_status', 'flocks_counted', 'flocks_needing_counts', 'flock_disposals', 'flock_salmonella_schedule', 'scheduled_flock_placements'}:
+        elif definition.handler in {'flock_status', 'flock_status_producer', 'flocks_counted', 'flocks_needing_counts', 'flock_disposals', 'flock_salmonella_schedule', 'scheduled_flock_placements'}:
             handler = definition.handler
             source_flocks, source_accounts = repo.get_flocks(), repo.get_accounts()
             params = st.columns(3)
@@ -169,12 +170,20 @@ if section == "Report Library":
                 as_of = params[1].date_input(end_label, value=halifax_today(), key=handler+'_end')
             else:
                 as_of = params[0].date_input('As of Date' if handler == 'flock_status' else 'Report Date', value=halifax_today(), key=handler+'_date')
-            mortality = (st if handler == 'scheduled_flock_placements' else params[1]).text_input('Mortality (% per month)', value='0.4', key=handler+'_mortality') if handler in {'flock_status', 'flock_salmonella_schedule', 'scheduled_flock_placements'} else None
+            mortality = (st if handler == 'scheduled_flock_placements' else params[1]).text_input('Mortality (% per month)', value='0.4', key=handler+'_mortality') if handler in {'flock_status', 'flock_status_producer', 'flock_salmonella_schedule', 'scheduled_flock_placements'} else None
             kinds = {str(value).strip() for value in source_flocks.get('FLOCK_QUOTA_TYPE', pd.Series(dtype=object)).dropna() if str(value).strip()}
-            if handler in {'flock_status', 'flocks_needing_counts', 'flock_salmonella_schedule'}:
+            if handler in {'flock_status', 'flock_status_producer', 'flocks_needing_counts', 'flock_salmonella_schedule'}:
                 kinds.discard('Special Permit')
             options = ['Egg Production', 'All', *sorted(kinds - {'Egg Production', 'All'})]
             selected_type = params[2].selectbox('Quota Type', options, key=handler+'_type')
+            account_id, account_label = None, ''
+            if handler == 'flock_status_producer':
+                account_labels = {str(row['ACCOUNT_ID']): f"{row.get('ORGANIZATION_NAME', '')} · {row.get('REGISTRATION_NUMBER', '')} · {row['ACCOUNT_ID']}" for row in source_accounts.to_dict('records')}
+                account_id = st.selectbox('Account', [None, *sorted(account_labels, key=lambda identity: account_labels[identity].casefold())], format_func=lambda identity: account_labels.get(identity, 'Select an Account'), key=handler+'_account')
+                account_label = account_labels.get(account_id, '')
+                if account_id is None:
+                    st.session_state.pop(handler+'_result', None)
+                    st.info('Select an Account to run Flock Status Report by Producer.')
             from_age, to_age, count_type = 19, 299, 'All'
             if handler == 'flock_salmonella_schedule':
                 extra = st.columns(2)
@@ -193,12 +202,16 @@ if section == "Report Library":
                 st.warning('PROVISIONAL Disposal Age: whole weeks from Hatch Date to actual Disposal Date. This has not been validated against legacy Disposal Age.')
             if handler in {'flock_status', 'flocks_counted', 'flock_disposals'}:
                 st.caption('Quota uses confirmed Account Egg Production positions at the report/end date. Unavailable state evidence leaves quota unknown. Totals sum known values.')
-            if st.button('Run Report', type='primary', key='run_'+handler):
+            elif handler == 'flock_status_producer':
+                st.caption('NFPMC Allocation is province-wide confirmed Egg Production quota. Issuance is the selected Account quota. Provincial Utilization divides Account inventory by province allocation; row Util. divides by Account quota. Unavailable evidence remains unknown.')
+            if st.button('Run Report', type='primary', key='run_'+handler, disabled=handler == 'flock_status_producer' and account_id is None):
                 st.session_state.pop(handler+'_result', None)
                 try:
                     quotas, reasons = load_flock_report_quotas(source_accounts, start if handler == 'scheduled_flock_placements' else as_of) if handler not in {'flocks_needing_counts', 'flock_salmonella_schedule'} else ({}, [])
                     summary = None
-                    if handler == 'flock_salmonella_schedule':
+                    if handler == 'flock_status_producer':
+                        result, summary = build_flock_status_by_producer_report(source_flocks, repo.get_flock_transactions(), source_accounts, repo.get_facilities(), quotas, as_of, account_id, mortality, selected_type)
+                    elif handler == 'flock_salmonella_schedule':
                         result = build_flock_salmonella_schedule(source_flocks, repo.get_flock_transactions(), source_accounts, repo.get_facilities(), as_of, mortality, selected_type, from_age, to_age)
                     elif handler == 'scheduled_flock_placements':
                         result = build_scheduled_flock_placements(source_flocks, repo.get_flock_transactions(), source_accounts, repo.get_facilities(), quotas, start, as_of, mortality, selected_type)
@@ -218,8 +231,10 @@ if section == "Report Library":
                         applied += f' · Start date: {start}'
                         if handler == 'scheduled_flock_placements':
                             applied += f' · Mortality: {mortality}% (unused)'
-                    elif handler == 'flock_status':
+                    elif handler in {'flock_status', 'flock_status_producer'}:
                         applied += f' · Mortality: {mortality}% per month'
+                        if handler == 'flock_status_producer':
+                            applied += f' · Account: {account_label}'
                     elif handler == 'flock_salmonella_schedule':
                         applied += f' · Mortality: {mortality}% per month · Age: {from_age}–{to_age}'
                     else:
