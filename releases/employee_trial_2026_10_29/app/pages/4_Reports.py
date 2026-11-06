@@ -14,6 +14,7 @@ from app.security import Permission
 from app.services.report_center import (
     CUSTOM_DATASETS, build_custom_report, build_quota_summary, build_quota_summary_details, report_csv,
     report_definition, report_xlsx, visible_catalog, FLOCK_RECORD_COUNT, FLOCK_RECORD_COUNT_LABEL, transaction_type_options,
+    quota_account_label,
 )
 from app.services.flock_current_report import build_flock_current_report
 from app.services.flock_age_report import build_flock_age_report, build_flock_age_quotas
@@ -118,7 +119,7 @@ if section == "Report Library":
         if definition.handler in {"quota_summary", "quota_summary_details"}:
             prefix = definition.handler
             accounts = repo.get_accounts()
-            account_options = {"All Accounts": None, **{f"{r.ORGANIZATION_NAME} · {r.REGISTRATION_NUMBER or str(r.ACCOUNT_ID)[:8]}": r.ACCOUNT_ID for r in accounts.itertuples()}}
+            account_options = {"All Accounts": None, **{quota_account_label(row): row['ACCOUNT_ID'] for row in accounts.to_dict('records')}}
             params = st.columns(4)
             as_of = params[0].date_input("As of Date", value=halifax_today(), key=prefix+"_as_of")
             quota_type = params[1].selectbox("Quota Type", QUOTA_TYPES, key=prefix+"_type")

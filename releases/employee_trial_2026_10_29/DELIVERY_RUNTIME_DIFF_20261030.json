@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "bf3d19912565c93264f107866f4f5146d6cf16635a8bb6b9d03a08e5ffd37a67"
+      "candidate_lf_sha256": "9e41f353914904da293326c240824c68dd822ff8b95ebe007011babb8f3dea4e"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "0cc8354772705627eaf5e0d3ad027abbd9f28c42680c164cbfa2205bdb6b7776"
+      "candidate_lf_sha256": "a9acb9515ad43d3c06acb9184b071eb2fca21827cf9f52edf926342ff58d02d5"
     },
     {
       "path": "app/services/revision_history.py",

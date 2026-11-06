@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import datetime as dt
 import io
+import unicodedata
 import pandas as pd
 
 from app.security import Permission, User, has_permission, require_permission
@@ -132,6 +133,17 @@ QUOTA_ACCOUNT_COLUMNS = ['Reg No', 'Account Name', 'Address', 'City', 'Province'
 QUOTA_DETAIL_COLUMNS = [*QUOTA_ACCOUNT_COLUMNS, 'Account Total', 'Quota Transaction Type', 'Quota Bird Count']
 
 
+def _quota_text(value):
+    """Normalize nullable stored text for report display and string operations."""
+    return stored_text(value) or ''
+
+
+def quota_account_label(account):
+    name = _quota_text(account.get('ORGANIZATION_NAME'))
+    registration = _quota_text(account.get('REGISTRATION_NUMBER'))
+    return f"{name} · {registration or _quota_text(account.get('ACCOUNT_ID'))[:8]}"
+
+
 def _quota_report_accounts(repo, user, as_of_date, quota_type, account_id, status):
     """Read existing repository methods only; registration dates do not limit listing."""
     require_permission(user, Permission.VIEW_REPORTS)
@@ -146,13 +158,21 @@ def _quota_report_accounts(repo, user, as_of_date, quota_type, account_id, statu
         raise ValueError('Missing or duplicate Account identity')
     selected = [row for row in registrations.to_dict('records')
         if quota_type_key(row.get('QUOTA_TYPE')) == quota_type_key(quota_type)
-        and (status in (None, 'All') or stored_text(row.get('STATUS')).casefold() == status.casefold())]
+        and (status in (None, 'All') or _quota_text(row.get('STATUS')).casefold() == status.casefold())]
     owners = {guid(row.get('ACCOUNT_ID')) for row in selected}
     listed = [row for row in accounts.to_dict('records') if guid(row.get('ACCOUNT_ID')) in owners
               and (not account_id or guid(row.get('ACCOUNT_ID')) == guid(account_id))]
     def order(row):
-        value = stored_text(row.get('REGISTRATION_NUMBER'))
-        return (0, int(value), guid(row['ACCOUNT_ID'])) if value.isdecimal() else (1, value.casefold(), guid(row['ACCOUNT_ID']))
+        value = _quota_text(row.get('REGISTRATION_NUMBER'))
+        identity = guid(row['ACCOUNT_ID'])
+        if not value:
+            return (2, '', identity)
+        if value.isdecimal():
+            # Compare digit strings instead of converting unbounded input to int.
+            # This also handles leading zeroes without Python's integer-size limit.
+            digits = ''.join(str(unicodedata.decimal(char)) for char in value).lstrip('0') or '0'
+            return (0, (len(digits), digits), identity)
+        return (1, value.casefold(), identity)
     listed.sort(key=order)
     if not listed:
         return [], []
@@ -168,7 +188,7 @@ def _quota_report_accounts(repo, user, as_of_date, quota_type, account_id, statu
 def _quota_account_row(account):
     fields = ('REGISTRATION_NUMBER', 'ORGANIZATION_NAME', 'ADDRESS_LINE1', 'CITY',
               'PROVINCE', 'POSTAL_CODE', 'CONTACT_PHONE', 'FAX')
-    return dict(zip(QUOTA_ACCOUNT_COLUMNS, [stored_text(account.get(field)) for field in fields]))
+    return dict(zip(QUOTA_ACCOUNT_COLUMNS, [_quota_text(account.get(field)) for field in fields]))
 
 
 def _quota_frame(rows, columns):
@@ -177,7 +197,7 @@ def _quota_frame(rows, columns):
 
 
 def _quota_notes(accounts, positions):
-    return [f"{stored_text(account.get('REGISTRATION_NUMBER'))} {stored_text(account.get('ORGANIZATION_NAME'))}: "
+    return [f"{_quota_text(account.get('REGISTRATION_NUMBER'))} {_quota_text(account.get('ORGANIZATION_NAME'))}: "
             + '; '.join(position['reasons']) for account, position in zip(accounts, positions) if position['reasons']]
 
 

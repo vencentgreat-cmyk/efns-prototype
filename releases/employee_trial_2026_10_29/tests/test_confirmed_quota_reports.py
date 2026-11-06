@@ -200,3 +200,69 @@ def test_catalog_and_page_wiring(report_id,tmp_path,monkeypatch):
     app.button(key='run_'+prefix).click().run()
     assert not app.error and not app.exception
     assert set(app.dataframe[0].value['Reg No']) == {'','7022'}
+
+
+@pytest.mark.parametrize('builder',[build_quota_summary,build_quota_summary_details])
+def test_null_and_blank_account_fields_sort_last_and_export(builder):
+    repo = Repository({'z-null':7,'b-null':8,'text':9,'ten':10,'two':2,'zero-two':3,'alpha':4})
+    registrations = {'z-null':None,'b-null':pd.NA,'text':'abc','ten':'10','two':'2','zero-two':'002','alpha':'ABC'}
+    repo.accounts['REGISTRATION_NUMBER'] = repo.accounts.ACCOUNT_ID.map(registrations)
+    fields = ['ORGANIZATION_NAME','ADDRESS_LINE1','CITY','PROVINCE','POSTAL_CODE','CONTACT_PHONE','FAX']
+    repo.accounts.loc[repo.accounts.ACCOUNT_ID.eq('z-null'),fields] = None
+    repo.accounts.loc[repo.accounts.ACCOUNT_ID.eq('b-null'),fields] = '   '
+    frame,metrics = report(repo,builder)
+    amount = 'Issuance' if builder == build_quota_summary else 'Account Total'
+    assert frame[amount].tolist()[1:] == [2,3,10,4,9,8,7]
+    assert frame['Reg No'].tolist()[1:] == ['2','002','10','ABC','abc','','']
+    assert frame.iloc[-2:][QUOTA_ACCOUNT_COLUMNS].eq('').all().all()
+    assert metrics['notes'] == []
+    for exported in (
+        pd.read_csv(BytesIO(report_csv(user(),frame)),keep_default_na=False,dtype=str),
+        pd.read_excel(BytesIO(report_xlsx(user(),frame)),keep_default_na=False,dtype=str)):
+        assert exported.iloc[-2:][QUOTA_ACCOUNT_COLUMNS].eq('').all().all()
+        assert exported[amount].tolist()[1:] == ['2','3','10','4','9','8','7']
+
+
+@pytest.mark.parametrize('builder',[build_quota_summary,build_quota_summary_details])
+def test_null_names_notes_and_registration_status(builder,monkeypatch):
+    repo = Repository({'null-account':100,'missing-status':200})
+    repo.accounts.loc[:,['REGISTRATION_NUMBER','ORGANIZATION_NAME','ADDRESS_LINE1','CITY',
+        'PROVINCE','POSTAL_CODE','CONTACT_PHONE','FAX']] = None
+    repo.registrations.loc[repo.registrations.ACCOUNT_ID.eq('missing-status'),'STATUS'] = None
+    monkeypatch.setattr('app.services.report_center.get_inactive_quota_transaction_ids',lambda *args,**kwargs:None)
+    frame,metrics = report(repo,builder)
+    assert len(frame) == 2  # Missing registration Status is not Active.
+    assert frame.iloc[1][QUOTA_ACCOUNT_COLUMNS].eq('').all()
+    assert metrics['notes'] and 'Transaction state evidence unavailable' in metrics['notes'][0]
+    assert 'None' not in metrics['notes'][0] and 'nan' not in metrics['notes'][0]
+    assert len(report(repo,builder,status=None)[0]) == 3
+
+
+def test_unbounded_numeric_registration_sorts_without_integer_conversion():
+    repo = Repository({'huge':1,'small':2,'blank':3})
+    repo.accounts['REGISTRATION_NUMBER'] = ['9'*5000,'2',None]
+    frame,_ = report(repo)
+    assert frame.Issuance.tolist()[1:] == [2,1,3]
+
+
+@pytest.mark.parametrize('report_id',['quota-summary','quota-summary-details'])
+def test_page_null_registration_name_and_address(report_id,tmp_path,monkeypatch):
+    from tests.auth_support import authenticated_app
+    root = Path(__file__).resolve().parents[1]
+    repo = Repository({'null-account':100,'7022':34526})
+    repo.accounts.loc[0,['REGISTRATION_NUMBER','ORGANIZATION_NAME','ADDRESS_LINE1','CITY',
+        'PROVINCE','POSTAL_CODE','CONTACT_PHONE','FAX']] = pd.NA
+    app = authenticated_app(root/'streamlit_app.py',tmp_path,monkeypatch)
+    app.session_state['_base_repo'] = repo
+    app.switch_page('app/pages/4_Reports.py').run()
+    app.session_state['report_center_open_report'] = report_id
+    app.run()
+    prefix = report_definition(report_id).handler
+    assert not app.error and not app.exception
+    labels = app.selectbox(key=prefix+'_account').options
+    assert not any('None' in label or '<NA>' in label or 'nan' in label for label in labels)
+    app.button(key='run_'+prefix).click().run()
+    assert not app.error and not app.exception
+    assert len(app.get('download_button')) == 2
+    assert app.dataframe[0].value['Reg No'].tolist() == ['', '7022','']
+    assert app.dataframe[0].value.iloc[-1][QUOTA_ACCOUNT_COLUMNS].eq('').all()
