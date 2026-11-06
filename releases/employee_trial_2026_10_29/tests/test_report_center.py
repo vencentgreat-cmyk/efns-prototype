@@ -46,6 +46,7 @@ def test_catalog_contains_only_confirmed_and_existing_report_names():
         "Flock Current Report",
         "Flock Current Report by Producer",
         "Quota Summary Report",
+        "Quota Summary Details",
         "Salmonella Test Report",
         "Customize Report",
     }
@@ -63,8 +64,22 @@ def test_catalog_and_report_execution_apply_permissions():
 
 
 class QuotaSummaryRepository:
+    _is_memory = True
     def __init__(self):
         self.arguments = None
+
+    def get_accounts(self):
+        return pd.DataFrame([dict(ACCOUNT_ID='account-1',REGISTRATION_NUMBER='REG-1',
+            ORGANIZATION_NAME='Synthetic One',ADDRESS_LINE1='1 Test Road',CONTACT_PHONE='555-0100')])
+
+    def get_quota_registrations(self):
+        return pd.DataFrame([dict(QUOTA_ID=q,ACCOUNT_ID='account-1',QUOTA_TYPE='Egg Production',
+            STATUS='Active',EFFECTIVE_DATE='2200-01-01') for q in ('quota-1','quota-2')])
+
+    def get_quota_transactions(self):
+        return pd.DataFrame([dict(QUOTA_TRANSACTION_ID=q,QUOTA_ID=q,OWNER_ACCOUNT_ID='account-1',
+            TRANSACTION_TYPE='Base',QUOTA_COUNT=value,EFFECTIVE_DATE='2000-01-01')
+            for q,value in [('quota-1',12),('quota-2',8)]])
 
     def get_quota_summary(self, as_of_date, quota_type, account_id=None, status="Active"):
         self.arguments = (as_of_date, quota_type, account_id, status)
@@ -95,45 +110,43 @@ class QuotaSummaryRepository:
         )
 
 
-def test_quota_summary_forwards_parameters_and_avoids_join_duplication():
+def test_quota_summary_one_account_despite_multiple_registrations():
     repo = QuotaSummaryRepository()
     as_of = dt.date(2026, 9, 15)
     result, metrics = build_quota_summary(
         repo, user=user(), as_of_date=as_of, quota_type="Egg Production",
         account_id="account-1", status="Active",
     )
-    assert repo.arguments == (as_of, "Egg Production", "account-1", "Active")
+    assert repo.arguments is None  # Legacy provisional query is no longer used.
     assert len(result) == 2
-    assert metrics == {"producer_count": 1, "total_issuance": 20}
+    assert metrics == {"producer_count": 1, "total_issuance": 20, 'notes': []}
     assert list(result.columns) == [
-        "REGISTRATION_NUMBER", "ACCOUNT_NAME", "ADDRESS", "CITY", "PROVINCE",
-        "POSTAL_CODE", "PHONE", "FAX", "ISSUANCE",
+        "Reg No", "Account Name", "Address", "City", "Province",
+        "Postal Code", "Phone", "Fax", "Issuance",
     ]
 
 
 def test_quota_summary_empty_and_invalid_parameters():
     repo = QuotaSummaryRepository()
-    repo.get_quota_summary = lambda *args, **kwargs: pd.DataFrame()
+    repo.get_quota_registrations = lambda: pd.DataFrame()
     result, metrics = build_quota_summary(
         repo, user=user(), as_of_date=dt.date.today(), quota_type="Egg Production"
     )
     assert result.empty
-    assert metrics == {"producer_count": 0, "total_issuance": None}
+    assert metrics == {"producer_count": 0, "total_issuance": None, 'notes': []}
     with pytest.raises(ValueError, match="As of Date"):
         build_quota_summary(repo, user=user(), as_of_date=None, quota_type="Egg Production")
     with pytest.raises(ValueError, match="Quota Type"):
         build_quota_summary(repo, user=user(), as_of_date=dt.date.today(), quota_type="Invented")
 
 
-def test_mock_quota_summary_uses_deterministic_location_and_as_of_filters():
+def test_mock_quota_summary_uses_account_address_and_ignores_registration_dates():
     repo = MockRepository(seed=42)
     quota = repo.get_quota_registrations(status="Active").iloc[0]
     account_id = quota["ACCOUNT_ID"]
     quota_type = quota["QUOTA_TYPE"]
     locations = repo.get_farm_locations(account_id=account_id)
-    expected = locations.assign(
-        _rank=locations["STATUS"].ne("Active").astype(int)
-    ).sort_values(["_rank", "FARM_LOCATION_ID"]).iloc[0]
+    expected = repo.get_accounts().loc[lambda frame:frame.ACCOUNT_ID.eq(account_id)].iloc[0]
     result, _metrics = build_quota_summary(
         repo,
         user=user(),
@@ -142,7 +155,7 @@ def test_mock_quota_summary_uses_deterministic_location_and_as_of_filters():
         account_id=account_id,
     )
     assert not result.empty
-    assert set(result["ADDRESS"]) == {expected["ADDRESS_1"]}
+    assert result.iloc[1]['Address'] == (expected.get('ADDRESS_LINE1') or '')
     before_effective, _ = build_quota_summary(
         repo,
         user=user(),
@@ -150,7 +163,7 @@ def test_mock_quota_summary_uses_deterministic_location_and_as_of_filters():
         quota_type=quota_type,
         account_id=account_id,
     )
-    assert before_effective.empty
+    assert not before_effective.empty
 
 
 def test_snowflake_quota_summary_is_parameter_bound_and_has_one_location():

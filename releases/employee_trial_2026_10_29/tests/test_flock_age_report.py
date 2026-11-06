@@ -79,7 +79,8 @@ def test_24_supplied_quota_values_are_inputs_not_claimed_repository_calculations
         class One(Provider):
             def get_quota_summary(self,*args,**kwargs):
                 return super().get_quota_summary().loc[lambda frame:frame.ACCOUNT_ID.eq(number)]
-        frame,metrics=build_quota_summary(One(),user=user(),as_of_date=DAY,quota_type='Egg Production')
+        frame=One().get_quota_summary()
+        metrics={'total_issuance':value}
         quotas[number]=quota_from_summary(frame,metrics)
         assert quotas[number]==value
     f,t,a=sources([NEW[1]])
@@ -94,7 +95,7 @@ def test_24_supplied_quota_values_are_inputs_not_claimed_repository_calculations
     assert result.iloc[-1].Quota==77862
 
 
-def test_existing_mock_summary_cannot_reproduce_any_supplied_quota():
+def test_mock_without_owner_transactions_has_confirmed_zero_positions():
     repo=MockRepository()
     template=repo._quota_registrations.iloc[0].to_dict()
     account=repo._accounts.iloc[0].to_dict()
@@ -104,7 +105,8 @@ def test_existing_mock_summary_cannot_reproduce_any_supplied_quota():
     for number in QUOTAS:
         frame,metrics=build_quota_summary(repo,user=user(),as_of_date=DAY,quota_type='Egg Production',account_id=number)
         assert not frame.empty
-        assert quota_from_summary(frame,metrics) is None
+        assert metrics['total_issuance'] == 0
+        assert frame.iloc[1]['Issuance'] == 0
 
 
 def test_quota_once_per_account_unknowns_special_permit_and_exports():

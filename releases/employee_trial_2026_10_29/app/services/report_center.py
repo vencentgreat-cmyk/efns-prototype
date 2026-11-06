@@ -14,6 +14,10 @@ from data.quota_types import quota_type_key, supported_quota_type
 from app.services.report_relationships import report_relationships
 from data.producer_identity import production_identities, text as stored_text
 from data.source_scope import scope_production
+from data.confirmed_quota_position import confirmed_quota_position, INCREASING_TYPES
+from data.position_evidence import guid, known_sum
+from data.quota_position import load_rules
+from app.services.quota_state import get_inactive_quota_transaction_ids
 
 
 @dataclass(frozen=True)
@@ -35,7 +39,8 @@ REPORT_CATALOG = (
     ReportDefinition("flock-status-producer", "Flock Status Report by Producer", "Flock", "Operational Report", "Selected Account Flock Status with province-wide allocation and Account issuance.", ("Report Date", "Mortality", "Quota Type", "Account"), Permission.VIEW_REPORTS, "Available", "flock_status_producer", ("CSV", "XLSX")),
     ReportDefinition("flock-salmonella-schedule", "Flock Salmonella Testing Schedule", "Flock", "Operational Report", "Current Flock Age inventory within inclusive age bounds; unknown inventory excluded.", ("Report Date", "Mortality", "Quota Type", "Flock Minimum Age", "Flock Maximum Age"), Permission.VIEW_REPORTS, "Available", "flock_salmonella_schedule", ("CSV", "XLSX")),
     ReportDefinition("scheduled-flock-placements", "Scheduled Flock Placements", "Flock", "Operational Report", "Upcoming placements with initial Delivery quantities and confirmed Account quota at the start date. Mortality is unused.", ("Mortality", "Quota Type", "Scheduled Placements Date Start", "Scheduled Placements End Date"), Permission.VIEW_REPORTS, "Available", "scheduled_flock_placements", ("CSV", "XLSX")),
-    ReportDefinition("quota-summary", "Quota Summary Report", "Quota", "Summary Report", "Account and quota registration summary at a selected date. Issuance awaits a confirmed rule.", ("As of Date", "Quota Type", "Account", "Status"), Permission.VIEW_REPORTS, "Available · provisional calculations", "quota_summary", ("CSV", "XLSX")),
+    ReportDefinition("quota-summary", "Quota Summary Report", "Quota", "Summary Report", "One row per Account. Issuance is the confirmed owner quota position at the as-of date; unknown when state evidence is unavailable.", ("As of Date", "Quota Type", "Account", "Status"), Permission.VIEW_REPORTS, "Available", "quota_summary", ("CSV", "XLSX")),
+    ReportDefinition("quota-summary-details", "Quota Summary Details", "Quota", "Summary Report", "Gross increasing quota transaction totals using confirmed position eligibility; amounts remain unknown when state evidence is unavailable.", ("As of Date", "Quota Type", "Account", "Status"), Permission.VIEW_REPORTS, "Available", "quota_summary_details", ("CSV", "XLSX")),
     ReportDefinition("flock-age", "Flock Age Report", "Flock", "Operational Report", "Age and inventory by Account with confirmed owner quota positions and evidence-gated utilization. Special Permit excluded.", ("As of Date", "Mortality", "Quota Type"), Permission.VIEW_REPORTS, "Available", "flock_age", ("CSV", "XLSX")),
     ReportDefinition("flock-status", "Flock Status Report", "Flock", "Operational Report", "Flock Age calculations ordered by registration number with Account totals first.", ("As of Date", "Mortality", "Quota Type"), Permission.VIEW_REPORTS, "Available", "flock_status", ("CSV", "XLSX")),
     ReportDefinition("flocks-counted", "Flocks Counted Report", "Flock", "Operational Report", "Every Count transaction in an inclusive date range; explicitly marked DEV_TEST Flocks excluded.", ("Flock Count Start Date", "Flocks Counted End Date", "Quota Type"), Permission.VIEW_REPORTS, "Available", "flocks_counted", ("CSV", "XLSX")),
@@ -123,31 +128,92 @@ def report_definition(report_id: str) -> ReportDefinition:
         raise ValueError("Unknown report definition.") from exc
 
 
-def build_quota_summary(
-    repo,
-    *,
-    user: User,
-    as_of_date,
-    quota_type: str,
-    account_id=None,
-    status="Active",
-):
+QUOTA_ACCOUNT_COLUMNS = ['Reg No', 'Account Name', 'Address', 'City', 'Province', 'Postal Code', 'Phone', 'Fax']
+QUOTA_DETAIL_COLUMNS = [*QUOTA_ACCOUNT_COLUMNS, 'Account Total', 'Quota Transaction Type', 'Quota Bird Count']
+
+
+def _quota_report_accounts(repo, user, as_of_date, quota_type, account_id, status):
+    """Read existing repository methods only; registration dates do not limit listing."""
     require_permission(user, Permission.VIEW_REPORTS)
-    if not isinstance(as_of_date, (dt.date, dt.datetime, pd.Timestamp)):
+    if not isinstance(as_of_date, (dt.date, dt.datetime, pd.Timestamp)) or pd.isna(as_of_date):
         raise ValueError("As of Date is required.")
     if not supported_quota_type(quota_type):
         raise ValueError("Quota Type must be selected from the supported values.")
-    frame = repo.get_quota_summary(as_of_date, quota_type, account_id=account_id, status=status)
-    if frame.empty:
-        return frame, {"producer_count": 0, "total_issuance": None}
-    frame = frame.drop_duplicates("QUOTA_ID").reset_index(drop=True)
-    producer_count = frame.loc[frame["PRODUCER_ROLE"].fillna(False).astype(bool), "ACCOUNT_ID"].nunique()
-    issuance = pd.to_numeric(frame["ISSUANCE"], errors="coerce") if "ISSUANCE" in frame else pd.Series(dtype=float)
-    total_issuance = None if issuance.notna().sum() == 0 else issuance.sum()
-    columns = ["REGISTRATION_NUMBER", "ACCOUNT_NAME", "ADDRESS", "CITY", "PROVINCE", "POSTAL_CODE", "PHONE", "FAX", "ISSUANCE"]
-    return frame[[column for column in columns if column in frame]], {
-        "producer_count": int(producer_count), "total_issuance": total_issuance,
-    }
+    if status not in (None, 'All', 'Active', 'Inactive', 'Expired'):
+        raise ValueError('Unknown registration Status.')
+    accounts, registrations = repo.get_accounts(), repo.get_quota_registrations()
+    if not accounts.empty and (accounts.ACCOUNT_ID.map(guid).isna().any() or accounts.ACCOUNT_ID.map(guid).duplicated().any()):
+        raise ValueError('Missing or duplicate Account identity')
+    selected = [row for row in registrations.to_dict('records')
+        if quota_type_key(row.get('QUOTA_TYPE')) == quota_type_key(quota_type)
+        and (status in (None, 'All') or stored_text(row.get('STATUS')).casefold() == status.casefold())]
+    owners = {guid(row.get('ACCOUNT_ID')) for row in selected}
+    listed = [row for row in accounts.to_dict('records') if guid(row.get('ACCOUNT_ID')) in owners
+              and (not account_id or guid(row.get('ACCOUNT_ID')) == guid(account_id))]
+    def order(row):
+        value = stored_text(row.get('REGISTRATION_NUMBER'))
+        return (0, int(value), guid(row['ACCOUNT_ID'])) if value.isdecimal() else (1, value.casefold(), guid(row['ACCOUNT_ID']))
+    listed.sort(key=order)
+    if not listed:
+        return [], []
+    transactions = repo.get_quota_transactions()
+    inactive_ids = get_inactive_quota_transaction_ids(repo,
+        transactions.get('QUOTA_TRANSACTION_ID', pd.Series(dtype=object)).tolist(), user=user)
+    rules = load_rules()
+    positions = [confirmed_quota_position(registrations, transactions, row['ACCOUNT_ID'],
+        quota_type, as_of_date, inactive_ids, rules) for row in listed]
+    return listed, positions
+
+
+def _quota_account_row(account):
+    fields = ('REGISTRATION_NUMBER', 'ORGANIZATION_NAME', 'ADDRESS_LINE1', 'CITY',
+              'PROVINCE', 'POSTAL_CODE', 'CONTACT_PHONE', 'FAX')
+    return dict(zip(QUOTA_ACCOUNT_COLUMNS, [stored_text(account.get(field)) for field in fields]))
+
+
+def _quota_frame(rows, columns):
+    result = pd.DataFrame(rows, columns=columns, dtype=object)
+    return result.where(result.notna(), '')
+
+
+def _quota_notes(accounts, positions):
+    return [f"{stored_text(account.get('REGISTRATION_NUMBER'))} {stored_text(account.get('ORGANIZATION_NAME'))}: "
+            + '; '.join(position['reasons']) for account, position in zip(accounts, positions) if position['reasons']]
+
+
+def build_quota_summary(repo, *, user: User, as_of_date, quota_type: str,
+                        account_id=None, status='Active'):
+    accounts, positions = _quota_report_accounts(repo, user, as_of_date, quota_type, account_id, status)
+    values = [position['net_position'] for position in positions]
+    count = sum(value is not None and value > 0 for value in values)
+    total = known_sum(values)
+    rows = [dict(_quota_account_row(account), Issuance=value) for account, value in zip(accounts, values)]
+    if rows:
+        rows.insert(0, {'Account Name': f'Producers: {count}', 'Issuance': total})
+    return _quota_frame(rows, [*QUOTA_ACCOUNT_COLUMNS, 'Issuance']), {
+        'producer_count': count, 'total_issuance': total, 'notes': _quota_notes(accounts, positions)}
+
+
+def build_quota_summary_details(repo, *, user: User, as_of_date, quota_type: str,
+                                account_id=None, status='Active'):
+    """Gross increasing types; eligibility and unknown evidence come from net position."""
+    accounts, positions = _quota_report_accounts(repo, user, as_of_date, quota_type, account_id, status)
+    rows, totals = [], []
+    for account, position in zip(accounts, positions):
+        sums = position['per_type_sums']
+        total = known_sum(list(sums.values())) if sums is not None else None
+        totals.append(total)
+        types = [kind for kind in INCREASING_TYPES if sums is not None and kind in sums]
+        if sums is None:
+            types = ['']  # Preserve the Account with blank amounts; never guess its types.
+        for kind in types:
+            rows.append(dict(_quota_account_row(account), **{'Account Total': total,
+                'Quota Transaction Type': kind, 'Quota Bird Count': sums[kind] if sums is not None else None}))
+    grand = known_sum(totals)
+    if rows:
+        rows.insert(0, {'Account Name': 'Total', 'Account Total': grand})
+    return _quota_frame(rows, QUOTA_DETAIL_COLUMNS), {
+        'total_issuance': grand, 'notes': _quota_notes(accounts, positions)}
 
 
 def transaction_type_options(repo, dataset: str) -> tuple[str, ...]:

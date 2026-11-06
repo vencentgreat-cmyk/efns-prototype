@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "17f3b7bd66d85a6e042ccc33e589d955d32370cf0d45a972ce722369c9e3d18a"
+      "candidate_lf_sha256": "bf3d19912565c93264f107866f4f5146d6cf16635a8bb6b9d03a08e5ffd37a67"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "b6396050e258cec3828304154de23dace534ac0d0f21c9b5cd38e15adfd8e93f"
+      "candidate_lf_sha256": "0cc8354772705627eaf5e0d3ad027abbd9f28c42680c164cbfa2205bdb6b7776"
     },
     {
       "path": "app/services/revision_history.py",
@@ -251,8 +251,8 @@
     {
       "path": "data/confirmed_quota_position.py",
       "status": "NEW",
-      "reason": "Pure confirmed owner quota calculation with Active state evidence, latest Base/Created At ordering and active lease bounds.",
-      "candidate_lf_sha256": "b12fa6474cdea53066c0efde11a232a8073999063443b4be084092bd0ba8c857"
+      "reason": "Pure confirmed owner quota calculation with Active state evidence, latest Base/Created At ordering and active lease bounds; increasing per-type sums share the exact net eligibility loop for Quota Summary Details.",
+      "candidate_lf_sha256": "b78fe29d89fb4c236f7cd2a7f7910f55bafbfb013aca8536625766194ca24e6a"
     },
     {
       "path": "app/services/quota_state.py",

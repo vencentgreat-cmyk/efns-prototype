@@ -12,7 +12,7 @@ from app.auth import can_current, get_auth_store, require_page_permission
 from app.navigation import format_timestamp, page_file, timestamp_columns
 from app.security import Permission
 from app.services.report_center import (
-    CUSTOM_DATASETS, build_custom_report, build_quota_summary, report_csv,
+    CUSTOM_DATASETS, build_custom_report, build_quota_summary, build_quota_summary_details, report_csv,
     report_definition, report_xlsx, visible_catalog, FLOCK_RECORD_COUNT, FLOCK_RECORD_COUNT_LABEL, transaction_type_options,
 )
 from app.services.flock_current_report import build_flock_current_report
@@ -115,47 +115,57 @@ if section == "Report Library":
         st.divider(); section_intro(definition.name, definition.description)
         if st.button("Close report", icon=":material/arrow_back:", key="close_library_report"):
             st.session_state.pop("report_center_open_report", None); st.rerun()
-        if definition.handler == "quota_summary":
+        if definition.handler in {"quota_summary", "quota_summary_details"}:
+            prefix = definition.handler
             accounts = repo.get_accounts()
             account_options = {"All Accounts": None, **{f"{r.ORGANIZATION_NAME} · {r.REGISTRATION_NUMBER or str(r.ACCOUNT_ID)[:8]}": r.ACCOUNT_ID for r in accounts.itertuples()}}
             params = st.columns(4)
-            as_of = params[0].date_input("As of Date", value=halifax_today(), key="quota_summary_as_of")
-            quota_type = params[1].selectbox("Quota Type", QUOTA_TYPES, key="quota_summary_type")
-            account_label = params[2].selectbox("Account", list(account_options), key="quota_summary_account")
-            status = params[3].selectbox("Status", ["Active", "Inactive", "Expired", "All"], key="quota_summary_status")
-            st.caption("Address rule: prefer Active Farm Locations, then choose the lowest FARM_LOCATION_ID. Account phone is a fallback; Fax comes from Account. This rule is provisional.")
-            if st.button("Run Report", type="primary", icon=":material/play_arrow:", key="run_quota_summary"):
+            as_of = params[0].date_input("As of Date", value=halifax_today(), key=prefix+"_as_of")
+            quota_type = params[1].selectbox("Quota Type", QUOTA_TYPES, key=prefix+"_type")
+            account_label = params[2].selectbox("Account", list(account_options), key=prefix+"_account")
+            status = params[3].selectbox("Status", ["Active", "Inactive", "Expired", "All"], key=prefix+"_status")
+            st.caption("Status filters Quota Registrations; registration dates do not limit Account listing. Address and contact details come from Account. Calculations use Active owner transactions and Active Registrations at the as-of date; unavailable state evidence leaves amounts unknown.")
+            if prefix == 'quota_summary':
+                st.caption('Issuance is the confirmed owner quota position at the as-of date.')
+            else:
+                st.caption('Details shows gross Base, Adjustment, Purchase, Global Adjustment and Lease (In) totals. Sale, Lease (Out) and Terminate Quota are not shown or subtracted; these totals differ from net Issuance.')
+            if st.button("Run Report", type="primary", icon=":material/play_arrow:", key="run_"+prefix):
+                st.session_state.pop(prefix+'_result', None)
                 try:
-                    result, metrics = build_quota_summary(repo, user=user, as_of_date=as_of, quota_type=quota_type, account_id=account_options[account_label], status=None if status == "All" else status)
-                    st.session_state.quota_summary_result = result
-                    st.session_state.quota_summary_metrics = metrics
-                    st.session_state.quota_summary_execution = dt.datetime.now(dt.timezone.utc)
-                    st.session_state.quota_summary_parameters = {
+                    builder = build_quota_summary if prefix == 'quota_summary' else build_quota_summary_details
+                    result, metrics = builder(repo, user=user, as_of_date=as_of, quota_type=quota_type, account_id=account_options[account_label], status=None if status == "All" else status)
+                    st.session_state[prefix+'_result'] = result
+                    st.session_state[prefix+'_metrics'] = metrics
+                    st.session_state[prefix+'_execution'] = dt.datetime.now(dt.timezone.utc)
+                    st.session_state[prefix+'_parameters'] = {
                         "as_of": as_of, "quota_type": quota_type,
                         "account": account_label, "status": status,
                     }
                     audit("RUN_REPORT", definition.report_id, {"row_count": len(result), "quota_type": quota_type})
                 except Exception as exc: show_data_error(exc)
-            result = st.session_state.get("quota_summary_result")
-            metrics = st.session_state.get("quota_summary_metrics")
+            result = st.session_state.get(prefix+"_result")
+            metrics = st.session_state.get(prefix+"_metrics")
             if isinstance(result, pd.DataFrame):
-                applied = st.session_state.get("quota_summary_parameters", {})
-                st.markdown("## Quota Summary Report")
+                applied = st.session_state.get(prefix+"_parameters", {})
+                st.markdown("## " + definition.name)
                 st.caption(
                     f"Quota Type: {applied.get('quota_type', quota_type)} · "
                     f"As of: {applied.get('as_of', as_of)} · "
                     f"Account: {applied.get('account', account_label)} · "
                     f"Status: {applied.get('status', status)} · "
-                    f"Executed: {format_timestamp(st.session_state.get('quota_summary_execution'))}"
+                    f"Executed: {format_timestamp(st.session_state.get(prefix+'_execution'))}"
                 )
-                count_col, issuance_col = st.columns(2)
-                count_col.metric("Distinct Producer count", metrics["producer_count"])
-                issuance_col.metric("Total Issuance", "Pending confirmation" if metrics["total_issuance"] is None else f"{metrics['total_issuance']:,.2f}")
-                st.caption("Mortality is omitted because no reliable source or confirmed formula exists. Issuance is intentionally blank pending confirmation.")
-                st.caption(f"{len(result):,} quota registration row(s)")
-                if result.empty: st.info("No Quota Registrations match the selected parameters.")
+                if prefix == 'quota_summary':
+                    st.metric("Producers with positive Issuance", metrics["producer_count"])
+                st.metric("Total Issuance" if prefix == 'quota_summary' else "Gross quota total", 'Unknown' if metrics['total_issuance'] is None else f"{metrics['total_issuance']:,.2f}")
+                for note in metrics['notes']:
+                    st.caption(note)
+                if metrics['notes']:
+                    st.caption('Totals sum known amounts; Accounts with unavailable amounts are excluded from the total.')
+                st.caption(f"{max(len(result)-1, 0):,} report row(s), plus Totals where applicable")
+                if result.empty: st.info("No quota report rows match the selected parameters.")
                 else: st.dataframe(result, width="stretch", hide_index=True)
-                downloads(result, "quota_summary_report", definition.report_id)
+                downloads(result, prefix+"_report", definition.report_id)
         elif definition.handler in {'flock_status', 'flock_status_producer', 'flocks_counted', 'flocks_needing_counts', 'flock_disposals', 'flock_salmonella_schedule', 'scheduled_flock_placements'}:
             handler = definition.handler
             source_flocks, source_accounts = repo.get_flocks(), repo.get_accounts()
