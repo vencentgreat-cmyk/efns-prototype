@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "3f088da34df13cbe94dbb8cbc4a9dfdad3a78699a439cf5bc1ad896c025823e3"
+      "candidate_lf_sha256": "513c60033f18fa6ce3f6d5d2cf8009a093b7babac56cee2730aa97d6a1255a22"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "439d05119012faca1a802015b3e4a08b60e1cd76d567bf9933ed878f9fadfc2e"
+      "candidate_lf_sha256": "5f9e8dc23721522aee30b8dadf766ba7d7234fea179efc92195c0b926ca51aba"
     },
     {
       "path": "app/services/revision_history.py",
@@ -208,9 +208,9 @@
     {
       "path": "data/repositories/base.py",
       "status": "MODIFIED",
-      "reason": "2026-11-02: declare bounded per-record history read interface; existing unfiltered history contract unchanged.",
+      "reason": "Bounded per-record history interface plus 2026-11-06 bounded complete production report read; existing read/write contracts unchanged.",
       "baseline_lf_sha256": "cc19f4dc9f73d814331f1a63862419d2e4e277217008e1d27ff8fcafc0a0bf09",
-      "candidate_lf_sha256": "2ddcfa80b65a652d5c321323142a1f29fc8c19fd3ca29a9c5ad82936794f3d61"
+      "candidate_lf_sha256": "15b1adae91d9c2292087411de231b9be33502fe922a6e2af2e8d604cc1e66374"
     },
     {
       "path": "data/repositories/continuity.py",
@@ -224,14 +224,14 @@
       "status": "MODIFIED",
       "reason": "Existing alias-compatible reads plus shared daily quota validation at commit, before writer, preserving rollback behavior.",
       "baseline_lf_sha256": "0c19af988ddc3596ae25e5e871740bb0b23fddcaceed72d0ec8c82c6d7532330",
-      "candidate_lf_sha256": "6515577787359a5b4d1d96c922ac5a3f2da47c79d83d1822bdae9e0aa5a2a8dd"
+      "candidate_lf_sha256": "e7228f71085de31807b64be077106ab6a4a599b29f125c542ddbad483728e924"
     },
     {
       "path": "data/repositories/snowflake.py",
       "status": "MODIFIED",
       "reason": "Existing alias-compatible reads plus shared daily quota validation and unique parent checks inside existing commit transaction; no executor/transaction implementation change.",
       "baseline_lf_sha256": "b7f42aa1c5f14fd888d8d7f3ea01f7baacf9850f9bfcb51b4ab04c184f7af5e3",
-      "candidate_lf_sha256": "9dd61907adc309a064cae820fbaa173aab4319ea5ac29930dadbe304f9cdb60b"
+      "candidate_lf_sha256": "1c65c1fed7cf2977a82fd9a99771cee951e05b403e93762ce2379750b3199667"
     },
     {
       "path": "data/validation.py",
@@ -242,6 +242,12 @@
     }
   ],
   "follow_up_runtime_changes": [
+    {
+      "path": "app/services/production_reports.py",
+      "status": "NEW",
+      "reason": "Pure Production Management family with retained source detail grain, exact integer component totals, provisional fractional rounding and nest-run inclusion, identity-safe grouping and discrepancy notes.",
+      "candidate_lf_sha256": "3c66044402be194e56b433e97c1ef262f5bbc58ca48425d9ab23b289f9adc341"
+    },
     {
       "path": "app/services/quota_reports.py",
       "status": "NEW",

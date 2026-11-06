@@ -1580,6 +1580,12 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
                 df = df.iloc[0:0]
         return df
 
+    def get_production_report_records(self, start_week: int, end_week: int) -> pd.DataFrame:
+        from app.services.production_reports import production_week
+        frame = self.get_production_records()
+        weeks = frame.apply(production_week, axis=1) if not frame.empty else pd.Series(dtype=object)
+        return frame.loc[weeks.map(lambda week: week is not None and int(start_week) <= week <= int(end_week))].copy()
+
     def get_production_summary_metrics(self) -> dict:
         pr = self._production
         ib = pd.DataFrame(self._import_batches)

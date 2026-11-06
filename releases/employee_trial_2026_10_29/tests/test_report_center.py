@@ -51,6 +51,11 @@ def test_catalog_contains_only_confirmed_and_existing_report_names():
         "Quota Leases Report",
         "Quota Leases Sorted by End Date",
         "Quota History Report",
+        "Production Management Summary",
+        "Production Management by Producer",
+        "Production Management Details",
+        "Production Management Details by Grader",
+        "Nest Run Details",
         "Salmonella Test Report",
         "Customize Report",
     }

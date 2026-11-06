@@ -20,6 +20,8 @@ from app.services.flock_current_report import build_flock_current_report
 from app.services.quota_reports import (build_quota_transactions_report,
     build_quota_leases_report, build_quota_history_report)
 from data.position_evidence import number as quota_number
+from app.services.production_reports import (build_production_report, build_nest_run_report,
+    production_grader_options, week_range, MARKETING_TYPES, AMOUNTS, NEST_FIELDS)
 from app.services.flock_age_report import build_flock_age_report, build_flock_age_quotas
 from app.services.quota_state import get_inactive_quota_transaction_ids
 from app.services.flock_reports import (
@@ -119,7 +121,61 @@ if section == "Report Library":
         st.divider(); section_intro(definition.name, definition.description)
         if st.button("Close report", icon=":material/arrow_back:", key="close_library_report"):
             st.session_state.pop("report_center_open_report", None); st.rerun()
-        if definition.handler in {'quota_transactions', 'quota_leases', 'quota_leases_by_end_date', 'quota_history'}:
+        if definition.category == 'Production' and definition.handler.startswith('production_'):
+            prefix = definition.handler
+            parameters = st.columns(3)
+            year = parameters[0].number_input('Year',min_value=1900,max_value=9999,value=halifax_today().year,step=1,key=prefix+'_year') if prefix == 'production_nest_run' else halifax_today().year
+            start = parameters[1].text_input('Start Week',value=str(year)+'01',key=prefix+'_start')
+            end = parameters[2].text_input('End Week',value=str(year)+'53',key=prefix+'_end')
+            source_accounts = repo.get_accounts()
+            types,selected_accounts,grader_key = list(MARKETING_TYPES),None,None
+            if prefix == 'production_management_grader':
+                st.selectbox('Unit of Measure',['Dozens'],key=prefix+'_unit')
+                account_options = {str(row['ACCOUNT_ID']):quota_account_label(row) for row in source_accounts.to_dict('records')}
+                selected_accounts = st.multiselect('Account',list(account_options),default=list(account_options),format_func=account_options.get,key=prefix+'_accounts')
+                selected_type = st.selectbox('Marketing Type',list(MARKETING_TYPES),index=list(MARKETING_TYPES).index('Regulated'),key=prefix+'_marketing')
+                types = [selected_type]
+                try:
+                    bounds = week_range(start,end)
+                    selector_records = repo.get_production_report_records(*bounds)
+                    options = production_grader_options(selector_records,source_accounts,*bounds)
+                except ValueError as exc:
+                    options = {}
+                    st.info(str(exc))
+                grader_key = st.selectbox('Grading Station',[None,*sorted(options,key=lambda key:(options[key],key))],format_func=lambda key:options.get(key,'Select a Grading Station'),key=prefix+'_grader')
+                if grader_key is None:
+                    st.info('Select a Grading Station to run this report.')
+                    st.session_state.pop(prefix+'_result',None)
+            elif prefix != 'production_nest_run':
+                types = st.multiselect('Type',list(MARKETING_TYPES),default=list(MARKETING_TYPES),key=prefix+'_types')
+            st.caption('In Dozens. Fractional component rounding is provisional HALF_UP per stored row. J2 repeats J and is excluded from Levy. Totals sum displayed rows; stored TOTAL differences are listed. Explicit DEV_TEST records excluded.')
+            if st.button('Run Report',type='primary',key='run_'+prefix,disabled=prefix=='production_management_grader' and grader_key is None):
+                st.session_state.pop(prefix+'_result',None)
+                try:
+                    bounds = week_range(start,end)
+                    source_records = repo.get_production_report_records(*bounds)
+                    if prefix == 'production_nest_run':
+                        result,metadata = build_nest_run_report(source_records,source_accounts,year,*bounds)
+                    else:
+                        layout = prefix.removeprefix('production_management_')
+                        result,metadata = build_production_report(source_records,source_accounts,*bounds,types,layout=layout,account_ids=selected_accounts,grader_key=grader_key)
+                    st.session_state[prefix+'_result'] = result
+                    st.session_state[prefix+'_metadata'] = metadata
+                except ValueError as exc:
+                    show_data_error(exc)
+            result = st.session_state.get(prefix+'_result')
+            if isinstance(result,pd.DataFrame):
+                metadata = st.session_state[prefix+'_metadata']
+                for header in metadata['headers']: st.markdown(header)
+                for note in metadata['notes']: st.caption(note)
+                if result.empty: st.info('No production records match the selected parameters.')
+                else:
+                    formats = {column:lambda value:'' if quota_number(value) is None else f'{quota_number(value):,}' for column in [*AMOUNTS,*NEST_FIELDS] if column in result}
+                    st.dataframe(result.style.format(formats),hide_index=True,width='stretch')
+                if can_current(Permission.EXPORT_REPORT):
+                    st.download_button('Export CSV',report_csv(user,result),prefix+'.csv','text/csv',key=prefix+'_csv')
+                    st.download_button('Export XLSX',report_xlsx(user,result),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
+        elif definition.handler in {'quota_transactions', 'quota_leases', 'quota_leases_by_end_date', 'quota_history'}:
             prefix = definition.handler
             source_accounts, source_registrations = repo.get_accounts(), repo.get_quota_registrations()
             parameters = st.columns(3)

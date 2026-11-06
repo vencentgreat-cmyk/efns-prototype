@@ -1836,6 +1836,13 @@ ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
         }
 
     def get_production_records(self, reporting_year=None, reporting_week=None, grader_number=None, barn_identity=None, egg_colour=None, account_id=None): return self._filtered("VW_PRODUCTION_SUMMARY", (("REPORTING_YEAR", reporting_year), ("REPORTING_WEEK", reporting_week), ("GRADER_NUMBER", grader_number), ("BARN_IDENTITY", barn_identity), ("EGG_COLOUR", egg_colour), ("PRODUCER_ACCOUNT_ID", account_id)), self.schema_reporting)
+    def get_production_report_records(self, start_week, end_week):
+        fields = list(dict.fromkeys(['PRODUCTION_ID', 'IMPORT_ID', 'SOURCE_FILE_ID', *PRODUCTION_COLUMNS]))
+        return self._query(
+            f"SELECT {', '.join(fields)} FROM {self._table('PRODUCTION_RECORD')} "
+            'WHERE COALESCE(TRY_TO_NUMBER(SOURCE_WEEK_CODE), REPORTING_YEAR * 100 + REPORTING_WEEK) BETWEEN %s AND %s '
+            'ORDER BY REPORTING_YEAR, REPORTING_WEEK, PRODUCTION_ID',
+            (int(start_week), int(end_week)))
     def get_efc_dates(self, date_from=None, date_to=None):
         conditions, params = [], []
         if date_from is not None: conditions.append("DAY >= %s"); params.append(date_from)

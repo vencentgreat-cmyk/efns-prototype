@@ -615,6 +615,10 @@ class BaseRepository(ABC):
         """Return aggregate summary metrics for the home page."""
         ...
 
+    def get_production_report_records(self, start_week: int, end_week: int) -> pd.DataFrame:
+        """Read complete CORE size/nest-run fields in an inclusive YYYYWW range."""
+        raise NotImplementedError
+
     @abstractmethod
     def get_efc_dates(
         self, date_from: Optional[object] = None,
