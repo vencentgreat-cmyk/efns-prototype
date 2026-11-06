@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "9e41f353914904da293326c240824c68dd822ff8b95ebe007011babb8f3dea4e"
+      "candidate_lf_sha256": "3f088da34df13cbe94dbb8cbc4a9dfdad3a78699a439cf5bc1ad896c025823e3"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "a9acb9515ad43d3c06acb9184b071eb2fca21827cf9f52edf926342ff58d02d5"
+      "candidate_lf_sha256": "439d05119012faca1a802015b3e4a08b60e1cd76d567bf9933ed878f9fadfc2e"
     },
     {
       "path": "app/services/revision_history.py",
@@ -243,6 +243,12 @@
   ],
   "follow_up_runtime_changes": [
     {
+      "path": "app/services/quota_reports.py",
+      "status": "NEW",
+      "reason": "Pure quota Transactions, Leases, End Date ordering and History projections; Active state evidence, explicit DEV_TEST exclusion, stored rows retained and confirmed signed contributions reused.",
+      "candidate_lf_sha256": "0aba7babc53d499499df32f7e19617e9420ff8ec3ac8fe7c0ff2cbd433d458f8"
+    },
+    {
       "path": "app/services/flock_reports.py",
       "status": "NEW",
       "reason": "Pure Flock Status layout with Account names and by-Producer summary, Counts, Needing Counts, actual Disposals, Salmonella schedule and Scheduled Placements projections; shared Flock Age calculations and provisional Disposal Age.",
@@ -251,8 +257,8 @@
     {
       "path": "data/confirmed_quota_position.py",
       "status": "NEW",
-      "reason": "Pure confirmed owner quota calculation with Active state evidence, latest Base/Created At ordering and active lease bounds; increasing per-type sums share the exact net eligibility loop for Quota Summary Details.",
-      "candidate_lf_sha256": "b78fe29d89fb4c236f7cd2a7f7910f55bafbfb013aca8536625766194ca24e6a"
+      "reason": "Pure confirmed owner quota calculation with Active state evidence, latest Base/Created At ordering and active lease bounds; per-type sums and per-transaction signed contributions share the exact net eligibility loop for quota reports.",
+      "candidate_lf_sha256": "1a929d786eef9d56dc8871ff10f659522b4109abe1cb31cd74c8719f45cb0566"
     },
     {
       "path": "app/services/quota_state.py",

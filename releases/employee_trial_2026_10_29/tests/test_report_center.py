@@ -47,6 +47,10 @@ def test_catalog_contains_only_confirmed_and_existing_report_names():
         "Flock Current Report by Producer",
         "Quota Summary Report",
         "Quota Summary Details",
+        "Quota Transactions Report",
+        "Quota Leases Report",
+        "Quota Leases Sorted by End Date",
+        "Quota History Report",
         "Salmonella Test Report",
         "Customize Report",
     }

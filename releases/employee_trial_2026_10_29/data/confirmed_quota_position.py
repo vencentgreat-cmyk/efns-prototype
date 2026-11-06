@@ -50,7 +50,7 @@ def confirmed_quota_position(registrations, transactions, account_id, quota_type
             reasons.append('Invalid transaction Effective Date')
         elif when is not None and effective <= when:
             eligible.append((row, kind, effective))
-    totals, selected_bases, per_type_sums = {}, {}, {}
+    totals, selected_bases, per_type_sums, transaction_adjustments = {}, {}, {}, {}
     for registration in ids:
         scoped = [(r, k, d) for r, k, d in eligible if guid(r.get('QUOTA_ID')) == registration]
         bases = [(r, d) for r, k, d in scoped if k == 'Base']
@@ -71,6 +71,7 @@ def confirmed_quota_position(registrations, transactions, account_id, quota_type
             selected_bases[registration] = selected
         total = number(0)
         for row, kind, effective in scoped:
+            transaction_adjustments[guid(row['QUOTA_TRANSACTION_ID'])] = number(0)
             if latest_day is not None and (effective < latest_day or (kind == 'Base' and guid(row['QUOTA_TRANSACTION_ID']) != selected)):
                 continue
             if kind not in SIGNS:
@@ -90,10 +91,12 @@ def confirmed_quota_position(registrations, transactions, account_id, quota_type
                 reasons.append('Missing/invalid Quota Count')
                 continue
             total += value * SIGNS[kind]
+            transaction_adjustments[guid(row['QUOTA_TRANSACTION_ID'])] = value * SIGNS[kind]
             if kind in INCREASING_TYPES:
                 per_type_sums[kind] = per_type_sums.get(kind, number(0)) + value
         totals[registration] = total
     return {'net_position': None if reasons else sum(totals.values(), number(0)),
             'per_type_sums': None if reasons else per_type_sums,
+            'transaction_adjustments': None if reasons else transaction_adjustments,
             'registration_totals': totals, 'selected_bases': selected_bases,
             'reasons': list(dict.fromkeys(reasons))}

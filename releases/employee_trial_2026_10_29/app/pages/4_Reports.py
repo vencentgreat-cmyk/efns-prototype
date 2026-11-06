@@ -17,6 +17,9 @@ from app.services.report_center import (
     quota_account_label,
 )
 from app.services.flock_current_report import build_flock_current_report
+from app.services.quota_reports import (build_quota_transactions_report,
+    build_quota_leases_report, build_quota_history_report)
+from data.position_evidence import number as quota_number
 from app.services.flock_age_report import build_flock_age_report, build_flock_age_quotas
 from app.services.quota_state import get_inactive_quota_transaction_ids
 from app.services.flock_reports import (
@@ -116,7 +119,58 @@ if section == "Report Library":
         st.divider(); section_intro(definition.name, definition.description)
         if st.button("Close report", icon=":material/arrow_back:", key="close_library_report"):
             st.session_state.pop("report_center_open_report", None); st.rerun()
-        if definition.handler in {"quota_summary", "quota_summary_details"}:
+        if definition.handler in {'quota_transactions', 'quota_leases', 'quota_leases_by_end_date', 'quota_history'}:
+            prefix = definition.handler
+            source_accounts, source_registrations = repo.get_accounts(), repo.get_quota_registrations()
+            parameters = st.columns(3)
+            if prefix == 'quota_transactions':
+                start = parameters[0].date_input('Start Date', value=halifax_today().replace(month=1,day=1), key=prefix+'_start')
+                as_of = parameters[1].date_input('End Date', value=halifax_today(), key=prefix+'_end')
+            else:
+                as_of = parameters[0].date_input('As of Date', value=halifax_today(), key=prefix+'_date')
+            selected_type = parameters[2].selectbox('Quota Type', QUOTA_TYPES, index=QUOTA_TYPES.index('Egg Production'), key=prefix+'_type')
+            account_id, account_label = None, 'All Accounts'
+            if prefix == 'quota_history':
+                account_options = {'All Accounts':None, **{quota_account_label(row)+' · '+str(row['ACCOUNT_ID']):row['ACCOUNT_ID'] for row in source_accounts.to_dict('records')}}
+                account_label = st.selectbox('Account', list(account_options), key=prefix+'_account')
+                account_id = account_options[account_label]
+                st.caption('Active owner transactions on Active Registrations; pre-Base and expired lease rows remain visible with zero Adjust. Stored rows are not split or merged.')
+            else:
+                st.caption('Active owner transactions on Active Registrations; registration dates do not limit listing. Related Account is the counterparty. Explicit DEV_TEST data is excluded.')
+            if st.button('Run Report', type='primary', key='run_'+prefix):
+                st.session_state.pop(prefix+'_result', None)
+                try:
+                    source_transactions = repo.get_quota_transactions()
+                    inactive_ids = get_inactive_quota_transaction_ids(repo, source_transactions.get('QUOTA_TRANSACTION_ID',pd.Series(dtype=object)).tolist(), user=user)
+                    args = (source_accounts, source_registrations, source_transactions, inactive_ids)
+                    if prefix == 'quota_transactions':
+                        result, metadata = build_quota_transactions_report(*args, start, as_of, selected_type)
+                    elif prefix == 'quota_history':
+                        result, metadata = build_quota_history_report(*args, as_of, selected_type, account_id, rules=load_rules())
+                    else:
+                        result, metadata = build_quota_leases_report(*args, as_of, selected_type, by_end_date=prefix == 'quota_leases_by_end_date')
+                    st.session_state[prefix+'_result'] = result
+                    st.session_state[prefix+'_metadata'] = metadata
+                    st.session_state[prefix+'_applied_account'] = account_label
+                except ValueError as exc:
+                    show_data_error(exc)
+            result = st.session_state.get(prefix+'_result')
+            if isinstance(result,pd.DataFrame):
+                metadata = st.session_state[prefix+'_metadata']
+                st.markdown(metadata['header'])
+                if prefix == 'quota_history':
+                    st.caption('Account: '+st.session_state[prefix+'_applied_account'])
+                for note in metadata['notes']:
+                    st.caption(note)
+                if result.empty:
+                    st.info('No report rows are available for the selected parameters. Review any evidence notes above.')
+                else:
+                    formats = {column:lambda value: '' if quota_number(value) is None else f'{quota_number(value):,}' for column in ('Price','Bird Count','Quota Count Adjust','Running Balance','Current Quota') if column in result}
+                    st.dataframe(result.style.format(formats), hide_index=True, width='stretch')
+                if can_current(Permission.EXPORT_REPORT):
+                    st.download_button('Export CSV',report_csv(user,result),prefix+'.csv','text/csv',key=prefix+'_csv')
+                    st.download_button('Export XLSX',report_xlsx(user,result),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
+        elif definition.handler in {"quota_summary", "quota_summary_details"}:
             prefix = definition.handler
             accounts = repo.get_accounts()
             account_options = {"All Accounts": None, **{quota_account_label(row): row['ACCOUNT_ID'] for row in accounts.to_dict('records')}}
