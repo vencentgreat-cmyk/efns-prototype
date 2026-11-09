@@ -20,6 +20,7 @@ from app.services.flock_current_report import build_flock_current_report
 from app.services.quota_reports import (build_quota_transactions_report,
     build_quota_leases_report, build_quota_history_report)
 from data.position_evidence import number as quota_number
+from data.producer_identity import text as stored_text
 from app.services.production_reports import (build_production_report, build_nest_run_report,
     production_grader_options, week_range, MARKETING_TYPES, AMOUNTS, NEST_FIELDS,
     PRODUCTION_CAPTION, production_rounding_summary, production_compact_caption, production_notes_frame)
@@ -112,7 +113,7 @@ if section == "Report Library":
             title.caption(f"{item.category} · {item.report_type} · {item.status}")
             title.write(item.description)
             title.caption("Parameters: " + ", ".join(item.parameters))
-            if action.button("Open", key=f"open_report_{item.report_id}", disabled=item.handler is None and item.input_entity is None, width="stretch"):
+            if action.button("Open" if item.status == 'Available' else 'Details', key=f"open_report_{item.report_id}", width="stretch"):
                 st.session_state.report_center_open_report = item.report_id
                 st.rerun()
 
@@ -122,7 +123,9 @@ if section == "Report Library":
         st.divider(); section_intro(definition.name, definition.description)
         if st.button("Close report", icon=":material/arrow_back:", key="close_library_report"):
             st.session_state.pop("report_center_open_report", None); st.rerun()
-        if definition.category == 'Production' and definition.handler.startswith('production_'):
+        if definition.status != 'Available':
+            st.info('This report is not included in this trial.')
+        elif definition.category == 'Production' and definition.handler.startswith('production_'):
             prefix = definition.handler
             parameters = st.columns(3)
             year = parameters[0].number_input('Year',min_value=1900,max_value=9999,value=halifax_today().year,step=1,key=prefix+'_year') if prefix == 'production_nest_run' else halifax_today().year
@@ -145,12 +148,12 @@ if section == "Report Library":
                     st.info(str(exc))
                 grader_key = st.selectbox('Grading Station',[None,*sorted(options,key=lambda key:(options[key],key))],format_func=lambda key:options.get(key,'Select a Grading Station'),key=prefix+'_grader')
                 if grader_key is None:
-                    st.info('Select a Grading Station to run this report.')
+                    st.info('Select a Grading Station to run this report.' if options else 'No Grading Station data is available for the selected weeks.')
                     st.session_state.pop(prefix+'_result',None)
             elif prefix != 'production_nest_run':
                 types = st.multiselect('Type',list(MARKETING_TYPES),default=list(MARKETING_TYPES),key=prefix+'_types')
             notes_caption = st.empty()
-            if st.button('Run Report',type='primary',key='run_'+prefix,disabled=prefix=='production_management_grader' and grader_key is None):
+            if st.button('Run Report',type='primary',key='run_'+prefix,disabled=prefix=='production_management_grader' and grader_key is None) and (prefix!='production_management_grader' or grader_key is not None):
                 st.session_state.pop(prefix+'_result',None)
                 try:
                     bounds = week_range(start,end)
@@ -310,7 +313,7 @@ if section == "Report Library":
             selected_type = params[2].selectbox('Quota Type', options, key=handler+'_type')
             account_id, account_label = None, ''
             if handler == 'flock_status_producer':
-                account_labels = {str(row['ACCOUNT_ID']): f"{row.get('ORGANIZATION_NAME', '')} · {row.get('REGISTRATION_NUMBER', '')} · {row['ACCOUNT_ID']}" for row in source_accounts.to_dict('records')}
+                account_labels = {str(row['ACCOUNT_ID']): f"{stored_text(row.get('ORGANIZATION_NAME')) or ''} · {stored_text(row.get('REGISTRATION_NUMBER')) or ''} · {row['ACCOUNT_ID']}" for row in source_accounts.to_dict('records')}
                 account_id = st.selectbox('Account', [None, *sorted(account_labels, key=lambda identity: account_labels[identity].casefold())], format_func=lambda identity: account_labels.get(identity, 'Select an Account'), key=handler+'_account')
                 account_label = account_labels.get(account_id, '')
                 if account_id is None:
@@ -433,7 +436,7 @@ if section == "Report Library":
             selected_account = None
             if definition.handler == 'flock_current_producer':
                 producer_accounts = repo.get_accounts()
-                account_labels = {str(r.ACCOUNT_ID): f'{r.ORGANIZATION_NAME} · {r.REGISTRATION_NUMBER} · {r.ACCOUNT_ID}' for r in producer_accounts.itertuples()}
+                account_labels = {str(r.ACCOUNT_ID): f"{stored_text(r.ORGANIZATION_NAME) or ''} · {stored_text(r.REGISTRATION_NUMBER) or ''} · {r.ACCOUNT_ID}" for r in producer_accounts.itertuples()}
                 selected_account = st.selectbox('Account', list(account_labels), format_func=account_labels.get, key=prefix+'_account') if account_labels else None
                 source_flocks = source_flocks.loc[source_flocks.ACCOUNT_ID.eq(selected_account)]
             kinds = sorted({str(value).strip() for value in source_flocks.get('FLOCK_QUOTA_TYPE', pd.Series(dtype=object)).dropna() if str(value).strip()})
@@ -461,6 +464,8 @@ if section == "Report Library":
                 if can_current(Permission.EXPORT_REPORT):
                     st.download_button('Export CSV', report_csv(user, result), prefix+'_report.csv', 'text/csv', key=prefix+'_csv')
                     st.download_button('Export XLSX', report_xlsx(user, result), prefix+'_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key=prefix+'_xlsx')
+        elif definition.handler == 'custom':
+            st.info('Use the Customize Report section to choose fields and run a preview.')
         elif definition.handler == "salmonella_report":
             st.info("Use the registered Salmonella Test Report page for the existing filterable report.")
             if st.button("Open Salmonella Test Report", icon=":material/lab_profile:"):
@@ -487,7 +492,7 @@ elif section == "Customize Report":
     selected_fields = [labels[label] for label in selected_labels]
 
     accounts = repo.get_accounts(); farm_locations = repo.get_farm_locations(); facilities = repo.get_facilities(); flocks = repo.get_flocks()
-    account_options = {"All": None, **{f"{r.ORGANIZATION_NAME} · {str(r.ACCOUNT_ID)[:8]}": r.ACCOUNT_ID for r in accounts.itertuples()}}
+    account_options = {"All": None, **{f"{stored_text(r.ORGANIZATION_NAME) or ''} · {str(r.ACCOUNT_ID)[:8]}": r.ACCOUNT_ID for r in accounts.itertuples()}}
     farm_location_options = {"All": None, **{f"{r.LOCATION_NAME} · {str(r.FARM_LOCATION_ID)[:8]}": r.FARM_LOCATION_ID for r in farm_locations.itertuples()}}
     facility_options = {"All": None, **{f"{r.FACILITY_NAME} · {str(r.FACILITY_ID)[:8]}": r.FACILITY_ID for r in facilities.itertuples()}}
     flock_options = {"All": None, **{f"{r.FLOCK_NUMBER} · {str(r.FLOCK_ID)[:8]}": r.FLOCK_ID for r in flocks.itertuples()}}

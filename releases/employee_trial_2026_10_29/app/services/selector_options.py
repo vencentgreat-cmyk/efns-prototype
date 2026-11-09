@@ -1,5 +1,6 @@
 """Presentation-only selector identities; never infer or change relationships."""
 from collections import defaultdict
+from data.producer_identity import text
 
 
 def unique_identity_options(items, *, reserved_labels=()):
@@ -8,7 +9,7 @@ def unique_identity_options(items, *, reserved_labels=()):
     Prefix width grows for the whole collision group, so results do not depend
     on query order, and prefixes shared by multiple IDs cannot overwrite one.
     """
-    rows=list(dict.fromkeys((str(label), str(identity)) for label,identity in items))
+    rows=list(dict.fromkeys((str(label) if text(label) is not None else '', str(identity)) for label,identity in items))
     groups=defaultdict(set)
     for label,identity in rows:
         groups[label].add(identity)

@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "3f4cad5553482e695efce05ceb31c90dc272f61dbc2da31b21510a15ff7dd1f0"
+      "candidate_lf_sha256": "4af5c928fc8cd8869bbfa7638a11ce0a8687136ed247ebf3ef8861ef7e679a48"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "bcf63f768a0f4ba8240cf27f5aef7f187a539b59dc678aded5b0fef80fdd33ef"
+      "candidate_lf_sha256": "102901d7001fba679d687f49b3b97bb77865f47f1d7d4b92eb39e4f890e41c18"
     },
     {
       "path": "app/services/revision_history.py",
@@ -133,7 +133,7 @@
       "status": "NEW",
       "reason": "R3 F5/F6: pure collision-only stable ID suffixes plus current-first, sorted historical filter labels; no relationship inference or input-policy expansion.",
       "baseline_lf_sha256": null,
-      "candidate_lf_sha256": "4aa3a61e355686248199a213453b7e7140ba4ba322fc42d734e814deb20ea762"
+      "candidate_lf_sha256": "b490004eade791a652092179494e3048c031e11eafcf7fce3ed7206de6ccafa1"
     },
     {
       "path": "config/quota_rules.json",
@@ -288,5 +288,19 @@
   "deployment_metadata_changes": {
     "snowflake.yml": "Include config/quota_rules.json. Existing target/runtime/entry/grants unchanged."
   },
-  "protected_live_modules_retained": true
+  "protected_live_modules_retained": true,
+  "trial_readiness_artifacts": [
+    {
+      "path": "tests/test_report_smoke.py",
+      "status": "NEW",
+      "reason": "Catalog-wide offline builder/UI smoke scenarios and manifest artifact verification.",
+      "candidate_lf_sha256": "8dc901aed0bf605069f7a7a26eab57c7732c3b3380a5b31ab37d2bf269827483"
+    },
+    {
+      "path": "docs/codex_reports/TRIAL_READINESS_STATIC_SCAN_20261109.md",
+      "status": "NEW",
+      "reason": "Report-only conditional NULL and empty-data risks; no source changes at these sites.",
+      "candidate_lf_sha256": "4c2da90237931521da6815a587ae414ddcf339bdfff7e4b0bbae5c4ee89183b8"
+    }
+  ]
 }
