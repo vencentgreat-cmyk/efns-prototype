@@ -105,7 +105,10 @@ def build_license_application(accounts, facilities, locations, registrations, tr
         value = clean(names.get(stored.casefold(), {}).get('ORGANIZATION_NAME'))
         return value or (stored if stored.casefold() == 'self' else '')
     def resolve_self(value):
-        return clean(account.get('ORGANIZATION_NAME')) if clean(value).casefold() == 'self' else clean(value)
+        normalized = ' '.join(clean(value).split()).casefold()
+        placeholders = {'self', 'self pullet grower', 'self grading station', 'self grader',
+                        'self spent fowl plan', 'self spent fowl plans'}
+        return clean(account.get('ORGANIZATION_NAME')) if normalized in placeholders else clean(value)
     result.fields = {
         wording.LICENSE_TYPE: clean(license_category), 'Licence renewal type': clean(license_type),
         wording.ACCOUNT_HEADERS[0]: result.missing('Account Name', account.get('ORGANIZATION_NAME')),

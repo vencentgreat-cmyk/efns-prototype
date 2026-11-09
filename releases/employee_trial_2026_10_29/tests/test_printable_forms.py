@@ -160,6 +160,57 @@ def test_license_self_relationships_use_own_organization(value,mode):
     pd.testing.assert_frame_equal(repo._accounts,original)
 
 
+LICENSE_LINK_FIELDS = (
+    ('GRADING_STATION_ACCOUNT_ID', w.RELATIONSHIP_HEADERS[0], 'Grading Station'),
+    ('SPENT_FOWL_PLANS_ACCOUNT_ID', w.RELATIONSHIP_HEADERS[1], 'Spent Fowl Plan'),
+    ('PULLET_GROWER_ACCOUNT_ID', w.RELATIONSHIP_HEADERS[2], 'Pullet Grower'),
+)
+
+
+def license_with_linked_name(column, name):
+    repo = legacy_form_repository()
+    repo._accounts = pd.concat([repo._accounts, pd.DataFrame([
+        dict(ACCOUNT_ID='linked-source', ORGANIZATION_NAME=name)
+    ])], ignore_index=True)
+    repo._accounts.loc[0, column] = 'linked-source'
+    # No alternate literal plant value: test the linked name's NULL handling.
+    if column == 'SPENT_FOWL_PLANS_ACCOUNT_ID':
+        repo._accounts.loc[0, 'SPENT_FOWL_PLANS'] = None
+    original = repo._accounts.copy(deep=True)
+    form = build_printable_form(repo, 'license_application_pdf', user=user(),
+                                registration='7173', report_date=date(2027, 1, 1))
+    pd.testing.assert_frame_equal(repo._accounts, original)
+    return form
+
+
+@pytest.mark.parametrize('column,label,missing_label', LICENSE_LINK_FIELDS)
+@pytest.mark.parametrize('name', ['Self', 'Self Pullet Grower', 'Self Grading Station',
+                                'Self Grader', 'Self Spent Fowl Plan', 'Self Spent Fowl Plans'])
+@pytest.mark.parametrize('varied_spacing_and_case', [False, True])
+def test_license_linked_self_placeholders_use_applicant_name(column,label,missing_label,name,varied_spacing_and_case):
+    if varied_spacing_and_case:
+        name = ' \t' + ' \t '.join(name.swapcase().split()) + '\n '
+    form = license_with_linked_name(column, name)
+    assert form.fields[label] == 'Maritime Pride Poultry Inc.'
+    assert missing_label not in form.missing_fields
+
+
+@pytest.mark.parametrize('column,label,missing_label', LICENSE_LINK_FIELDS)
+@pytest.mark.parametrize('name', ['Selfridge Farms', 'Self Pullet Grower Farms Ltd.'])
+def test_license_real_self_prefixed_accounts_are_not_replaced(column,label,missing_label,name):
+    form = license_with_linked_name(column, name)
+    assert form.fields[label] == name
+    assert missing_label not in form.missing_fields
+
+
+@pytest.mark.parametrize('column,label,missing_label', LICENSE_LINK_FIELDS)
+@pytest.mark.parametrize('name', [None, pd.NA, float('nan')])
+def test_license_null_linked_names_stay_blank_and_disclosed(column,label,missing_label,name):
+    form = license_with_linked_name(column, name)
+    assert form.fields[label] == ''
+    assert missing_label in form.missing_fields
+
+
 def test_nullable_fields_are_blank_and_disclosed_without_inferred_addresses():
     repo=legacy_form_repository()
     repo._accounts.loc[0,['CONTACT_NAME','CONTACT_PHONE','CONTACT_EMAIL','ADDRESS_LINE1','CITY','PROVINCE','POSTAL_CODE']]=None
