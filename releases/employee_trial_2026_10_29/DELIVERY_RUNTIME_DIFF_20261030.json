@@ -288,7 +288,7 @@
       "path": "app/services/printable_forms.py",
       "status": "NEW",
       "reason": "Pure read-only printable form projections and legacy PDF layout; confirmed quota helper reused.",
-      "candidate_lf_sha256": "c20ef3d7924ec7a4fb0258116f77ea99bbf2393f4686ee8db6e51d27ffa6c5d3"
+      "candidate_lf_sha256": "b20ff3f3ca6014a2e3a851df89eadfd6b494da1e9ebcd8c9743e11d8fb056042"
     },
     {
       "path": "app/services/printable_form_text.py",
@@ -356,43 +356,48 @@
       "path": "tests/test_printable_forms.py",
       "status": "NEW",
       "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
-      "candidate_lf_sha256": "b0796674d95c39f8ecf198b95775068d620a66a76cf936555718560ec9579af1"
+      "candidate_lf_sha256": "2379c8e1600c0069cfdd5f634c146a0a899680205058433deee25b3a2d54d996"
     },
     {
       "path": "docs/codex_reports/PRINTABLE_FORMS_20261109.md",
       "status": "NEW",
       "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
-      "candidate_lf_sha256": "8ab836fd311cd2c4cab0795535e1c4556435c9658a1e3483fb8fb583d95274db"
+      "candidate_lf_sha256": "08906d83ab54b853296c0a3f5781c5c988895e0071e576c5e483ceb5d9c07561"
     },
     {
       "path": "app/assets/efns_logo.png",
       "status": "NEW",
       "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
-      "candidate_sha256": "674ed2f97cef8249e6803749b9e6c2c7ef0874cc260ce1aef55447ed49d83b61"
+      "candidate_sha256": "674ed2f97cef8249e6803749b9e6c2c7ef0874cc260ce1aef55447ed49d83b61",
+      "candidate_lf_sha256": "7aa1ff10f2a5f710b851d4d84f1898f139cba6eba28479ed973b0333fd39331b"
     },
     {
       "path": "tests/fixtures/legacy_forms/efns_logo.png",
       "status": "NEW",
       "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
-      "candidate_sha256": "917f4b53487ef014d20ac752ebcf663c7cff836f4d1ee9b9ea10011623c78cad"
+      "candidate_sha256": "917f4b53487ef014d20ac752ebcf663c7cff836f4d1ee9b9ea10011623c78cad",
+      "candidate_lf_sha256": "199806c33230de0cc843d8fc6943a18d3e7e41e9941f4cfd6abd6abd17166771"
     },
     {
       "path": "tests/fixtures/legacy_forms/EIMSFlockPermitForm.pdf",
       "status": "NEW",
       "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
-      "candidate_sha256": "14eac4dcae037356bf359151290cc2ddf426f323bf1cbea5f027562080e67dbb"
+      "candidate_sha256": "14eac4dcae037356bf359151290cc2ddf426f323bf1cbea5f027562080e67dbb",
+      "candidate_lf_sha256": "889826c811b0aa667d45047ee2b81fedd0379628e1f9da7f93e66a3099a0f562"
     },
     {
       "path": "tests/fixtures/legacy_forms/EIMSFlockSalmonellaTestingForm.pdf",
       "status": "NEW",
       "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
-      "candidate_sha256": "e6528831b8f766bfa7a6a4f78dcde2a501f8bb8b16d1650dd088b82d63ebd49c"
+      "candidate_sha256": "e6528831b8f766bfa7a6a4f78dcde2a501f8bb8b16d1650dd088b82d63ebd49c",
+      "candidate_lf_sha256": "6d6b2cfac6585589b5be33d95677b5db50ff24601d221700d1ead15103ecd1f4"
     },
     {
       "path": "tests/fixtures/legacy_forms/EIMSLicenseApplicationForm.pdf",
       "status": "NEW",
       "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
-      "candidate_sha256": "59be6b7ef16961a8bf87ad63db4d3e2b012a695c31b57a2eb89594f9a17a5497"
+      "candidate_sha256": "59be6b7ef16961a8bf87ad63db4d3e2b012a695c31b57a2eb89594f9a17a5497",
+      "candidate_lf_sha256": "3d174ac855f2c951744363cfc5bc0911b2095e2f6a0334f50fc5cca2bcdc4db2"
     }
   ],
   "report_pdf_artifacts": [

@@ -38,7 +38,9 @@ def legacy_form_repository():
         dict(FARM_LOCATION_ID='layer-address',ACCOUNT_ID='layer',ADDRESS_1='612 Marsh Road',CITY='Annapolis Royal',PROVINCE='NS'),
         dict(FARM_LOCATION_ID='pullet-address',ACCOUNT_ID='pullet',ADDRESS_1='Jeffrey Clarke St',CITY='Aylseford',PROVINCE='NS')])
     repo._facilities = pd.DataFrame([
-        *[dict(FACILITY_ID='maritime-'+str(i),ACCOUNT_ID='maritime',FACILITY_NAME='7173 - A'+str(i),FACILITY_TYPE='Enriched',FARM_LOCATION_ID='maritime-address') for i in range(1,5)],
+        *[dict(FACILITY_ID='maritime-'+str(i),ACCOUNT_ID='maritime',FACILITY_NAME='7173 - A'+str(i),STATUS='Active',FACILITY_TYPE='Layers',HOUSING_SYSTEM='Enriched',FARM_LOCATION_ID='maritime-address') for i in range(1,5)],
+        *[dict(FACILITY_ID='excluded-'+name,ACCOUNT_ID='maritime',FACILITY_NAME='7173 - '+name,STATUS=status,FACILITY_TYPE=kind,HOUSING_SYSTEM='Excluded housing',FARM_LOCATION_ID='maritime-address')
+          for name,status,kind in [('AP1','Active','Pullets'),('AP2','Active','Pullets'),('CV1','Inactive','Layers'),('M1','Inactive','Layers'),('Org1','Inactive','Layers')]],
         dict(FACILITY_ID='layer-barn',ACCOUNT_ID='layer',FACILITY_NAME='7165 - 1',FARM_LOCATION_ID='layer-address'),
         dict(FACILITY_ID='pullet-barn',ACCOUNT_ID='pullet',FACILITY_NAME='7325 - P1',FARM_LOCATION_ID='pullet-address'),
         dict(FACILITY_ID='salmonella-barn',ACCOUNT_ID='salmonella',FACILITY_NAME='7107-Ueffing')])
@@ -77,7 +79,7 @@ def test_legacy_pdf_text_layout_and_logo(handler):
     assert not re.search(r'(?<!\w)(None|nan|NaT|<NA>)(?!\w)',content)
     expected = (w.LICENSE_TITLE+(*w.DECLARATIONS,'complaince','234,913','Maritime Pride Poultry Inc.','Pierre-David Cyr','Friday, January 1, 2027') if handler=='license_application_pdf'
         else (w.PERMIT_TITLE,*w.PERMIT_SECTIONS,'40289','30289','Centerbrook Poultry Ltd.','Jeffrey Clarke','10000','Atlantic Poultry Incorporated - NB Hatchery') if handler=='flock_permit_pdf'
-        else (*w.SALMONELLA_TITLE,w.NOTIFICATION,w.MARKET_RESTRICTION,w.FARM_GATE,w.RESULT_CLOSING,'7107','40285','7107-Ueffing','1/3/2024','12/4/2024','Negative'))
+        else (*w.SALMONELLA_TITLE,w.NOTIFICATION,w.MARKET_RESTRICTION,w.FARM_GATE,w.RESULT_CLOSING,'7107','40285','7107-Ueffing','1/3/2024','1/8/2024','12/4/2024','12/10/2024','Negative'))
     flat=' '.join(content.split())
     for value in expected:assert ' '.join(value.split()) in flat
     fills=[tuple(float(x) for x in args) for args,op in ContentStream(page.get_contents(),reader).operations if op==b'rg']
@@ -110,6 +112,52 @@ def test_missing_state_evidence_leaves_quota_unknown():
         repo._quota_transactions,'7173',date(2027,1,1),None,load_rules())
     assert form.fields['Quota']==''
     assert 'Transaction state evidence unavailable' in form.notes
+
+
+def test_7173_license_barns_only_active_layers_and_show_housing_system():
+    form=example_form('license_application_pdf')
+    assert form.tables['barns']==[
+        ['7173 - A'+str(i),'Enriched','623 Travis Rd\nAmherst\nNova Scotia'] for i in range(1,5)]
+    _,content=pdf_text(form)
+    assert 'Enriched' in content
+    for excluded in ('AP1','AP2','CV1','M1','Org1'):
+        assert '7173 - '+excluded not in content
+
+
+def test_null_housing_system_keeps_barn_and_discloses_blank(tmp_path,monkeypatch):
+    from tests.auth_support import authenticated_app
+    repo=legacy_form_repository()
+    repo._facilities.loc[repo._facilities.FACILITY_ID.eq('maritime-1'),'HOUSING_SYSTEM']=None
+    form=build_printable_form(repo,'license_application_pdf',user=user(),registration='7173',report_date=date(2027,1,1))
+    assert len(form.tables['barns'])==4
+    assert form.tables['barns'][0][1]==''
+    assert 'Housing System (Facility Type column)' in form.missing_fields
+    app=authenticated_app(ROOT/'streamlit_app.py',tmp_path,monkeypatch)
+    app.session_state['_base_repo']=repo
+    app.switch_page('app/pages/4_Reports.py').run()
+    app.button(key='open_report_license-application').click().run()
+    app.selectbox(key='print_license_application_pdf_registration').set_value('7173').run()
+    app.button(key='run_license_application_pdf').click().run()
+    assert not app.exception and not app.error
+    assert any('Housing System (Facility Type column)' in item.value for item in app.info)
+
+
+@pytest.mark.parametrize('value',['Self',' self ','sELF'])
+@pytest.mark.parametrize('mode',['literal','linked'])
+def test_license_self_relationships_use_own_organization(value,mode):
+    repo=legacy_form_repository()
+    if mode=='literal':
+        repo._accounts.loc[0,'PULLET_GROWER_ACCOUNT_ID']=value
+        repo._accounts.loc[0,'GRADING_STATION_ACCOUNT_ID']=value
+        repo._accounts.loc[0,'SPENT_FOWL_PLANS']=value
+    else:
+        repo._accounts=pd.concat([repo._accounts,pd.DataFrame([dict(ACCOUNT_ID='self-source',ORGANIZATION_NAME=value)])],ignore_index=True)
+        for column in ('PULLET_GROWER_ACCOUNT_ID','GRADING_STATION_ACCOUNT_ID','SPENT_FOWL_PLANS_ACCOUNT_ID'):
+            repo._accounts.loc[0,column]='self-source'
+    original=repo._accounts.copy(deep=True)
+    form=build_printable_form(repo,'license_application_pdf',user=user(),registration='7173',report_date=date(2027,1,1))
+    for label in w.RELATIONSHIP_HEADERS:assert form.fields[label]=='Maritime Pride Poultry Inc.'
+    pd.testing.assert_frame_equal(repo._accounts,original)
 
 
 def test_nullable_fields_are_blank_and_disclosed_without_inferred_addresses():
@@ -153,7 +201,7 @@ def test_permit_null_dates_quantities_and_owner_fields_stay_blank():
 
 def test_salmonella_null_sample_date_result_and_comments_are_blank():
     repo=legacy_form_repository()
-    repo._salmonella_tests[['TESTING_DATE','TEST_RESULT','COMMENTS']]=None
+    repo._salmonella_tests[['TESTING_DATE','TEST_RESULT','COMMENTS','DATE_RESULT_SENT','DATE_RECEIVED']]=None
     form=build_salmonella_form(repo._accounts,repo._flocks,repo._facilities,repo._salmonella_tests,'7107','40285')
     assert form.has_data and all(row[3:]==['']*4 for row in form.tables['results'])
     assert 'Sample Date' in form.missing_fields and 'Sample Result' in form.missing_fields
@@ -161,15 +209,40 @@ def test_salmonella_null_sample_date_result_and_comments_are_blank():
     assert not re.search(r'(?<!\w)(None|nan|NaT|<NA>)(?!\w)',content)
 
 
-def test_salmonella_filters_and_unconfirmed_result_date():
+def test_salmonella_filters_and_result_sent_date():
     repo=legacy_form_repository()
     form=build_salmonella_form(repo._accounts,repo._flocks,repo._facilities,repo._salmonella_tests,
         '7107','40285','Pass',date(2024,1,1),date(2024,1,31))
     assert len(form.tables['results'])==1
-    assert form.tables['results'][0][3:] == ['1/3/2024','','Negative','']
-    assert any('Date Result' in value for value in form.missing_fields)
+    assert form.tables['results'][0][3:] == ['1/3/2024','1/8/2024','Negative','']
+    assert 'Date Result' not in form.missing_fields
+    all_rows=build_salmonella_form(repo._accounts,repo._flocks,repo._facilities,repo._salmonella_tests,'7107','40285').tables['results']
+    assert [[row[3],row[4]] for row in all_rows]==[['1/3/2024','1/8/2024'],['12/4/2024','12/10/2024']]
     assert not build_salmonella_form(repo._accounts,repo._flocks,repo._facilities,repo._salmonella_tests,'7107','40285','Fail').has_data
     with pytest.raises(ValueError,match='start'):build_salmonella_form(repo._accounts,repo._flocks,repo._facilities,repo._salmonella_tests,'7107','40285','All',date(2025,1,1),date(2024,1,1))
+
+
+@pytest.mark.parametrize('sent,received,expected',[
+    ('2024-01-08','2099-01-01','1/8/2024'),
+    (None,'2023-06-17','6/17/2023'),
+    (pd.NaT,'2023-07-12','7/12/2023'),
+    (pd.NA,'2024-12-10','12/10/2024'),
+    (None,None,''),
+])
+def test_40285_result_date_sent_priority_and_null_received_fallback(sent,received,expected):
+    repo=legacy_form_repository()
+    repo._salmonella_tests=repo._salmonella_tests.iloc[:1].copy()
+    repo._salmonella_tests['DATE_RESULT_SENT']=sent
+    repo._salmonella_tests['DATE_RECEIVED']=received
+    if expected in {'6/17/2023','7/12/2023'}:
+        # Only result dates were supplied for the 2023 rows; do not invent their sample dates.
+        repo._salmonella_tests['TESTING_DATE']=None
+    form=build_salmonella_form(repo._accounts,repo._flocks,repo._facilities,repo._salmonella_tests,'7107','40285')
+    assert form.tables['results'][0][4]==expected
+    assert ('Date Result' in form.missing_fields)==(expected=='')
+    _,content=pdf_text(form)
+    if expected:assert expected in content
+    assert 'None' not in content and 'NaT' not in content and '<NA>' not in content
 
 
 def test_more_barns_paginate_without_dropping_declarations():

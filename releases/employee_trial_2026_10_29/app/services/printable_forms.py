@@ -101,7 +101,11 @@ def build_license_application(accounts, facilities, locations, registrations, tr
     position = confirmed_quota_position(registrations, transactions, account['ACCOUNT_ID'],
                                         quota_type, report_date, inactive_ids, rules)
     def linked(column):
-        return clean(names.get(clean(account.get(column)).casefold(), {}).get('ORGANIZATION_NAME'))
+        stored = clean(account.get(column))
+        value = clean(names.get(stored.casefold(), {}).get('ORGANIZATION_NAME'))
+        return value or (stored if stored.casefold() == 'self' else '')
+    def resolve_self(value):
+        return clean(account.get('ORGANIZATION_NAME')) if clean(value).casefold() == 'self' else clean(value)
     result.fields = {
         wording.LICENSE_TYPE: clean(license_category), 'Licence renewal type': clean(license_type),
         wording.ACCOUNT_HEADERS[0]: result.missing('Account Name', account.get('ORGANIZATION_NAME')),
@@ -111,9 +115,9 @@ def build_license_application(accounts, facilities, locations, registrations, tr
         wording.CONTACT_HEADERS[1]: result.missing('Phone', account.get('CONTACT_PHONE')),
         wording.CONTACT_HEADERS[2]: result.missing('Email', account.get('CONTACT_EMAIL')),
         wording.QUOTA_AS_OF: long_date(report_date), 'Quota': count_text(position['net_position']),
-        wording.RELATIONSHIP_HEADERS[0]: result.missing('Grading Station', linked('GRADING_STATION_ACCOUNT_ID')),
-        wording.RELATIONSHIP_HEADERS[1]: result.missing('Spent Fowl Plan', linked('SPENT_FOWL_PLANS_ACCOUNT_ID') or clean(account.get('SPENT_FOWL_PLANS'))),
-        wording.RELATIONSHIP_HEADERS[2]: result.missing('Pullet Grower', linked('PULLET_GROWER_ACCOUNT_ID')),
+        wording.RELATIONSHIP_HEADERS[0]: result.missing('Grading Station', resolve_self(linked('GRADING_STATION_ACCOUNT_ID'))),
+        wording.RELATIONSHIP_HEADERS[1]: result.missing('Spent Fowl Plan', resolve_self(linked('SPENT_FOWL_PLANS_ACCOUNT_ID') or clean(account.get('SPENT_FOWL_PLANS')))),
+        wording.RELATIONSHIP_HEADERS[2]: result.missing('Pullet Grower', resolve_self(linked('PULLET_GROWER_ACCOUNT_ID'))),
     }
     result.notes.extend(position['reasons'])
     if position['net_position'] is None:
@@ -122,13 +126,15 @@ def build_license_application(accounts, facilities, locations, registrations, tr
     for facility in records(facilities):
         if clean(facility.get('ACCOUNT_ID')).casefold() != clean(account['ACCOUNT_ID']).casefold():
             continue
+        if clean(facility.get('STATUS')).casefold() != 'active' or clean(facility.get('FACILITY_TYPE')).casefold() != 'layers':
+            continue
         _, location = facility_context(facility.get('FACILITY_ID'), facilities, locations)
         barns.append([result.missing('Barn Name', facility.get('FACILITY_NAME')),
-                      result.missing('Facility Type', facility.get('FACILITY_TYPE')),
+                      result.missing('Housing System (Facility Type column)', facility.get('HOUSING_SYSTEM')),
                       result.missing('Barn Address (linked Farm Location)', address(location, location=True))])
     result.tables['barns'] = sorted(barns, key=lambda row: row[0])
     if not barns:
-        result.notes.append('No barns are recorded for the selected Account.')
+        result.notes.append('No Active Layers barns are recorded for the selected Account.')
     return result
 
 
@@ -160,10 +166,12 @@ def build_salmonella_form(accounts, flocks, facilities, tests, registration, per
         if result_filter != 'All' and stored_result.casefold() not in accepted:
             continue
         facility = facility_map.get(clean(flock.get('FACILITY_ID')).casefold(), {})
-        # CORE has sent/received dates, not a confirmed laboratory result date.
+        result_date = test.get('DATE_RESULT_SENT')
+        if result_date is None or pd.isna(result_date):
+            result_date = test.get('DATE_RECEIVED')
         rows.append([clean(registration), permit_number,
                      form.missing('Facility', facility.get('FACILITY_NAME')), short_date(sampled),
-                     form.missing('Date Result (laboratory result date has no confirmed CORE source)', ''),
+                     form.missing('Date Result', short_date(result_date)),
                      form.missing('Sample Result', stored_result), clean(test.get('COMMENTS'))])
         if sampled is None:
             form.missing('Sample Date', '')
