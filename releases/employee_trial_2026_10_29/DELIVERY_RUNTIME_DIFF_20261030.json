@@ -288,7 +288,7 @@
       "path": "app/services/printable_forms.py",
       "status": "NEW",
       "reason": "Pure read-only printable form projections and legacy PDF layout; confirmed quota helper reused.",
-      "candidate_lf_sha256": "b20ff3f3ca6014a2e3a851df89eadfd6b494da1e9ebcd8c9743e11d8fb056042"
+      "candidate_lf_sha256": "67645b438834a4752db6442e65159facb3392446cf61a43eb70f2c2f58296cf9"
     },
     {
       "path": "app/services/printable_form_text.py",
@@ -356,7 +356,7 @@
       "path": "tests/test_printable_forms.py",
       "status": "NEW",
       "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
-      "candidate_lf_sha256": "2379c8e1600c0069cfdd5f634c146a0a899680205058433deee25b3a2d54d996"
+      "candidate_lf_sha256": "9b8cabe12024a6350465564978dc16da6736f418a91568db2e04d084321a93c9"
     },
     {
       "path": "docs/codex_reports/PRINTABLE_FORMS_20261109.md",

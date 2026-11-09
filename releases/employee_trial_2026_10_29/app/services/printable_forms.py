@@ -100,12 +100,16 @@ def build_license_application(accounts, facilities, locations, registrations, tr
     names = by_id(accounts, 'ACCOUNT_ID')
     position = confirmed_quota_position(registrations, transactions, account['ACCOUNT_ID'],
                                         quota_type, report_date, inactive_ids, rules)
-    def linked(column):
+    def linked(column, fallback=None):
         stored = clean(account.get(column))
-        value = clean(names.get(stored.casefold(), {}).get('ORGANIZATION_NAME'))
-        return value or (stored if stored.casefold() == 'self' else '')
+        if stored.casefold() in names:
+            return clean(names[stored.casefold()].get('ORGANIZATION_NAME'))
+        return stored if stored.casefold() == 'self' else clean(fallback)
     def resolve_self(value):
-        return clean(account.get('ORGANIZATION_NAME')) if clean(value).casefold() == 'self' else clean(value)
+        normalized = ' '.join(clean(value).split()).casefold()
+        placeholders = {'self', 'self pullet grower', 'self grading station', 'self grader',
+                        'self spent fowl plan', 'self spent fowl plans'}
+        return clean(account.get('ORGANIZATION_NAME')) if normalized in placeholders else clean(value)
     result.fields = {
         wording.LICENSE_TYPE: clean(license_category), 'Licence renewal type': clean(license_type),
         wording.ACCOUNT_HEADERS[0]: result.missing('Account Name', account.get('ORGANIZATION_NAME')),
@@ -116,7 +120,7 @@ def build_license_application(accounts, facilities, locations, registrations, tr
         wording.CONTACT_HEADERS[2]: result.missing('Email', account.get('CONTACT_EMAIL')),
         wording.QUOTA_AS_OF: long_date(report_date), 'Quota': count_text(position['net_position']),
         wording.RELATIONSHIP_HEADERS[0]: result.missing('Grading Station', resolve_self(linked('GRADING_STATION_ACCOUNT_ID'))),
-        wording.RELATIONSHIP_HEADERS[1]: result.missing('Spent Fowl Plan', resolve_self(linked('SPENT_FOWL_PLANS_ACCOUNT_ID') or clean(account.get('SPENT_FOWL_PLANS')))),
+        wording.RELATIONSHIP_HEADERS[1]: result.missing('Spent Fowl Plan', resolve_self(linked('SPENT_FOWL_PLANS_ACCOUNT_ID', account.get('SPENT_FOWL_PLANS')))),
         wording.RELATIONSHIP_HEADERS[2]: result.missing('Pullet Grower', resolve_self(linked('PULLET_GROWER_ACCOUNT_ID'))),
     }
     result.notes.extend(position['reasons'])
