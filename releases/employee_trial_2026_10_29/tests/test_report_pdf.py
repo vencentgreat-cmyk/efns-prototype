@@ -17,7 +17,7 @@ from app.services.report_center import REPORT_CATALOG,report_csv,report_xlsx
 from app.services.report_pdf import (render_report_pdf,csv_display_rows,table_layout,is_total_row,
     note_lines,MIN_FONT_SIZE,MAX_PDF_ROWS,PDFExportError,ROW_LIMIT_MESSAGE,
     QUANTITY_COLUMNS_BY_REPORT,PRODUCTION_QUANTITIES,NEST_RUN_QUANTITIES,group_quantity,pdf_display_rows)
-from app.services.report_pdf_ui import pdf_download_button,audit_pdf_export
+from app.services.report_pdf_ui import pdf_download_button,audit_pdf_export,custom_parameter_lines
 from app.services.printable_forms import FORM_HANDLERS,render_form_pdf
 from tests.test_report_smoke import smoke_repository,run_report
 from tests.test_printable_forms import example_form
@@ -206,6 +206,91 @@ def test_pdf_adapter_passes_explicit_catalog_id(monkeypatch):
     adapter.pdf_download_button(user(),pd.DataFrame({'Issuance':['34526.00']}),'Quota',[],
         'quota.pdf','quota-summary',target=FakeUI())
     assert captured==['quota-summary']
+
+
+def test_custom_pdf_friendly_subtitles_headers_and_unbroken_guid():
+    guid='421FEF51-ABCD-1234-ABCD-123456789ABC'
+    configuration={'dataset':'Accounts','selected_fields':['ACCOUNT_ID','ORGANIZATION_NAME','PROVINCE'],
+        'filters':{'province':'NS','statuses':['Active']},'sort_by':'ORGANIZATION_NAME',
+        'ascending':True,'count_records':False,'group_by':['PROVINCE'],'aggregations':{}}
+    expected=['Dataset: Accounts','Province: NS','Status: Active',
+              'Sorted by: Account Name (ascending)','Grouped by: Province']
+    assert custom_parameter_lines(configuration)==expected
+    frame=pd.DataFrame({'Account ID':[guid],'Account Name':['Example Farm'],'Province':['NS']})
+    original=frame.copy(deep=True)
+    csv_before=report_csv(user(),frame)
+    xlsx_before=report_xlsx(user(),frame)
+    _,text=read_pdf(render_report_pdf('Custom Report',expected,frame,report_id='custom-builder'))
+    subtitle=text.split('Dataset: Accounts',1)[1].split('Account ID',1)[0]
+    for line in expected:assert line in text
+    for forbidden in ('selected_fields','count_records','ascending:','[',']','ACCOUNT_ID','Fields:'):
+        assert forbidden not in subtitle
+    for header in frame.columns:assert header in text
+    assert guid in [line.strip() for line in text.splitlines()]
+    pd.testing.assert_frame_equal(frame,original)
+    assert report_csv(user(),frame)==csv_before
+    pd.testing.assert_frame_equal(pd.read_excel(BytesIO(report_xlsx(user(),frame))),
+                                  pd.read_excel(BytesIO(xlsx_before)))
+
+
+def test_custom_pdf_date_filters_and_internal_flags_are_not_parameters():
+    configuration={'dataset':'Flocks','selected_fields':['PLACEMENT_DATE'],
+        'filters':{'date_from':'2026-01-01','date_to':'2026-11-09','date_field':'PLACEMENT_DATE',
+                   'quota_type':'Egg Production','statuses':('Active','Planned'),'facility_id':None},
+        'sort_by':'PLACEMENT_DATE','ascending':False,'group_by':[], 'count_records':True}
+    assert custom_parameter_lines(configuration)==['Dataset: Flocks','Quota Type: Egg Production',
+        'Status: Active, Planned','Placement Date: 2026-01-01 to 2026-11-09',
+        'Sorted by: Placement Date (descending)']
+    assert custom_parameter_lines({'dataset':'Accounts','filters':{'province':'All','unknown':{'x':1}},
+        'sort_by':None,'group_by':[],'ascending':False,'count_records':False})==['Dataset: Accounts']
+
+
+def test_custom_pdf_identifiers_trigger_landscape_and_preserve_sparse_outlier():
+    guid='AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA'
+    frame=pd.DataFrame({header:[guid] for header in ('Account ID','Facility ID','Quota ID','Flock ID')})
+    frame['Account Name']='Example Farm'
+    frame['Province']='NS'
+    reader,text=read_pdf(render_report_pdf('Custom Report',['Dataset: Flocks'],frame,report_id='custom-builder'))
+    assert tuple(map(int,(reader.pages[0].mediabox.width,reader.pages[0].mediabox.height)))==(792,612)
+    assert [line.strip() for line in text.splitlines()].count(guid)==4
+    sparse=pd.DataFrame({'Account ID':['a']*150+[guid]+['a']*5,'Account Name':['Farm']*156})
+    _,text=read_pdf(render_report_pdf('Custom Report',[],sparse,report_id='custom-builder'))
+    assert guid in [line.strip() for line in text.splitlines()]
+
+
+def test_custom_pdf_refuses_identifiers_that_cannot_fit_landscape():
+    frame=pd.DataFrame({f'Identifier {i} ID':['A'*100] for i in range(6)})
+    with pytest.raises(PDFExportError,match='CSV or XLSX'):
+        render_report_pdf('Custom Report',[],frame,report_id='custom-builder')
+
+
+def test_custom_and_saved_pdf_use_applied_configuration(tmp_path,monkeypatch):
+    from tests.auth_support import authenticated_app
+    import app.services.report_pdf_ui as adapter
+    captured=[]
+    def capture(title,lines,frame,*args,**kwargs):
+        captured.append((list(lines),frame.copy(deep=True)))
+        return b'fixture PDF'
+    monkeypatch.setattr(adapter,'render_report_pdf',capture)
+    app=authenticated_app(ROOT/'app'/'Home.py',tmp_path,monkeypatch)
+    app.switch_page('pages/4_Reports.py').run()
+    app.radio(key='report_center_section').set_value('Customize Report').run()
+    app.selectbox(key='custom_filter_status').set_value('Active').run()
+    app.selectbox(key='custom_report_sort').set_value('Account Name').run()
+    next(button for button in app.button if button.label=='Run Report').click().run()
+    assert not app.exception and not app.error
+    expected=['Dataset: Accounts','Status: Active','Sorted by: Account Name (ascending)']
+    assert captured[-1][0]==expected
+    applied=captured[-1][1]
+    app.text_input(key='custom_report_save_name').set_value('Staff accounts').run()
+    next(button for button in app.button if button.label=='Save configuration').click().run()
+    app.selectbox(key='custom_filter_status').set_value('Inactive').run()
+    assert captured[-1][0]==expected  # Unapplied widgets must not relabel the PDF.
+    app.radio(key='report_center_section').set_value('Saved Reports').run()
+    next(button for button in app.button if button.label=='Run saved report').click().run()
+    assert not app.exception and not app.error
+    assert captured[-1][0]==expected
+    pd.testing.assert_frame_equal(captured[-1][1],applied)
 
 
 def test_forms_keep_specialized_layout_and_apply_row_guard():
