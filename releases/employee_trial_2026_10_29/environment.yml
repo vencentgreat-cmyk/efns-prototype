@@ -7,3 +7,4 @@ dependencies:
   - numpy=2.*
   - snowflake-snowpark-python
   - openpyxl
+  - reportlab=5.0.0

@@ -24,6 +24,8 @@ entities:
         dest: app/pages/
       - src: app/services/*.py
         dest: app/services/
+      - src: app/assets/*.png
+        dest: app/assets/
       - src: data/*.py
         dest: data/
       - src: data/repositories/*.py

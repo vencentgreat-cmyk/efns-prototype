@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "4af5c928fc8cd8869bbfa7638a11ce0a8687136ed247ebf3ef8861ef7e679a48"
+      "candidate_lf_sha256": "ecd6f7775dd32c03fa6cc10801d457370fce37fa542f32fbe6f4038faa2ad6af"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "102901d7001fba679d687f49b3b97bb77865f47f1d7d4b92eb39e4f890e41c18"
+      "candidate_lf_sha256": "7d08bacac53a1fe25c8d0068d7ccbe79086a3cd650438e30db940fc31c2557db"
     },
     {
       "path": "app/services/revision_history.py",
@@ -283,10 +283,46 @@
       "status": "NEW",
       "reason": "Read-only pure Flock Current report; exact mortality arithmetic and provisional inclusion; no PENDING rule changes.",
       "candidate_lf_sha256": "3a2269cf1bb8da59dfb54c4629bfc8526ea2df4363263e1aabf96b5b35ec48db"
+    },
+    {
+      "path": "app/services/printable_forms.py",
+      "status": "NEW",
+      "reason": "Pure read-only printable form projections and legacy PDF layout; confirmed quota helper reused.",
+      "candidate_lf_sha256": "e3f7110f3252dba4742c2e4393a2377947a23609a9fce35c920116e6d3547052"
+    },
+    {
+      "path": "app/services/printable_form_text.py",
+      "status": "NEW",
+      "reason": "Centralized legacy PDF wording including original spelling and header colors.",
+      "candidate_lf_sha256": "7cffa7ce01b6fa522b62f4e6740ac78ba85b65723127e0585090268041b54f00"
+    },
+    {
+      "path": "app/services/printable_form_ui.py",
+      "status": "NEW",
+      "reason": "Printable form parameters, data preview, blank-field notes and permission-checked PDF downloads.",
+      "candidate_lf_sha256": "98c960bf0fce9906ac0c6e9cc665b2e1be0ebfca30168d33587f53e9a34031c3"
+    },
+    {
+      "path": "environment.yml",
+      "status": "MODIFIED",
+      "reason": "Declare ReportLab 5.0.0 verified in the Snowflake package channel.",
+      "candidate_lf_sha256": "d3594dd4c9ef886498924ed1f516adbde7616d8b69795f4ea67295ce9826539d"
+    },
+    {
+      "path": "snowflake.yml",
+      "status": "MODIFIED",
+      "reason": "Package runtime PNG logo; no deployment/runtime/permissions change.",
+      "candidate_lf_sha256": "2d316409a17d778d02fd49ae5d7e53d24c1d44d49969430ee8f70471a03104da"
+    },
+    {
+      "path": "requirements-review.txt",
+      "status": "MODIFIED",
+      "reason": "Local ReportLab and pypdf pins for reproducible PDF tests.",
+      "candidate_lf_sha256": "f4625af957d49f6af7e4bfcbaa8b800315d0d0ab3d7f3e84cdda0d9b59a312fa"
     }
   ],
   "deployment_metadata_changes": {
-    "snowflake.yml": "Include config/quota_rules.json. Existing target/runtime/entry/grants unchanged."
+    "snowflake.yml": "Include config/quota_rules.json and runtime app/assets/*.png logo. Existing target/runtime/entry/grants unchanged."
   },
   "protected_live_modules_retained": true,
   "trial_readiness_artifacts": [
@@ -294,13 +330,57 @@
       "path": "tests/test_report_smoke.py",
       "status": "NEW",
       "reason": "Catalog-wide offline builder/UI smoke scenarios and manifest artifact verification.",
-      "candidate_lf_sha256": "8dc901aed0bf605069f7a7a26eab57c7732c3b3380a5b31ab37d2bf269827483"
+      "candidate_lf_sha256": "504f5cf6531bdd2ed98b25ff02c65e6b1a2ae829fedd063161e9daf7f69fd750"
     },
     {
       "path": "docs/codex_reports/TRIAL_READINESS_STATIC_SCAN_20261109.md",
       "status": "NEW",
       "reason": "Report-only conditional NULL and empty-data risks; no source changes at these sites.",
       "candidate_lf_sha256": "4c2da90237931521da6815a587ae414ddcf339bdfff7e4b0bbae5c4ee89183b8"
+    }
+  ],
+  "printable_form_artifacts": [
+    {
+      "path": "tests/test_printable_forms.py",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_lf_sha256": "e7b46f2e9006148061c4c0e3dc6d5d818817104d455724af66b4bf117406ff4c"
+    },
+    {
+      "path": "docs/codex_reports/PRINTABLE_FORMS_20261109.md",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_lf_sha256": "8ab836fd311cd2c4cab0795535e1c4556435c9658a1e3483fb8fb583d95274db"
+    },
+    {
+      "path": "app/assets/efns_logo.png",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_sha256": "674ed2f97cef8249e6803749b9e6c2c7ef0874cc260ce1aef55447ed49d83b61"
+    },
+    {
+      "path": "tests/fixtures/legacy_forms/efns_logo.png",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_sha256": "917f4b53487ef014d20ac752ebcf663c7cff836f4d1ee9b9ea10011623c78cad"
+    },
+    {
+      "path": "tests/fixtures/legacy_forms/EIMSFlockPermitForm.pdf",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_sha256": "14eac4dcae037356bf359151290cc2ddf426f323bf1cbea5f027562080e67dbb"
+    },
+    {
+      "path": "tests/fixtures/legacy_forms/EIMSFlockSalmonellaTestingForm.pdf",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_sha256": "e6528831b8f766bfa7a6a4f78dcde2a501f8bb8b16d1650dd088b82d63ebd49c"
+    },
+    {
+      "path": "tests/fixtures/legacy_forms/EIMSLicenseApplicationForm.pdf",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_sha256": "59be6b7ef16961a8bf87ad63db4d3e2b012a695c31b57a2eb89594f9a17a5497"
     }
   ]
 }

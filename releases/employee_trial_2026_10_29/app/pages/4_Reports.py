@@ -125,6 +125,9 @@ if section == "Report Library":
             st.session_state.pop("report_center_open_report", None); st.rerun()
         if definition.status != 'Available':
             st.info('This report is not included in this trial.')
+        elif definition.handler in {'license_application_pdf', 'flock_permit_pdf', 'salmonella_form_pdf'}:
+            from app.services.printable_form_ui import render_printable_form
+            render_printable_form(repo,user,definition.handler)
         elif definition.category == 'Production' and definition.handler.startswith('production_'):
             prefix = definition.handler
             parameters = st.columns(3)

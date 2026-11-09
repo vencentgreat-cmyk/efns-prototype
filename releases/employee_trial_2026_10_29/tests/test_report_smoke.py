@@ -14,6 +14,7 @@ from app.services.flock_reports import (build_flock_status_report,build_flock_st
     build_flock_salmonella_schedule,build_scheduled_flock_placements,build_flocks_counted_report,
     build_flocks_needing_counts_report,build_flock_disposals_report)
 from app.services.salmonella_reporting import build_salmonella_report
+from app.services.printable_forms import FORM_HANDLERS,build_printable_form,render_form_pdf
 from data.repositories.mock import MockRepository
 from data.business_time import halifax_today
 from data.quota_position import load_rules
@@ -37,7 +38,8 @@ def smoke_repository(case):
     flock.update(FLOCK_ID='flock',ACCOUNT_ID='producer',FACILITY_ID='barn',FLOCK_NUMBER='100',PERMIT_NUMBER='100',
         FLOCK_QUOTA_TYPE='Egg Production',STATUS='Active',HATCH_DATE=today-timedelta(weeks=30),
         PLACEMENT_DATE=today,EST_DISPOSAL=today+timedelta(days=365),DISPOSAL_DATE=None,BIRD_COUNT=100,BIRDS_DISPOSED=90)
-    repo._flocks=pd.DataFrame([flock,dict(flock,FLOCK_ID='disposed',FLOCK_NUMBER='101',PERMIT_NUMBER='101',DISPOSAL_DATE=today)])
+    flock['PERMIT_NUMBER']='40001'
+    repo._flocks=pd.DataFrame([flock,dict(flock,FLOCK_ID='disposed',FLOCK_NUMBER='101',PERMIT_NUMBER='40002',DISPOSAL_DATE=today)])
     repo._flock_transactions=pd.DataFrame([dict(FLOCK_TRANSACTION_ID='count',FLOCK_ID='flock',TRANSACTION_TYPE='Count',
         TRANSACTION_DATE=today,QUANTITY=100,COUNT_SOURCE_LABEL='Producer')])
     quota=repo._quota_registrations.iloc[0].to_dict()
@@ -49,7 +51,7 @@ def smoke_repository(case):
         dict(QUOTA_TRANSACTION_ID='lease',QUOTA_ID='quota',OWNER_ACCOUNT_ID='producer',RELATED_ACCOUNT_ID='grader',
             TRANSACTION_TYPE='Lease (Out)',EFFECTIVE_DATE=today,END_DATE=today+timedelta(days=30),QUOTA_COUNT=2,PRICE=None)])
     test=repo._salmonella_tests.iloc[0].to_dict()
-    test.update(SALMONELLA_TEST_ID='test',ACCOUNT_ID='producer',FLOCK_ID='flock',TESTING_DATE=today)
+    test.update(SALMONELLA_TEST_ID='test',ACCOUNT_ID='producer',FLOCK_ID='flock',PERMIT_NUMBER='40001',TESTING_DATE=today)
     repo._salmonella_tests=pd.DataFrame([test])
     from app.services.production_reports import COMPONENTS,NEST_FIELDS
     production=repo._production.iloc[0].to_dict()
@@ -91,6 +93,18 @@ def run_report(definition,repo,case):
     account=ids[0] if ids else None
     registrations,activity=repo.get_quota_registrations(),repo.get_quota_transactions()
     quotas,_count,_reasons=build_flock_age_quotas(registrations,activity,a,as_of,set(),load_rules())
+    if handler in FORM_HANDLERS:
+        selected=next(iter(a.get('REGISTRATION_NUMBER',pd.Series(dtype=object)).dropna()),None)
+        form=build_printable_form(repo,handler,user=user(),registration=selected,
+            report_date=as_of,layer_permit='40001',pullet_permits=[],
+            sample_start=start if case=='no_rows' else None,sample_end=as_of if case=='no_rows' else None)
+        from pypdf import PdfReader
+        from io import BytesIO
+        document=PdfReader(BytesIO(render_form_pdf(form)))
+        assert document.pages
+        for page in document.pages:
+            assert not re.search(r'(?<!\w)(?:None|nan|NaT|<NA>)(?!\w)',page.extract_text())
+        return form.preview
     if handler in {'quota_summary','quota_summary_details'}:
         return (build_quota_summary if handler=='quota_summary' else build_quota_summary_details)(repo,user=user(),as_of_date=as_of,quota_type='Egg Production')
     if handler.startswith('production_'):
@@ -173,6 +187,10 @@ def test_every_available_report_page_smoke(definition,case,tmp_path,monkeypatch)
                 app.session_state['_base_repo'].get_accounts(),halifax_today().year*100+1,halifax_today().year*100+53)
             if options:app.selectbox(key=prefix+'_grader').set_value(next(iter(options))).run()
         if case=='no_rows':
+            if prefix=='salmonella_form_pdf' and case!='empty':
+                app.checkbox(key='print_'+prefix+'_use_dates').check().run()
+                app.date_input(key='print_'+prefix+'_start').set_value(date(1900,1,1))
+                app.date_input(key='print_'+prefix+'_end').set_value(date(1900,1,1))
             empty_date=date(2200,1,1) if prefix in {'flock_age','flock_status','flock_status_producer',
                 'flock_current','flock_current_producer','flock_salmonella_schedule','flocks_needing_counts'} else date(1900,1,1)
             for widget in app.date_input:
@@ -181,8 +199,8 @@ def test_every_available_report_page_smoke(definition,case,tmp_path,monkeypatch)
             for widget in app.text_input:
                 if widget.key in {prefix+'_start',prefix+'_end'}:widget.set_value('190001')
             if prefix=='production_nest_run':app.number_input(key=prefix+'_year').set_value(1900)
-        run=app.button(key='run_'+prefix)
-        if not run.disabled:run.click().run()
+        run=next((button for button in app.button if button.key=='run_'+prefix),None)
+        if run is not None and not run.disabled:run.click().run()
     elif case=='no_rows':
         app.date_input(key='sal_rpt_dates').set_value((date(1900,1,1),date(1900,1,2))).run()
     assert not app.exception and not app.error

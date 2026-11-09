@@ -1,2 +1,4 @@
 # Direct dependencies and their resolved local dependency pins.
 -r requirements-lock.txt
+reportlab==5.0.0
+pypdf==7.0.0
