@@ -206,9 +206,11 @@ def deterministic_xlsx(frame: pd.DataFrame, sheet_name: str) -> bytes:
             info.external_attr = source.getinfo(name).external_attr
             content = source.read(name)
             if name == "docProps/core.xml":
+                # lxml declares xsi locally on these elements. Keep the opening
+                # tags (including namespace declarations) and replace only text.
                 content = re.sub(
-                    rb"<dcterms:(created|modified)[^>]*>.*?</dcterms:\1>",
-                    rb"<dcterms:\1 xsi:type='dcterms:W3CDTF'>2026-09-15T00:00:00Z</dcterms:\1>",
+                    rb"(<dcterms:(created|modified)\b[^>]*>).*?(</dcterms:\2>)",
+                    rb"\g<1>2026-09-15T00:00:00Z\g<3>",
                     content,
                 )
             target.writestr(info, content)
