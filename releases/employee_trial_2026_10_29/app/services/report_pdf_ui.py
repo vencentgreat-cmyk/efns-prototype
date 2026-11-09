@@ -16,7 +16,7 @@ def pdf_download_button(user,frame,title,subtitle_lines,filename,report_id,*,not
     target=target if target is not None else st
     try:
         ensure_pdf_row_limit(len(frame))
-        pdf=render_report_pdf(title,subtitle_lines,frame,notes)
+        pdf=render_report_pdf(title,subtitle_lines,frame,notes,report_id=report_id)
     except PDFExportError as exc:
         target.info(str(exc))
         target.button('Export PDF',disabled=True,key=key)

@@ -1,6 +1,7 @@
-"""Presentation-only, CSV-value-preserving SSRS-style report PDFs."""
+"""Presentation-only SSRS-style PDFs with explicit per-report quantity formats."""
 import csv
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from io import BytesIO, StringIO
 from pathlib import Path
 import re
@@ -15,6 +16,43 @@ MIN_FONT_SIZE = 7
 ROW_LIMIT_MESSAGE = 'PDF export is limited to 5,000 rows. Use CSV or XLSX for this report.'
 MISSING = re.compile(r'(?<!\w)(?:None|nan|NaT|<NA>)(?!\w)', re.IGNORECASE)
 NUMERIC = re.compile(r'^[+-]?(?:\d[\d,]*(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?%?$')
+QUANTITY = re.compile(r'^[+-]?(?:\d+(?:\.\d*)?|\.\d+|\d{1,3}(?:,\d{3})+(?:\.\d*)?)(?:[eE][+-]?\d+)?$')
+
+# Exact exported column labels, keyed by catalog report ID. Do not infer from
+# dtype or a column-name substring: years, ages, registration/permit numbers,
+# dates, percentages, phones and IDs must never receive quantity formatting.
+PRODUCTION_QUANTITIES = ('J','J2','XL','L','M','S','PW','B','C','NR','CR','OL','ON','RJ','LK','FG','FC','NonLevy','Levy','Total')
+NEST_RUN_QUANTITIES = ('NR','NR25','NR24','NR23','NR22','NR21','NR20','NR19','NR18','NR17','FG','FC')
+QUANTITY_COLUMNS_BY_REPORT = {
+    'production-management-summary': PRODUCTION_QUANTITIES,
+    'production-management-producer': PRODUCTION_QUANTITIES,
+    'production-management-details': PRODUCTION_QUANTITIES,
+    'production-management-grader': PRODUCTION_QUANTITIES,
+    'production-nest-run': NEST_RUN_QUANTITIES,
+    'quota-transactions': ('Bird Count',),
+    'quota-leases': ('Price','Bird Count'),
+    'quota-leases-by-end-date': ('Price','Bird Count'),
+    'quota-history': ('Bird Count','Quota Count Adjust','Running Balance','Current Quota'),
+    'quota-summary': ('Issuance',),
+    'quota-summary-details': ('Account Total','Quota Bird Count'),
+    'flock-status': ('Sold','Inventory','Quota','Up. Flocks'),
+    'flock-status-producer': ('Sold','Inventory','Quota','Up. Flocks'),
+    'flock-age': ('Inventory','Quota','Up. Flocks'),
+    'flock-current': ('Counted','Inventory','Up. Flocks'),
+    'flock-current-producer': ('Counted','Inventory','Up. Flocks'),
+    'flock-salmonella-schedule': ('Inventory',),
+    'scheduled-flock-placements': ('Inventory','Quota','Total Producers','Total Flocks','Total Birds'),
+    'flocks-counted': ('Quota','Birds Counted'),
+    'flocks-needing-counts': ('Bird Count',),
+    'flock-disposals': ('Quota','Placed','Disposed'),
+    'salmonella-report': ('Number of Samples',),
+    'custom-builder': ('Bird Count','Quantity','Quota Count','Price','Number of Samples','Total Received',
+        'Total Accepted','Source Total','Flock record count','Record count','Source Total known count','Source Total missing count'),
+    # These retain their specialized, already-established legacy form layouts.
+    'license-application': (),
+    'flock-permit': (),
+    'salmonella-form': (),
+}
 
 
 class PDFExportError(ValueError):
@@ -44,6 +82,35 @@ def csv_display_rows(frame):
         return []
     return [[display_text(cell) for cell in row]
             for row in csv.reader(StringIO(frame.to_csv(index=False))) ]
+
+
+def group_quantity(value):
+    """Group exact decimal text without float conversion or fractional rounding."""
+    if not QUANTITY.fullmatch(value):
+        return value
+    try:
+        number=Decimal(value.replace(',',''))
+    except InvalidOperation:
+        return value
+    if not number.is_finite():
+        return value
+    grouped=format(number,',f')
+    if number==number.to_integral_value():
+        grouped=grouped.partition('.')[0]
+    return '+'+grouped if value.startswith('+') else grouped
+
+
+def pdf_display_rows(frame,report_id=None):
+    """Change only explicitly allowlisted PDF cells; never mutate the frame."""
+    rows=csv_display_rows(frame)
+    if not rows:
+        return rows
+    allowed=QUANTITY_COLUMNS_BY_REPORT.get(report_id,())
+    positions=[index for index,column in enumerate(rows[0]) if column in allowed]
+    for row in rows[1:]:
+        for index in positions:
+            row[index]=group_quantity(row[index])
+    return rows
 
 
 def is_total_row(headers, values):
@@ -113,8 +180,8 @@ def table_layout(rows, available_width):
     return size,widths
 
 
-def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=None):
-    """Return PDF bytes for the exact export frame. No repository access."""
+def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=None, report_id=None):
+    """Render the export frame with PDF-only quantity grouping. No repository access."""
     ensure_pdf_row_limit(len(frame))
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_RIGHT
@@ -184,7 +251,7 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
         topMargin=page_height-body_top,bottomMargin=32,title=title,author='Egg Farmers of Nova Scotia')
     doc.addPageTemplates(PageTemplate(id='report',frames=[Frame(24,32,available,body_top-32,
         leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)],onPage=header))
-    rows=csv_display_rows(frame)
+    rows=pdf_display_rows(frame,report_id)
     story=[]
     if rows:
         size,widths=table_layout(rows,available)

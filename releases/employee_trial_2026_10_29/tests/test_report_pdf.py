@@ -15,7 +15,8 @@ from pypdf.generic import ContentStream
 
 from app.services.report_center import REPORT_CATALOG,report_csv,report_xlsx
 from app.services.report_pdf import (render_report_pdf,csv_display_rows,table_layout,is_total_row,
-    note_lines,MIN_FONT_SIZE,MAX_PDF_ROWS,PDFExportError,ROW_LIMIT_MESSAGE)
+    note_lines,MIN_FONT_SIZE,MAX_PDF_ROWS,PDFExportError,ROW_LIMIT_MESSAGE,
+    QUANTITY_COLUMNS_BY_REPORT,PRODUCTION_QUANTITIES,NEST_RUN_QUANTITIES,group_quantity,pdf_display_rows)
 from app.services.report_pdf_ui import pdf_download_button,audit_pdf_export
 from app.services.printable_forms import FORM_HANDLERS,render_form_pdf
 from tests.test_report_smoke import smoke_repository,run_report
@@ -48,7 +49,7 @@ def test_every_available_report_pdf(definition,case):
     original=frame.copy(deep=True)
     csv_before=report_csv(user(),frame)
     xlsx_before=report_xlsx(user(),frame)
-    reader,text=read_pdf(render_report_pdf(definition.name,[SUBTITLE],frame,generated_at=NOW))
+    reader,text=read_pdf(render_report_pdf(definition.name,[SUBTITLE],frame,generated_at=NOW,report_id=definition.report_id))
     assert reader.pages and definition.name in ' '.join(text.split())
     assert SUBTITLE in ' '.join(text.split())
     assert not re.search(r'(?<!\w)(None|nan|NaT|<NA>)(?!\w)',text)
@@ -120,8 +121,91 @@ def test_production_week_codes_and_totals_do_not_wrap_or_round():
     from app.services.production_reports import build_production_report
     records,accounts,_=mock_fixture('summary')
     frame,metadata=build_production_report(records,accounts,202601,202602)
-    _,text=read_pdf(render_report_pdf('Production',metadata['headers'],frame))
-    assert '202601' in text and '202602' in text and '1288762' in text
+    _,text=read_pdf(render_report_pdf('Production',metadata['headers'],frame,report_id='production-management-summary'))
+    assert '202601' in text and '202602' in text and '1,288,762' in text
+
+
+@pytest.mark.parametrize('value,expected',[
+    ('34526','34,526'),('34526.00','34,526'),('34526.0','34,526'),
+    ('1027985.0000','1,027,985'),('1234.5000','1,234.5000'),
+    ('-34526.00','-34,526'),('-1234.5000','-1,234.5000'),('+34526.00','+34,526'),
+    ('0.00','0'),('-0.00','-0'),('.1250','0.1250'),('1.23E-5','0.0000123'),
+    ('1E6','1,000,000'),('1,027,985.00','1,027,985'),('', ''),('—','—'),
+    ('12,34','12,34'),('12.50%','12.50%'),('2026-11-09','2026-11-09'),
+    ('123456789012345678901234567890.12345678901234567890',
+     '123,456,789,012,345,678,901,234,567,890.12345678901234567890'),
+])
+def test_quantity_grouping_rules_without_rounding(value,expected):
+    assert group_quantity(value)==expected
+
+
+@pytest.mark.parametrize('definition',AVAILABLE,ids=lambda r:r.report_id)
+def test_explicit_allowlist_per_report_and_identifier_columns_unchanged(definition):
+    allowed=QUANTITY_COLUMNS_BY_REPORT[definition.report_id]
+    ungrouped={'Reg No':'07173','Registration Number':'07173','Permit No':'000040285',
+        'Flock Number':'000040285','Week':'202601','Year':'2026','Flock Age':'1000',
+        'Disposal Age':'1000','Start Date Age':'1000','End Date Age':'1000','Age':'1000',
+        'Transaction Date':'20261109','Account ID':'1234567890','Util.':'102.53%',
+        'Phone':'9028956341','Not Allowlisted':'34526.00'}
+    frame=pd.DataFrame([{**ungrouped,**{label:'34526.00' for label in allowed}}])
+    original=csv_display_rows(frame)
+    grouped=pdf_display_rows(frame,definition.report_id)
+    assert grouped[0]==original[0]
+    for index,label in enumerate(grouped[0]):
+        assert grouped[1][index]==('34,526' if label in allowed else original[1][index])
+
+
+def test_allowlist_catalog_and_actual_report_columns():
+    from app.services.report_center import CUSTOM_DATASETS,FLOCK_RECORD_COUNT_LABEL
+    from app.services.production_reports import AMOUNTS,NEST_FIELDS
+    assert set(QUANTITY_COLUMNS_BY_REPORT)=={r.report_id for r in AVAILABLE}
+    assert PRODUCTION_QUANTITIES==tuple(AMOUNTS)
+    assert NEST_RUN_QUANTITIES==tuple(NEST_FIELDS)
+    for definition in AVAILABLE:
+        allowed=set(QUANTITY_COLUMNS_BY_REPORT[definition.report_id])
+        if definition.report_id=='custom-builder':
+            labels={f.label for _,_,fields in CUSTOM_DATASETS.values() for f in fields}
+            labels.update({FLOCK_RECORD_COUNT_LABEL,'Record count','Source Total known count','Source Total missing count'})
+            assert allowed<=labels
+        elif definition.handler not in FORM_HANDLERS:
+            source=run_report(definition,smoke_repository('normal'),'normal')
+            frame=source[0] if isinstance(source,tuple) else source
+            assert allowed<=set(frame.columns),(definition.report_id,allowed-set(frame.columns))
+        else:
+            assert not allowed  # Preserve specialized legacy form formatting.
+
+
+def test_grouped_detail_and_total_pdf_keeps_csv_xlsx_and_source_unchanged():
+    row={'Reg No':'07173','Account':'Farm','Permit No':'000040285','Counted':Decimal('34526.00'),
+         'Inventory':Decimal('1027985.1250'),'Up. Flocks':Decimal('-1234.00'),'Util.':'102.53%','Flock Age':'1000'}
+    frame=pd.DataFrame([row,dict(row,Account='Account Total',**{'Reg No':'—','Permit No':'—'})])
+    original=frame.copy(deep=True)
+    csv_before=report_csv(user(),frame)
+    xlsx_before=pd.read_excel(BytesIO(report_xlsx(user(),frame)))
+    _,text=read_pdf(render_report_pdf('Flock Current Report',[SUBTITLE],frame,report_id='flock-current'))
+    for value in ('34,526','1,027,985.1250','-1,234'):
+        assert text.count(value)==2
+    for value in ('07173','000040285','102.53%','1000'):assert value in text
+    assert '40,285' not in text and '2,026' not in text
+    pd.testing.assert_frame_equal(frame,original)
+    assert report_csv(user(),frame)==csv_before
+    pd.testing.assert_frame_equal(pd.read_excel(BytesIO(report_xlsx(user(),frame))),xlsx_before)
+
+
+def test_unknown_report_and_missing_context_never_infer_quantities():
+    frame=pd.DataFrame({'Inventory':['34526.00'],'Permit No':['000040285']})
+    assert pdf_display_rows(frame)==csv_display_rows(frame)
+    assert pdf_display_rows(frame,'unregistered-report')==csv_display_rows(frame)
+
+
+def test_pdf_adapter_passes_explicit_catalog_id(monkeypatch):
+    import app.services.report_pdf_ui as adapter
+    captured=[]
+    def render(*args,**kwargs):captured.append(kwargs['report_id']);return b'fixture'
+    monkeypatch.setattr(adapter,'render_report_pdf',render)
+    adapter.pdf_download_button(user(),pd.DataFrame({'Issuance':['34526.00']}),'Quota',[],
+        'quota.pdf','quota-summary',target=FakeUI())
+    assert captured==['quota-summary']
 
 
 def test_forms_keep_specialized_layout_and_apply_row_guard():
