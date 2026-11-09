@@ -1,0 +1,18 @@
+{
+  "schemas": {
+    "APP": 1,
+    "CORE": 15,
+    "RAW": 10,
+    "SECURITY": 1
+  },
+  "tables": 27,
+  "views": 4,
+  "table_columns": 440,
+  "view_columns": 80,
+  "PK": 27,
+  "FK": 39,
+  "UNIQUE": 6,
+  "NOT_NULL_table_fields": 138,
+  "CHECK": 1,
+  "identifying_FK": 1
+}

@@ -16,6 +16,8 @@ entities:
     artifacts:
       - streamlit_app.py
       - environment.yml
+      - src: .streamlit/config.toml
+        dest: .streamlit/config.toml
       - src: app/*.py
         dest: app/
       - src: app/pages/*.py
@@ -34,6 +36,10 @@ entities:
         dest: config/eims_migration_mapping_v2.json
       - src: config/eims_migration_mapping_v3.json
         dest: config/eims_migration_mapping_v3.json
+      - src: config/eims_migration_mapping_v3_disposal_r1.json
+        dest: config/eims_migration_mapping_v3_disposal_r1.json
+      - src: config/source_provenance.json
+        dest: config/source_provenance.json
     grants:
       - privilege: USAGE
         role: EFNS_DEV_ADMIN

@@ -1,0 +1,186 @@
+﻿path,line,symbol,evidence
+app\pages\4_Reports.py,36,"def audit(action: str, report_id: str, details=None):",E05 local source; compare snapshot before claiming deployed
+app\pages\4_Reports.py,40,"def downloads(frame: pd.DataFrame, stem: str, report_id: str):",E05 local source; compare snapshot before claiming deployed
+app\pages\8_Quota_Transactions.py,50,def transaction_title(record):,E05 local source; compare snapshot before claiming deployed
+app\pages\8_Quota_Transactions.py,54,def related_transaction_options(current_id=None):,E05 local source; compare snapshot before claiming deployed
+app\security.py,96,class UserValidationError(Exception):,E05 local source; compare snapshot before claiming deployed
+app\security.py,114,class AuditEvent:,E05 local source; compare snapshot before claiming deployed
+app\security.py,170,def validate_internal_email(email: str) -> str:,E05 local source; compare snapshot before claiming deployed
+app\security.py,177,def validate_password(password: str) -> None:,E05 local source; compare snapshot before claiming deployed
+app\security.py,279,"def list_audit(self, actor: User, limit: int = 1000) -> list[AuditEvent]: ...",E05 local source; compare snapshot before claiming deployed
+app\security.py,565,def _insert_audit(,E05 local source; compare snapshot before claiming deployed
+app\security.py,582,"def list_audit(self, actor: User, limit: int = 1000) -> list[AuditEvent]:",E05 local source; compare snapshot before claiming deployed
+app\services\authorized_repository.py,84,"def _authorized_upsert(self, name, method):",E05 local source; compare snapshot before claiming deployed
+app\services\authorized_repository.py,111,"def _authorized_import(self, name, method):",E05 local source; compare snapshot before claiming deployed
+app\services\report_builder.py,249,def _prepare_quota_transactions(,E05 local source; compare snapshot before claiming deployed
+app\services\report_builder.py,284,def build_report(,E05 local source; compare snapshot before claiming deployed
+app\services\report_center.py,17,class ReportDefinition:,E05 local source; compare snapshot before claiming deployed
+app\services\report_center.py,104,"def visible_catalog(user: User) -> tuple[ReportDefinition, ...]:",E05 local source; compare snapshot before claiming deployed
+app\services\report_center.py,108,def report_definition(report_id: str) -> ReportDefinition:,E05 local source; compare snapshot before claiming deployed
+app\services\report_center.py,164,def build_custom_report(,E05 local source; compare snapshot before claiming deployed
+app\services\report_center.py,233,"def report_csv(user: User, frame: pd.DataFrame) -> bytes:",E05 local source; compare snapshot before claiming deployed
+app\services\report_center.py,238,"def report_xlsx(user: User, frame: pd.DataFrame, sheet_name=""EFNS Report"") -> bytes:",E05 local source; compare snapshot before claiming deployed
+app\services\report_relationships.py,14,"def report_relationships(repo, frame: pd.DataFrame, entity: str) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+app\services\salmonella_reporting.py,11,"def build_salmonella_report(repo: BaseRepository, **filters) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+app\snowflake_security.py,223,def _insert_audit(,E05 local source; compare snapshot before claiming deployed
+app\snowflake_security.py,256,"def list_audit(self, actor: User, limit: int = 1000) -> list[AuditEvent]:",E05 local source; compare snapshot before claiming deployed
+data\connection.py,183,"def _validated_rows(sql: str, rows: ParamRows, marker: str) -> list[tuple[object, ...]]:",E05 local source; compare snapshot before claiming deployed
+data\connection.py,285,"def transaction(self) -> Iterator[""SqlExecutor""]: ...",E05 local source; compare snapshot before claiming deployed
+data\connection.py,427,"def transaction(self) -> Iterator[""ConnectorExecutor""]:",E05 local source; compare snapshot before claiming deployed
+data\connection.py,615,"def transaction(self) -> Iterator[""SnowparkExecutor""]:",E05 local source; compare snapshot before claiming deployed
+data\connection.py,731,def transaction(self):,E05 local source; compare snapshot before claiming deployed
+data\flock_quota_import.py,68,class WorkbookImportError(ValueError):,E05 local source; compare snapshot before claiming deployed
+data\flock_quota_import.py,160,class ValidatedRow:,E05 local source; compare snapshot before claiming deployed
+data\flock_quota_import.py,184,class ValidationReport:,E05 local source; compare snapshot before claiming deployed
+data\flock_quota_import.py,204,def record_rows(self) -> list[ValidatedRow]:,E05 local source; compare snapshot before claiming deployed
+data\flock_quota_import.py,208,def can_import(self) -> bool:,E05 local source; compare snapshot before claiming deployed
+data\flock_quota_import.py,314,"def _frame_matches(frame: pd.DataFrame, column: str, value: Any) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\flock_quota_import.py,321,def _one_match(,E05 local source; compare snapshot before claiming deployed
+data\flock_quota_import.py,368,"def validate_flock_quota_batch(parsed: ParsedBatch, repo) -> ValidationReport:",E05 local source; compare snapshot before claiming deployed
+data\historical_corrections.py,129,"def _correction_id(batch_id: str, raw_row_id: str) -> str:",E05 local source; compare snapshot before claiming deployed
+data\importing.py,65,def normalize_eims_records(raw: pd.DataFrame) -> pd.DataFrame:,E05 local source; compare snapshot before claiming deployed
+data\importing.py,110,"def validate_eims_records(raw: pd.DataFrame) -> tuple[list[str], list[str]]:",E05 local source; compare snapshot before claiming deployed
+data\importing.py,146,def build_raw_rows(,E05 local source; compare snapshot before claiming deployed
+data\migration.py,38,class MigrationSourceFile:,E05 local source; compare snapshot before claiming deployed
+data\migration.py,44,class MigrationAnalysis:,E05 local source; compare snapshot before claiming deployed
+data\migration.py,81,def _source_file(value) -> MigrationSourceFile:,E05 local source; compare snapshot before claiming deployed
+data\migration.py,103,"def migration_stage_path(batch_id: str, filename: str) -> str:",E05 local source; compare snapshot before claiming deployed
+data\migration.py,109,def migration_stage_prefix(batch_id: str) -> str:,E05 local source; compare snapshot before claiming deployed
+data\migration.py,115,"def _read_frame(source: MigrationSourceFile, spec: dict) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\migration.py,193,"def parse_reporting_period(value) -> tuple[int, int] | None:",E05 local source; compare snapshot before claiming deployed
+data\migration.py,215,"def _source_value(raw: dict, spec: dict, field: str, source_row: int):",E05 local source; compare snapshot before claiming deployed
+data\migration.py,257,def normalize_migration_row(,E05 local source; compare snapshot before claiming deployed
+data\migration.py,283,"def analyze_migration_files(files: Iterable, mapping: dict | None = None) -> MigrationAnalysis:",E05 local source; compare snapshot before claiming deployed
+data\migration_identity.py,16,"def scoped_raw_rows(batch_id, rows, *, allow_unassigned=False):",E05 local source; compare snapshot before claiming deployed
+data\migration_identity.py,36,"def validate_correction_sources(batch_id, correction_rows, raw_rows):",E05 local source; compare snapshot before claiming deployed
+data\operational_flock_quota_import.py,91,class OperationalImportError(ValueError):,E05 local source; compare snapshot before claiming deployed
+data\operational_flock_quota_import.py,122,class OperationalReport:,E05 local source; compare snapshot before claiming deployed
+data\operational_flock_quota_import.py,151,"def raw_rows(self) -> list[dict[str, Any]]:",E05 local source; compare snapshot before claiming deployed
+data\operational_flock_quota_import.py,299,"def _match(frame: pd.DataFrame, columns: Iterable[str], value: Any) -> tuple[dict[str, Any] | None, bool]:",E05 local source; compare snapshot before claiming deployed
+data\operational_flock_quota_import.py,357,def _validate_row(,E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,63,class MigrationDataError(RepositoryError):,E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,87,"def migration_commit_failure_details(error: Exception) -> tuple[str, str, str]:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,127,"def upsert_account(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,161,"def upsert_farm_location(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,180,"def upsert_facility(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,200,"def upsert_facility_detail(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,224,"def upsert_flock(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,236,def get_flock_transactions(,E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,243,"def upsert_flock_transaction(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,247,"def delete_flock_transaction(self, transaction_id: str) -> bool:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,267,"def upsert_quota_registration(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,275,def get_quota_transactions(,E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,287,"def get_quota_transaction(self, transaction_id: str) -> Optional[dict]:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,299,"def upsert_quota_transaction(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,303,"def delete_quota_transaction(self, transaction_id: str) -> bool:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,337,"def upsert_salmonella_test(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,354,"def create_import_batch(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,359,def get_import_batches(self) -> pd.DataFrame:,E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,363,"def find_import_by_hash(self, file_hash: str) -> Optional[dict]:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,368,def import_production_bundle(,E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,379,def import_flock_quota_batch(,E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,389,def import_operational_flock_quota_batch(,E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,399,"def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,404,"def get_raw_rows(self, import_id: str) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,411,"def find_migration_by_hash(self, package_hash: str) -> Optional[dict]:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,415,def get_migration_batches(self) -> pd.DataFrame:,E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,419,"def get_migration_raw_rows(self, batch_id: str) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,423,"def get_migration_reconciliation(self, batch_id: str) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,428,"def get_migration_commit_errors(self, batch_id: str) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,433,"def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,437,"def prepare_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,441,"def get_migration_retry_status(self, batch_id: str) -> dict:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,446,"def repair_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,451,"def commit_migration_batch(self, batch_id: str) -> dict:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,470,"def cleanup_synthetic_migration(self, batch_id: str) -> bool:",E05 local source; compare snapshot before claiming deployed
+data\repositories\base.py,475,"def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,99,"def _upsert_frame(self, attribute: str, key: str, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,169,"def upsert_account(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,257,"def upsert_farm_location(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,282,"def upsert_facility(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,309,"def upsert_facility_detail(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,349,"def upsert_flock(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,373,"def get_flock_transactions(self, flock_id: Optional[str] = None, account_id=None, transaction_type=None, date_from=None, date_to=None) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,387,"def upsert_flock_transaction(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,394,"def delete_flock_transaction(self, transaction_id: str) -> bool:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,441,"def upsert_quota_registration(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,459,def get_quota_transactions(,E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,491,"def upsert_quota_transaction(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,528,"def get_quota_transaction(self, transaction_id: str) -> Optional[dict]:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,534,"def delete_quota_transaction(self, transaction_id: str) -> bool:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,604,"def upsert_salmonella_test(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,627,"def create_import_batch(self, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,640,def get_import_batches(self) -> pd.DataFrame:,E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,643,"def find_import_by_hash(self, file_hash: str) -> Optional[dict]:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,649,def import_production_bundle(,E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,673,def import_flock_quota_batch(,E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,781,def import_operational_flock_quota_batch(,E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,884,"def insert_raw_rows(self, import_id: str, rows: list[dict]) -> int:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,895,"def get_raw_rows(self, import_id: str) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,899,"def find_migration_by_hash(self, package_hash: str) -> Optional[dict]:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,902,def get_migration_batches(self) -> pd.DataFrame:,E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,905,"def get_migration_raw_rows(self, batch_id: str) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,908,"def get_migration_reconciliation(self, batch_id: str) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,914,"def get_migration_commit_errors(self, batch_id: str) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,926,"def stage_migration_file(self, batch_id: str, filename: str, content: bytes) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,931,"def prepare_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,982,"def get_migration_retry_status(self, batch_id: str) -> dict:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,1085,"def repair_migration_batch(self, batch: dict, files: list[dict], raw_rows: list[dict]) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,1211,"def commit_migration_batch(self, batch_id: str) -> dict:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,1420,"def cleanup_synthetic_migration(self, batch_id: str) -> bool:",E05 local source; compare snapshot before claiming deployed
+data\repositories\mock.py,1425,"def insert_production_records(self, records: pd.DataFrame, import_id: str) -> int:",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,143,def normalize_migration_identifier_bind(value) -> str | None:,E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,227,def transaction(self):,E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,300,def _upsert_with_executor(,E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,419,"def _upsert(self, table: str, record: dict) -> str:",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,475,"def upsert_account(self, record):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,521,"def upsert_farm_location(self, record):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,528,"def upsert_facility(self, record): return self._upsert(""FACILITY"", record)",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,538,"def upsert_facility_detail(self, record): return self._upsert(""FACILITY_DETAIL"", record)",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,543,"def upsert_flock(self, record):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,548,"def delete_flock(self, value): return self._delete(""FLOCK"", ""FLOCK_ID"", value, ((""FLOCK_TRANSACTION"", ""FLOCK_ID""), (""SALMONELLA_TEST"", ""FLOCK_ID""), (""PRODUCTION_RECORD"", ""FLOCK_ID"")))",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,550,"def get_flock_transactions(self, flock_id=None, account_id=None, transaction_type=None, date_from=None, date_to=None):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,558,"def upsert_flock_transaction(self, record):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,563,"def delete_flock_transaction(self, value): return self._delete(""FLOCK_TRANSACTION"", ""FLOCK_TRANSACTION_ID"", value)",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,573,"def upsert_quota_registration(self, record):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,578,"def delete_quota_registration(self, value): return self._delete(""QUOTA_REGISTRATION"", ""QUOTA_ID"", value, ((""QUOTA_TRANSACTION"", ""QUOTA_ID""), (""FLOCK"", ""QUOTA_ID"")))",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,580,"def get_quota_transactions(self, account_id=None, quota_id=None, quota_type=None, transaction_type=None, date_from=None, date_to=None):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,589,"def upsert_quota_transaction(self, record):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,597,"def get_quota_transaction(self, value): return self._one(""QUOTA_TRANSACTION"", ""QUOTA_TRANSACTION_ID"", value)",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,623,"def delete_quota_transaction(self, value): return self._delete(""QUOTA_TRANSACTION"", ""QUOTA_TRANSACTION_ID"", value, ((""QUOTA_TRANSACTION"", ""RELATED_TRANSACTION_ID""),))",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,642,"def upsert_salmonella_test(self, record):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,650,"def _insert_batch(self, executor, import_id, record):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,657,"def create_import_batch(self, record):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,661,"def get_import_batches(self): return self._filtered(""IMPORT_BATCH"", (), self.schema_raw)",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,662,"def find_import_by_hash(self, file_hash): return self._one(""IMPORT_BATCH"", ""FILE_HASH"", file_hash, self.schema_raw) if file_hash else None",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,664,"def _insert_raw(self, executor, import_id, rows):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,668,"def insert_raw_rows(self, import_id, rows):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,670,"def get_raw_rows(self, import_id): return self._query(f""SELECT * FROM {self._table('IMPORT_RAW_ROW', self.schema_raw)} WHERE IMPORT_ID = %s ORDER BY SOURCE_ROW_NUMBER"", (import_id,))",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,672,"def find_migration_by_hash(self, package_hash):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,675,def get_migration_batches(self):,E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,678,"def get_migration_raw_rows(self, batch_id):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,684,"def get_migration_reconciliation(self, batch_id):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,691,"def get_migration_commit_errors(self, batch_id):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,700,"def stage_migration_file(self, batch_id, filename, content):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,706,"def prepare_migration_batch(self, batch, files, raw_rows):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,799,"def _migration_retry_status(self, batch_id, executor=None):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,956,"def get_migration_retry_status(self, batch_id):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,959,"def repair_migration_batch(self, batch, files, raw_rows):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,1174,"def _migration_entity_records(cls, rows, entity, spec):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,1193,"def _insert_migration_core(self, tx, table, records, schema=None):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,1216,"def commit_migration_batch(self, batch_id):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,1437,"def cleanup_synthetic_migration(self, batch_id):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,1442,"def _insert_production(self, executor, records, import_id):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,1465,"def insert_production_records(self, records, import_id):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,1468,"def import_production_bundle(self, batch, raw_rows, records, allow_duplicate=False):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,1482,"def import_flock_quota_batch(self, batch, quota_records, flock_records):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,1614,"def import_operational_flock_quota_batch(self, batch, records_by_entity, raw_rows):",E05 local source; compare snapshot before claiming deployed
+data\repositories\snowflake.py,1731,"def get_production_records(self, reporting_year=None, reporting_week=None, grader_number=None, barn_identity=None, egg_colour=None, account_id=None): return self._filtered(""VW_PRODUCTION_SUMMARY"", ((""REPORTING_YEAR"", reporting_year), (""REPORTING_WEEK"", reporting_week), (""GRADER_NUMBER"", grader_number), (""BARN_IDENTITY"", barn_identity), (""EGG_COLOUR"", egg_colour), (""PRODUCER_ACCOUNT_ID"", account_id)), self.schema_reporting)",E05 local source; compare snapshot before claiming deployed
+data\synthetic.py,302,"def generate_flock_transactions(flocks: pd.DataFrame, seed: int = 42) -> pd.DataFrame:",E05 local source; compare snapshot before claiming deployed
+data\synthetic.py,354,def generate_quota_transactions(,E05 local source; compare snapshot before claiming deployed
+data\validation.py,33,"def parse_optional_coordinate(value, field: str) -> float | None:",E05 local source; compare snapshot before claiming deployed
+data\validation.py,52,"def validate_farm_location(repo, record: dict) -> list[str]:",E05 local source; compare snapshot before claiming deployed
+data\validation.py,118,"def validate_flock(repo: ""BaseRepository"", record: dict) -> list[str]:",E05 local source; compare snapshot before claiming deployed
+data\validation.py,169,"def validate_quota_registration(repo: ""BaseRepository"", record: dict) -> list[str]:",E05 local source; compare snapshot before claiming deployed
+data\validation.py,185,"def validate_quota_transaction(repo: ""BaseRepository"", record: dict) -> list[str]:",E05 local source; compare snapshot before claiming deployed
+data\validation.py,205,"def validate_salmonella_test(repo: ""BaseRepository"", record: dict) -> list[str]:",E05 local source; compare snapshot before claiming deployed

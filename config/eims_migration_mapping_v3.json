@@ -109,7 +109,7 @@
     },
     "QUOTA_REGISTRATION": {
       "filename": "new_quota.csv", "id_field": "QUOTA_ID",
-      "required": ["QUOTA_ID", "REGISTRATION_NUMBER", "ACCOUNT_ID", "QUOTA_TYPE"], "natural_key": [],
+      "required": ["QUOTA_ID", "ACCOUNT_ID", "QUOTA_TYPE"], "natural_key": [],
       "field_map": {
         "QUOTA_ID": "new_quotaid", "REGISTRATION_NUMBER": "efc_eimsregisterid", "ACCOUNT_ID": "new_account",
         "QUOTA_NAME": "new_name", "QUOTA_TYPE": "efc_quotatype_displayname", "STATUS": "statuscode_displayname",
@@ -175,6 +175,7 @@
     },
     "SALMONELLA_TEST": {
       "filename": "new_flocksalmonellatesting.csv", "id_field": "SALMONELLA_TEST_ID",
+      "allow_account_mismatch": true,
       "required": ["SALMONELLA_TEST_ID", "FLOCK_ID", "ACCOUNT_ID", "PERMIT_NUMBER", "TESTING_DATE"],
       "natural_key": [],
       "field_map": {
@@ -234,6 +235,10 @@
       "constants": {"SOURCE_TYPE": "EIMS_MIGRATION", "MATCH_STATUS": "CONFIRMED"},
       "row_number_fields": ["SOURCE_ROW_NUMBER"],
       "period_fields": {"REPORTING_YEAR": "year", "REPORTING_WEEK": "week"},
+      "numeric_rules": {
+        "REPORTING_YEAR": {"min": 1900, "max": 2100},
+        "REPORTING_WEEK": {"min": 1, "max": 53}
+      },
       "foreign_keys": {
         "PRODUCER_ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"], "GRADER_ACCOUNT_ID": ["ACCOUNT", "ACCOUNT_ID"]
       }

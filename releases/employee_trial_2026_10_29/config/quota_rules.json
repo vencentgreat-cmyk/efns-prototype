@@ -1,0 +1,44 @@
+{
+  "status": "CONFIRMED",
+  "type_sign": {
+    "Base": 1,
+    "Adjustment": 1,
+    "Global Adjustment": 1,
+    "Purchase": 1,
+    "Sale": -1,
+    "Lease (In)": 1,
+    "Lease (Out)": -1,
+    "Terminate Quota": 0
+  },
+  "excluded_types": [
+    "National Allocation",
+    "Provincial Allocation"
+  ],
+  "lease_active_rule": "EFFECTIVE_DATE<=as_of<=END_DATE",
+  "terminate_policy": "ZERO_EFFECT_CLOSE_REGISTRATION",
+  "units_compatible": false,
+  "confirmed_by": "Yuxin Yang / validated against legacy Flock Age report 2026-11-05",
+  "confirmed_on": "2026-11-05",
+  "evidence": ["User validation: all 24 Egg Production quota bird counts total 1,027,985 as of 2026-11-05; no database query run in this task"],
+  "confirmed_calculation": "data.confirmed_quota_position.confirmed_quota_position",
+  "base_tiebreaker": "CREATED_AT_DESC",
+  "no_active_base_policy": "SUM_ALL_ELIGIBLE_ACTIVE_TRANSACTIONS",
+  "allow_empty_lease_end_date": true,
+  "transaction_state_source": "RAW.MIGRATION_RAW_ROW.RAW_DATA:STATECODE_DISPLAYNAME; absent RAW row is Active",
+  "flock_stock": {
+    "status": "PENDING",
+    "type_sign": {
+      "Delivery": 1,
+      "Removal": -1,
+      "Sale": -1
+    },
+    "count_source_priority": null,
+    "lifecycle_rule": null,
+    "confirmed_by": null,
+    "confirmed_on": null,
+    "evidence": []
+  },
+  "base_policy": "LATEST_SNAPSHOT_PER_REGISTRATION",
+  "confirmed_facts_source": "User-provided old-system UI and read-only findings, 2026-10-30; no query run in this task",
+  "global_adjustment_meaning": "Positive province-wide increase applied to producers; historical 2004-2012, later entered as Adjustment"
+}

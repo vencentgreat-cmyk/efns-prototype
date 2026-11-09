@@ -112,6 +112,54 @@ def test_missing_database_parent_rejects_row_clearly():
     assert "Account was not found" in " ".join(report.rejected_rows[0].messages)
 
 
+def test_account_export_is_reported_as_unsupported_account_data():
+    repo = MockRepository()
+    upload = csv_upload("account.csv", [{
+        "accountid": str(uuid.uuid4()), "name": "Synthetic account",
+        "address1_city": "Synthetic city", "statuscode_displayname": "Active",
+    }])
+
+    report = analyze_operational_files([upload], "Auto-detect", repo)
+
+    assert report.files[0].entity is None
+    assert report.files[0].unsupported_entity == "ACCOUNT"
+    assert report.files[0].errors == ["Unsupported entity: Account data."]
+    assert len(report.unsupported_rows) == 1
+    assert not report.rejected_rows
+    assert not any(report.records_by_entity.values())
+
+
+def test_salmonella_export_is_never_auto_detected_as_flock():
+    repo = MockRepository()
+    upload = csv_upload("new_flocksalmonellatesting.csv", [{
+        "new_flocksalmonellatestingid": str(uuid.uuid4()),
+        "new_permitnumberid": str(uuid.uuid4()),
+        "new_testingdate": "2026-09-01", "new_setestresult": "Negative",
+        "efc_salmonellaid": "TEST-1",
+    }])
+
+    report = analyze_operational_files([upload], "Auto-detect", repo)
+
+    assert report.files[0].entity is None
+    assert report.files[0].unsupported_entity == "SALMONELLA_TEST"
+    assert report.files[0].errors == ["Unsupported entity: Salmonella Tests."]
+    assert len(report.unsupported_rows) == 1
+    assert not report.rejected_rows
+    assert not report.records_by_entity["FLOCK"]
+
+
+def test_account_id_reference_does_not_make_a_flock_file_unsupported_account_data():
+    repo = MockRepository()
+    row = flock_row(repo, "ACCOUNT-ID-REFERENCE")
+    row["ACCOUNT_ID"] = row.pop("Account")
+
+    report = analyze_operational_files([csv_upload("flock.csv", [row])], "Auto-detect", repo)
+
+    assert report.files[0].entity == "FLOCK"
+    assert report.files[0].unsupported_entity is None
+    assert len(report.ready_rows) == 1
+
+
 def test_validation_only_does_not_write_to_repository():
     repo = MockRepository()
     before = (len(repo.get_import_batches()), len(repo.get_quota_registrations()), len(repo.get_raw_rows("none")))

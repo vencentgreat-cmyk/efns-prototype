@@ -12,6 +12,9 @@ from __future__ import annotations
 import pandas as pd
 
 from data.repositories import BaseRepository
+from app.services.report_relationships import report_relationships
+from data.producer_identity import production_identities
+from data.source_scope import scope_production
 
 
 REPORT_FIELDS = {
@@ -37,6 +40,8 @@ REPORT_FIELDS = {
         ("FAX", "Fax", "FAX"),
     ],
     "Facility": [
+        ("FACILITY_ACCOUNT", "Facility Account", "FACILITY_ACCOUNT_NAME"),
+        ("FACILITY_ACCOUNT_ID", "Facility Account ID", "FACILITY_ACCOUNT_ID"),
         ("FACILITY_NAME", "Facility Name", "FACILITY_NAME"),
         ("FACILITY_TYPE", "Facility Type", "FACILITY_TYPE"),
         ("FACILITY_STATUS", "Facility Status", "STATUS_FAC"),
@@ -44,6 +49,8 @@ REPORT_FIELDS = {
         ("CLOSURE_DATE", "Closure Date", "CLOSURE_DATE"),
     ],
     "Flock": [
+        ("FLOCK_ACCOUNT", "Flock Account", "FLOCK_ACCOUNT_NAME"),
+        ("FLOCK_ACCOUNT_ID", "Flock Account ID", "FLOCK_ACCOUNT_ID"),
         ("FLOCK_NUMBER", "Flock Number", "FLOCK_NUMBER"),
         ("BIRD_COUNT", "Bird Count", "BIRD_COUNT"),
         ("PLACEMENT_DATE", "Placement Date", "PLACEMENT_DATE"),
@@ -51,9 +58,10 @@ REPORT_FIELDS = {
         ("EGG_COLOUR", "Egg Colour", "EGG_COLOUR_FLOCK"),
         (
             "EST_PROD_COMPLETION",
-            "Est. Completion",
-            "EST_PROD_COMPLETION",
+            "Estimated Disposal Date",
+            "EST_DISPOSAL",
         ),
+        ("DISPOSAL_DATE", "Actual Disposal Date", "DISPOSAL_DATE"),
         ("DISPOSAL_METHOD", "Disposal Method", "DISPOSAL_METHOD"),
         ("FLOCK_STATUS", "Flock Status", "STATUS_FLOCK"),
     ],
@@ -158,6 +166,18 @@ REPORT_FIELDS = {
         ("INVOICE_NUMBER", "Invoice Number", "INVOICE_NUMBER"),
     ],
     "Production": [
+        ("SOURCE_SCOPE", "Source scope", "SOURCE_SCOPE"),
+        ("PRODUCER_IDENTITY_LABEL", "Producer identity", "PRODUCER_IDENTITY_LABEL"),
+        ("PRODUCER_IDENTITY_KEY", "Producer identity key", "PRODUCER_IDENTITY_KEY"),
+        ("PRODUCER_IDENTITY_STATUS", "Producer identity status", "PRODUCER_IDENTITY_STATUS"),
+        ("SOURCE_TOTAL", "Source Total", "TOTAL"),
+        ("PRODUCTION_FACILITY_ID", "Production Facility ID", "FACILITY_ID"),
+        ("FLOCK_FACILITY_ID", "Flock Facility ID", "FLOCK_FACILITY_ID"),
+        ("REPORT_FACILITY_ID", "Report Facility ID", "REPORT_FACILITY_ID"),
+        ("FACILITY_SOURCE", "Facility Source", "REPORT_FACILITY_SOURCE"),
+        ("FACILITY_REFERENCE_COMPARISON", "Facility Reference Comparison", "FACILITY_REFERENCE_DIFFERENCE"),
+        ("PRODUCER_ACCOUNT", "Producer Account", "PRODUCER_ACCOUNT_NAME"),
+        ("PRODUCER_ACCOUNT_ID", "Producer Account ID", "PRODUCER_ACCOUNT_ID"),
         ("PRODUCER_NUMBER", "Producer Number", "PRODUCER_NUMBER"),
         ("GRADER_NUMBER", "Grader Number", "GRADER_NUMBER"),
         ("BARN_IDENTITY", "Barn Identity", "BARN_IDENTITY"),
@@ -270,6 +290,7 @@ def _prepare_quota_transactions(
 def build_report(
     repo: BaseRepository,
     selected_keys: list[str],
+    source_scope='All DEV records (mixed sources)',
 ) -> pd.DataFrame:
     """Build a provisional joined report from selected field keys."""
 
@@ -317,7 +338,7 @@ def build_report(
     prod = None
 
     if has_production:
-        prod = repo.get_production_records().rename(
+        prod = scope_production(repo.get_production_records(),source_scope).rename(
             columns={
                 "EGG_COLOUR": "EGG_COLOUR_PROD",
             }
@@ -333,19 +354,7 @@ def build_report(
             }
         )
 
-        df = df.merge(
-            flocks,
-            on=["FLOCK_ID", "ACCOUNT_ID"],
-            how="left",
-            suffixes=("_TEST", "_FLOCK"),
-        )
-
-        if has_facility:
-            df = df.merge(
-                facilities,
-                on=["ACCOUNT_ID", "FACILITY_ID"],
-                how="left",
-            )
+        df = report_relationships(repo, df, "SALMONELLA_TEST")
 
         if has_account:
             df = df.merge(
@@ -386,65 +395,19 @@ def build_report(
                 how="left",
             )
 
-    # Production joined through Flock.
-    elif has_production and (
-        has_account
-        or has_facility
-        or has_flock
-    ):
-        hierarchy = flocks.copy()
-
-        if has_facility:
-            hierarchy = hierarchy.merge(
-                facilities,
-                on=["ACCOUNT_ID", "FACILITY_ID"],
-                how="left",
-                suffixes=("_FLOCK", "_FAC"),
-            )
-
-            hierarchy["FACILITY_NAME"] = (
-                hierarchy["FACILITY_NAME"].fillna("Unassigned")
-            )
-
-            hierarchy["STATUS_FAC"] = (
-                hierarchy["STATUS_FAC"].fillna("Unassigned")
-            )
-
-        if has_account:
-            hierarchy = hierarchy.merge(
-                accounts,
-                on="ACCOUNT_ID",
-                how="left",
-                suffixes=("_HIER", "_ACCT"),
-            )
-
-        df = prod.merge(
-            hierarchy,
-            on="FLOCK_ID",
-            how="left",
-        )
-
     elif has_production:
-        df = prod.copy()
+        df = report_relationships(repo, prod, "PRODUCTION_RECORD")
+        df = production_identities(df)
+        if has_account:
+            # Generic Account fields on a production report always refer to
+            # the recorded producer, never the Flock or Facility Account.
+            if "PRODUCER_ACCOUNT_ID" not in df:
+                df["PRODUCER_ACCOUNT_ID"] = None
+            df = df.merge(accounts.rename(columns={"ACCOUNT_ID": "PRODUCER_ACCOUNT_ID"}),
+                          on="PRODUCER_ACCOUNT_ID", how="left", validate="many_to_one")
 
     elif has_flock:
-        df = flocks.copy()
-
-        if has_facility:
-            df = df.merge(
-                facilities,
-                on=["ACCOUNT_ID", "FACILITY_ID"],
-                how="left",
-                suffixes=("_FLOCK", "_FAC"),
-            )
-
-            df["FACILITY_NAME"] = (
-                df["FACILITY_NAME"].fillna("Unassigned")
-            )
-
-            df["STATUS_FAC"] = (
-                df["STATUS_FAC"].fillna("Unassigned")
-            )
+        df = report_relationships(repo, flocks, "FLOCK")
 
         if has_account:
             df = df.merge(
@@ -455,7 +418,7 @@ def build_report(
             )
 
     elif has_facility:
-        df = facilities.copy()
+        df = report_relationships(repo, facilities, "FACILITY")
 
         if has_account:
             df = df.merge(

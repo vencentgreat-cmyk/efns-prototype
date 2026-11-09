@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import uuid
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
@@ -14,6 +16,9 @@ from data.constants import EGG_COLOURS, FLOCK_QUOTA_TYPES, FLOCK_STATUSES, UNASS
 from data.repositories import get_repository
 from data.repositories.base import RepositoryError
 from data.validation import validate_flock
+from data.repositories.continuity import changed_attributes
+from data.producer_identity import text
+from data.repositories.snowflake import normalize_numeric_bind
 
 
 require_operational_page()
@@ -139,9 +144,9 @@ else:
                 account_label = left.selectbox("Account *", account_labels, index=option_index(account_labels, label_for_id(account_options, current_account)), key="flock_form_account")
                 account_id = account_options[account_label]
                 related_facilities = repo.get_facilities(account_id=account_id)
-                facility_options = {row.FACILITY_NAME: row.FACILITY_ID for row in related_facilities.itertuples()}
+                facility_options = {**{row.FACILITY_NAME: row.FACILITY_ID for row in related_facilities.itertuples()}, UNASSIGNED_LABEL: None}
                 facility_labels = list(facility_options)
-                facility_label = left.selectbox("Facility *", facility_labels, index=option_index(facility_labels, label_for_id(facility_options, current.get("FACILITY_ID"))), key="flock_form_facility")
+                facility_label = left.selectbox("Facility *", facility_labels, index=0 if not view.record_id else option_index(facility_labels, label_for_id(facility_options, current.get("FACILITY_ID"),UNASSIGNED_LABEL)), key="flock_form_facility")
                 facility_id = facility_options.get(facility_label)
                 detail_options = {UNASSIGNED_LABEL: None, **{row.DETAIL_NAME: row.FACILITY_DETAIL_ID for row in repo.get_facility_details(facility_id).itertuples()}}
                 detail_label = left.selectbox("Facility Detail", list(detail_options), index=option_index(list(detail_options), label_for_id(detail_options, current.get("FACILITY_DETAIL_ID"), UNASSIGNED_LABEL)), key="flock_form_detail")
@@ -156,24 +161,47 @@ else:
                 hatch_date = right.date_input("Hatch Date *", value=current.get("HATCH_DATE") or dt.date.today(), key="flock_form_hatch")
             with lifecycle:
                 left, right = st.columns(2)
-                bird_count = left.number_input("Bird Count *", min_value=0, value=int(current.get("BIRD_COUNT") or 0), key="flock_form_birds")
+                bird_count_input = left.text_input("Bird Count *",value=text(current.get("BIRD_COUNT")) or "",key="flock_form_birds_text") if view.record_id else None
+                bird_count = left.number_input("Bird Count *", min_value=0, value=0,key="flock_form_birds") if not view.record_id else None
                 egg_colour = left.selectbox("Egg Colour", EGG_COLOURS, index=option_index(list(EGG_COLOURS), current.get("EGG_COLOUR")), key="flock_form_colour")
                 permit_date = left.date_input("Permit Date", value=current.get("PERMIT_DATE"), key="flock_form_permit_date")
                 ordered_date = left.date_input("Date Ordered", value=current.get("DATE_ORDERED"), key="flock_form_ordered")
                 placement_date = left.date_input("Placement Date", value=current.get("PLACEMENT_DATE"), key="flock_form_placement")
                 estimated_disposal = right.date_input("Estimated Disposal Date", value=current.get("EST_DISPOSAL"), key="flock_form_est_disposal")
                 disposal_date = right.date_input("Disposal Date", value=current.get("DISPOSAL_DATE"), key="flock_form_disposal")
-                birds_disposed = right.number_input("Birds Disposed", min_value=0, value=int(current.get("BIRDS_DISPOSED") or 0), key="flock_form_disposed")
+                birds_disposed_input = right.text_input("Birds Disposed",value=text(current.get("BIRDS_DISPOSED")) or "",key="flock_form_disposed_text")
                 bird_strain = right.text_input("Bird Strain", value=str(current.get("BIRD_STRAIN") or ""), key="flock_form_strain")
                 comments = st.text_area("Comments", value=str(current.get("COMMENTS") or ""), key="flock_form_comments")
+            if view.record_id:
+                revision_reason = st.text_input("Reason for correction *",key="flock_form_revision_reason")
+                st.session_state.setdefault("flock_form_revision_request",uuid.uuid4().hex)
+            else:
+                initial_confirmed = st.checkbox('Record an evidence-confirmed initial Facility and placement time',key='flock_form_initial_confirmed')
+                initial_time = st.time_input('Confirmed initial placement time (Atlantic / Halifax)',value=dt.time(12),key='flock_form_initial_time')
+                initial_reason = st.text_input('Evidence for initial position',key='flock_form_initial_reason')
+                st.session_state.setdefault('flock_form_initial_request',uuid.uuid4().hex)
         if action == "save":
+            try:
+                if view.record_id: bird_count = normalize_numeric_bind(bird_count_input,"BIRD_COUNT",1,integer=True)
+                birds_disposed = normalize_numeric_bind(birds_disposed_input,"BIRDS_DISPOSED",1,integer=True)
+            except RepositoryError as exc:
+                show_data_error(exc)
+                st.stop()
             record = {"FLOCK_ID": view.record_id, "FLOCK_NUMBER": flock_number.strip(), "ACCOUNT_ID": account_id, "FACILITY_ID": facility_id, "FACILITY_DETAIL_ID": detail_options[detail_label], "QUOTA_ID": quota_options[quota_label], "FLOCK_QUOTA_TYPE": quota_type, "STATUS": status, "CREATE_DELIVERY_TRANSACTION": create_delivery, "PERMIT_NUMBER": permit_number.strip(), "PERMIT_DATE": permit_date, "HATCH_DATE": hatch_date, "DATE_ORDERED": ordered_date, "BIRD_COUNT": bird_count, "EGG_COLOUR": egg_colour, "BIRD_STRAIN": bird_strain or None, "PLACEMENT_DATE": placement_date, "EST_DISPOSAL": estimated_disposal, "DISPOSAL_DATE": disposal_date, "BIRDS_DISPOSED": birds_disposed, "COMMENTS": comments or None}
             if not view.record_id: record.pop("FLOCK_ID")
             else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
-            errors = validate_flock(repo, record)
+            errors = validate_flock(repo, record) if not view.record_id else []
             if errors:
                 for error in errors: st.error(error)
             else:
                 try:
-                    saved_id = repo.upsert_flock(record); clear_widget_prefix("flock_form_"); open_view("detail", saved_id)
+                    if view.record_id:
+                        repo.check_flock_reference_change(record)
+                        changes = changed_attributes(current,record)
+                        saved_id = repo.revise_record("FLOCK",view.record_id,changes,revision_reason,st.session_state.flock_form_revision_request,expected_updated_at=st.session_state.get(expected_key)) if changes else view.record_id
+                    elif initial_confirmed:
+                        if not placement_date or not initial_reason.strip(): raise RepositoryError('Confirmed initial position requires placement date, time and evidence.')
+                        saved_id = repo.create_flock_with_initial_position(record,dt.datetime.combine(placement_date,initial_time,ZoneInfo('America/Halifax')),initial_reason,st.session_state.flock_form_initial_request)
+                    else: saved_id = repo.upsert_flock(record)
+                    clear_widget_prefix("flock_form_"); open_view("detail", saved_id)
                 except (ValueError, RepositoryError) as exc: show_data_error(exc)

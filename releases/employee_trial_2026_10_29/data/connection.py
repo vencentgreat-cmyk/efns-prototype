@@ -1,0 +1,854 @@
+"""Snowflake runtime discovery and parameter-bound SQL execution.
+
+The repository writes SQL using the connector ``%s`` placeholder. Executors
+adapt it to the runtime they own; Snowpark uses qmark binding while the Python
+connector keeps ``%s``. Runtime discovery is lazy so selecting Snowflake mode
+does not contact a real account until a repository operation is requested.
+"""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from contextlib import contextmanager
+from dataclasses import dataclass
+import os
+import io
+from pathlib import Path
+import re
+import tempfile
+import threading
+from typing import Callable, Iterable, Iterator, Sequence
+from weakref import WeakKeyDictionary
+
+import pandas as pd
+
+from data.repositories.base import (
+    RepositoryConfigurationError,
+    RepositoryConnectionError,
+    RepositoryError,
+    RepositoryOperationError,
+)
+
+
+Params = Sequence[object] | None
+ParamRows = Iterable[Sequence[object]]
+
+
+_SQL_OPERATION = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|MERGE|BEGIN|COMMIT|ROLLBACK)\b", re.IGNORECASE)
+_SQL_ENTITY = re.compile(
+    r"\b(?:FROM|INTO|UPDATE|MERGE\s+INTO)\s+([A-Za-z_][A-Za-z0-9_$.]*)",
+    re.IGNORECASE,
+)
+_BULK_INSERT_SELECT = re.compile(
+    r"^(\s*INSERT\s+INTO\s+.+?\))\s+(SELECT\s+.+?)(\s*;?\s*)$",
+    re.IGNORECASE | re.DOTALL,
+)
+_SAFE_REFERENCE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+
+class _SessionExecutionState:
+    """Coordinate all SQL and transaction ownership for one Snowpark session."""
+
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.transaction_owner: int | None = None
+        self.transaction_depth = 0
+
+
+_SESSION_STATES_LOCK = threading.Lock()
+_SESSION_STATES: WeakKeyDictionary = WeakKeyDictionary()
+_SESSION_STATES_BY_ID: dict[int, _SessionExecutionState] = {}
+
+
+def _snowpark_connection_resource(session):
+    """Resolve the connector resource that owns Snowflake transaction state."""
+    connection = getattr(session, "connection", None)
+    if connection is not None:
+        return connection
+    server_connection = getattr(session, "_conn", None)
+    connector_connection = getattr(server_connection, "_conn", None)
+    if connector_connection is not None:
+        return connector_connection
+    return server_connection if server_connection is not None else session
+
+
+def _session_execution_state(session) -> _SessionExecutionState:
+    """Return the shared guard for every executor using one connection."""
+    resource = _snowpark_connection_resource(session)
+    with _SESSION_STATES_LOCK:
+        try:
+            state = _SESSION_STATES.get(resource)
+            if state is None:
+                state = _SessionExecutionState()
+                _SESSION_STATES[resource] = state
+            return state
+        except TypeError:
+            # Some third-party session wrappers cannot be weak-referenced.
+            return _SESSION_STATES_BY_ID.setdefault(id(resource), _SessionExecutionState())
+
+
+def _note_cleanup_failure(primary: Exception, operation: str) -> None:
+    if hasattr(primary, "add_note"):
+        primary.add_note(f"Snowflake {operation} also failed; the original operation error is preserved.")
+
+
+def _safe_reference(value) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if _SAFE_REFERENCE.fullmatch(text) else None
+
+
+def _operation_context(sql: str) -> tuple[str, str]:
+    operation_match = _SQL_OPERATION.search(sql or "")
+    entity_match = _SQL_ENTITY.search(sql or "")
+    operation = operation_match.group(1).upper() if operation_match else "SQL"
+    entity = entity_match.group(1).split(".")[-1].upper() if entity_match else "TRANSACTION"
+    return operation, entity
+
+
+def _operation_error(exc: Exception, sql: str, cursor=None) -> RepositoryOperationError:
+    operation, entity = _operation_context(sql)
+    query_id = next(
+        (
+            _safe_reference(getattr(source, attribute, None))
+            for source in (exc, cursor)
+            for attribute in ("query_id", "sfqid")
+            if _safe_reference(getattr(source, attribute, None))
+        ),
+        None,
+    )
+    error_code = next(
+        (
+            _safe_reference(getattr(exc, attribute, None))
+            for attribute in ("errno", "sql_error_code")
+            if _safe_reference(getattr(exc, attribute, None))
+        ),
+        None,
+    )
+    sql_state = next(
+        (
+            _safe_reference(getattr(exc, attribute, None))
+            for attribute in ("sqlstate", "sql_state")
+            if _safe_reference(getattr(exc, attribute, None))
+        ),
+        None,
+    )
+    return RepositoryOperationError(
+        operation,
+        entity,
+        query_id=query_id,
+        error_code=error_code,
+        sql_state=sql_state,
+        error_type=type(exc).__name__,
+    )
+
+
+def _rewrite_placeholders(sql: str, source: str, target: str | None = None) -> tuple[str, int]:
+    """Rewrite/count bind markers outside quoted SQL literals.
+
+    This intentionally small scanner understands Snowflake's single-quoted
+    string literals and double-quoted identifiers, including doubled quote
+    escapes. Bind-looking text inside either form is left untouched.
+    """
+    output: list[str] = []
+    count = 0
+    index = 0
+    quote: str | None = None
+    while index < len(sql):
+        char = sql[index]
+        if quote:
+            output.append(char)
+            if char == quote:
+                if index + 1 < len(sql) and sql[index + 1] == quote:
+                    output.append(sql[index + 1])
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            output.append(char)
+            index += 1
+            continue
+        if sql.startswith(source, index):
+            output.append(source if target is None else target)
+            count += 1
+            index += len(source)
+            continue
+        output.append(char)
+        index += 1
+    return "".join(output), count
+
+
+def _validated_rows(sql: str, rows: ParamRows, marker: str) -> list[tuple[object, ...]]:
+    """Materialize a row iterable once and validate its bind shape."""
+    try:
+        values = [tuple(row) for row in rows]
+    except TypeError as exc:
+        raise RepositoryError("Bulk write rows must each be a sequence of bound values.") from exc
+    if not values:
+        return []
+    _, placeholder_count = _rewrite_placeholders(sql, marker)
+    row_length = len(values[0])
+    if any(len(row) != row_length for row in values):
+        raise RepositoryError("Bulk write rows must all contain the same number of values.")
+    if row_length != placeholder_count:
+        raise RepositoryError(
+            f"Bulk write row length ({row_length}) does not match the SQL bind count ({placeholder_count})."
+        )
+    return values
+
+
+@dataclass(frozen=True)
+class SnowflakeSettings:
+    connection_name: str | None
+    account: str | None
+    user: str | None
+    password: str | None
+    authenticator: str | None
+    private_key_file: str | None
+    private_key_file_pwd: str | None
+    warehouse: str | None
+    database: str
+    role: str | None
+
+    @classmethod
+    def from_env(cls) -> "SnowflakeSettings":
+        value = lambda name: os.getenv(name) or None
+        return cls(
+            connection_name=value("SNOWFLAKE_CONNECTION_NAME"),
+            account=value("SNOWFLAKE_ACCOUNT"),
+            user=value("SNOWFLAKE_USER"),
+            password=value("SNOWFLAKE_PASSWORD"),
+            authenticator=value("SNOWFLAKE_AUTHENTICATOR"),
+            private_key_file=value("SNOWFLAKE_PRIVATE_KEY_FILE"),
+            private_key_file_pwd=value("SNOWFLAKE_PRIVATE_KEY_FILE_PWD"),
+            warehouse=value("SNOWFLAKE_WAREHOUSE"),
+            database=value("SNOWFLAKE_DATABASE") or "EFNS_DEV",
+            role=value("SNOWFLAKE_ROLE"),
+        )
+
+    def connector_kwargs(self) -> dict:
+        if self.connection_name:
+            return {"connection_name": self.connection_name, "autocommit": False}
+        if not self.account or not self.user:
+            raise RepositoryConfigurationError(
+                "Snowflake is not configured. Set a connection name or provide account and user settings."
+            )
+        credentials = bool(self.password or self.private_key_file or self.authenticator)
+        if not credentials:
+            raise RepositoryConfigurationError(
+                "Snowflake authentication is not configured. Use SSO, key-pair authentication, or an optional development password."
+            )
+        values = {
+            "account": self.account,
+            "user": self.user,
+            "password": self.password,
+            "authenticator": self.authenticator,
+            "private_key_file": self.private_key_file,
+            "private_key_file_pwd": self.private_key_file_pwd,
+            "warehouse": self.warehouse,
+            "database": self.database,
+            "role": self.role,
+            "autocommit": False,
+        }
+        return {key: value for key, value in values.items() if value is not None}
+
+    @property
+    def configured(self) -> bool:
+        if self.connection_name:
+            return True
+        return bool(self.account and self.user and (self.password or self.private_key_file or self.authenticator))
+
+
+class SqlExecutor(ABC):
+    """Small execution contract shared by connector and Snowpark runtimes."""
+
+    runtime_name = "Unknown"
+
+    def _commit_result(self):
+        try:self.commit()
+        except Exception as exc:
+            raise RepositoryError('COMMIT outcome is unknown. Do not save again or start a new request. Preserve the request/record ID and verify its receipt and current record using a separate read-only connection. '+str(exc)) from exc
+
+    @contextmanager
+    def intake_transaction(self):
+        """Bound app serialization waits, restoring the session's exact scope."""
+        lock=getattr(self,'_operation_lock',None)
+        if lock is None:lock=self._execution_state.lock
+        if not lock.acquire(timeout=30):
+            raise RepositoryError('System busy: no write transaction started within 30 seconds. Reload before trying again.')
+        changed=False
+        settings_owner=getattr(self,'_execution_state',self)
+        try:
+            if getattr(settings_owner,'transaction_depth',getattr(self,'_transaction_depth',0)):
+                raise RepositoryError('Cannot enter an intake transaction inside an ordinary transaction. Finish or roll back the outer transaction first; no session settings changed.')
+            if getattr(settings_owner,'_intake_settings_broken',False):
+                raise RepositoryError('Session settings could not be restored previously. Reconnect before saving.')
+            metadata=self.query("SHOW PARAMETERS LIKE 'LOCK_TIMEOUT' IN SESSION")
+            rows=[{str(k).upper():v for k,v in row.items()} for row in metadata.to_dict('records')]
+            rows=[r for r in rows if str(r.get('KEY','')).upper()=='LOCK_TIMEOUT']
+            if len(rows)!=1:raise RepositoryError('Cannot verify session lock timeout; no business write started.')
+            old=int(rows[0]['VALUE']);level=str(rows[0].get('LEVEL','')).upper()
+            if level not in {'SESSION','USER','ACCOUNT',''} or old<0:
+                raise RepositoryError('Unrecognized session lock configuration; no business write started.')
+            if old>30:
+                self.execute('ALTER SESSION SET LOCK_TIMEOUT=30');changed=True
+            try:
+                with self.transaction() as tx:yield tx
+            finally:
+                if changed:
+                    import sys
+                    primary=sys.exc_info()[1]
+                    try:self.execute(f'ALTER SESSION SET LOCK_TIMEOUT={old}' if level=='SESSION' else 'ALTER SESSION UNSET LOCK_TIMEOUT')
+                    except Exception:
+                        settings_owner._intake_settings_broken=True
+                        if primary is not None:_note_cleanup_failure(primary,'restore LOCK_TIMEOUT')
+                        else:raise RepositoryError('Business transaction committed, but session settings restoration failed. Do not repeat the save; reconnect and verify the saved record.')
+        finally:lock.release()
+
+    @abstractmethod
+    def query(self, sql: str, params: Params = None) -> pd.DataFrame: ...
+
+    @abstractmethod
+    def execute(self, sql: str, params: Params = None) -> int: ...
+
+    @abstractmethod
+    def executemany(self, sql: str, rows: ParamRows, *, batch_size: int = 500) -> int: ...
+
+    @abstractmethod
+    def commit(self) -> None: ...
+
+    @abstractmethod
+    def rollback(self) -> None: ...
+
+    @abstractmethod
+    def transaction(self) -> Iterator["SqlExecutor"]: ...
+
+    def check_connection(self) -> None:
+        self.query("SELECT CURRENT_VERSION() AS VERSION")
+
+    def put_stream(self, stream, stage_path: str) -> None:
+        raise RepositoryConfigurationError(
+            "The active Snowflake runtime does not support migration stage uploads."
+        )
+
+    def get_stream(self, stage_path: str):
+        raise RepositoryConfigurationError("The active runtime cannot retrieve original files.")
+
+
+class ConnectorExecutor(SqlExecutor):
+    runtime_name = "Connector"
+
+    def __init__(self, connection_factory: Callable[[], object]):
+        self._connection_factory = connection_factory
+        self._connection = None
+        self._operation_lock = threading.RLock()
+        self._transaction_owner: int | None = None
+        self._transaction_depth = 0
+
+    def _connect(self):
+        if self._connection is None:
+            try:
+                self._connection = self._connection_factory()
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise RepositoryConnectionError(
+                    "Snowflake connection failed. Check the configured authentication, network access, and account permissions."
+                ) from exc
+        return self._connection
+
+    @contextmanager
+    def _cursor(self):
+        with self._operation_lock:
+            cursor = None
+            try:
+                cursor = self._connect().cursor()
+                yield cursor
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise RepositoryConnectionError(
+                    "Snowflake could not open a SQL cursor for this operation."
+                ) from exc
+            finally:
+                if cursor is not None:
+                    cursor.close()
+
+    def query(self, sql: str, params: Params = None) -> pd.DataFrame:
+        from data.business_time import precise_version_sql
+        sql=precise_version_sql(sql)
+        with self._cursor() as cursor:
+            try:
+                cursor.execute(sql, tuple(params or ()))
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql, cursor) from exc
+            rows = cursor.fetchall()
+            columns = [column[0] for column in (cursor.description or [])]
+            # Some lightweight offline cursor doubles expose only fetchone.
+            if not rows and not columns and hasattr(cursor, "fetchone"):
+                first = cursor.fetchone()
+                rows = [] if first is None else [first]
+            if rows and not columns:
+                columns = [f"COLUMN_{index + 1}" for index in range(len(rows[0]))]
+            return pd.DataFrame.from_records(rows, columns=columns)
+
+    def execute(self, sql: str, params: Params = None) -> int:
+        with self._cursor() as cursor:
+            try:
+                cursor.execute(sql, tuple(params or ()))
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql, cursor) from exc
+            return int(cursor.rowcount if cursor.rowcount is not None else -1)
+
+    def executemany(self, sql: str, rows: ParamRows, *, batch_size: int = 500) -> int:
+        values = _validated_rows(sql, rows, "%s")
+        if not values:
+            return 0
+        select_match = _BULK_INSERT_SELECT.match(sql.strip())
+        with self._cursor() as cursor:
+            try:
+                if select_match:
+                    if batch_size < 1:
+                        raise RepositoryError("Connector bulk-write batch size must be at least one.")
+                    prefix, select_group, suffix = select_match.groups()
+                    total = 0
+                    for start in range(0, len(values), batch_size):
+                        batch = values[start : start + batch_size]
+                        statement = prefix + " " + " UNION ALL ".join([select_group] * len(batch)) + suffix
+                        parameters = tuple(value for row in batch for value in row)
+                        cursor.execute(statement, parameters)
+                        affected = cursor.rowcount
+                        total += len(batch) if affected is None or affected < 0 else int(affected)
+                    return total
+                cursor.executemany(sql, values)
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql, cursor) from exc
+            rowcount = cursor.rowcount
+            return len(values) if rowcount is None or rowcount < 0 else int(rowcount)
+
+    def commit(self) -> None:
+        with self._operation_lock:
+            try:
+                self._connect().commit()
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise RepositoryError("Snowflake could not commit the transaction.") from exc
+
+    def rollback(self) -> None:
+        with self._operation_lock:
+            try:
+                self._connect().rollback()
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise RepositoryError("Snowflake could not roll back the transaction.") from exc
+
+    def put_stream(self, stream, stage_path: str) -> None:
+        try:
+            stage_directory, filename = stage_path.rsplit("/", 1)
+            with tempfile.TemporaryDirectory(prefix="efns-migration-") as directory:
+                temporary_path = os.path.join(directory, filename)
+                with open(temporary_path, "wb") as temporary:
+                    temporary.write(stream.read())
+                escaped = temporary_path.replace("\\", "/").replace("'", "''")
+                with self._cursor() as cursor:
+                    cursor.execute(
+                        f"PUT 'file://{escaped}' {stage_directory}/ AUTO_COMPRESS=FALSE OVERWRITE=FALSE"
+                    )
+        except RepositoryError:
+            raise
+        except Exception as exc:
+            raise _operation_error(exc, "PUT_STREAM EIMS_MIGRATION_FILE") from exc
+
+    def get_stream(self, stage_path: str):
+        if not re.fullmatch(r"@[A-Za-z0-9_.$]+/[A-Za-z0-9_.$/-]+", stage_path):
+            raise RepositoryError("Invalid archive location.")
+        try:
+            with tempfile.TemporaryDirectory(prefix="efns-retrieve-") as directory:
+                destination = directory.replace("\\", "/").replace("'", "''")
+                with self._cursor() as cursor:
+                    cursor.execute(f"GET {stage_path} 'file://{destination}/'")
+                files = list(Path(directory).glob("*"))
+                if len(files) != 1:
+                    raise RepositoryError("The original file is not uniquely available in the archive.")
+                return io.BytesIO(files[0].read_bytes())
+        except RepositoryError:
+            raise
+        except Exception as exc:
+            raise _operation_error(exc, "GET_STREAM ORIGINAL_FILE") from exc
+
+    @contextmanager
+    def transaction(self) -> Iterator["ConnectorExecutor"]:
+        with self._operation_lock:
+            owner = threading.get_ident()
+            if self._transaction_owner == owner:
+                self._transaction_depth += 1
+                try:
+                    yield self
+                finally:
+                    self._transaction_depth -= 1
+                return
+            self._transaction_owner = owner
+            self._transaction_depth = 1
+            try:
+                yield self
+                self._commit_result()
+            except Exception as primary:
+                try:
+                    self.rollback()
+                except Exception:
+                    _note_cleanup_failure(primary, "rollback")
+                raise
+            finally:
+                self._transaction_owner = None
+                self._transaction_depth = 0
+
+
+def _qmark(sql: str) -> str:
+    return _rewrite_placeholders(sql, "%s", "?")[0]
+
+
+def _literalize_null_bindings(
+    sql: str,
+    params: Sequence[object],
+    marker: str = "?",
+) -> tuple[str, list[object]]:
+    """Render Python ``None`` as SQL NULL while keeping other values bound.
+
+    Snowpark warehouse-runtime binding can serialize ``None`` as the text
+    ``"None"``. This scanner replaces only
+    the corresponding unquoted bind marker with the SQL NULL literal. Values
+    are never interpolated, and bind-looking text inside quoted SQL remains
+    unchanged.
+    """
+    values = list(params)
+    bound: list[object] = []
+    output: list[str] = []
+    value_index = 0
+    index = 0
+    quote: str | None = None
+    while index < len(sql):
+        char = sql[index]
+        if quote:
+            output.append(char)
+            if char == quote:
+                if index + 1 < len(sql) and sql[index + 1] == quote:
+                    output.append(sql[index + 1])
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            output.append(char)
+            index += 1
+            continue
+        if sql.startswith(marker, index):
+            if value_index >= len(values):
+                raise RepositoryError("SQL bind count exceeds the supplied parameter count.")
+            value = values[value_index]
+            value_index += 1
+            if value is None:
+                output.append("NULL")
+            else:
+                output.append(marker)
+                bound.append(value)
+            index += len(marker)
+            continue
+        output.append(char)
+        index += 1
+    if value_index != len(values):
+        raise RepositoryError("Supplied parameter count exceeds the SQL bind count.")
+    return "".join(output), bound
+
+
+def _affected_rows(rows: list[object]) -> int:
+    if not rows:
+        return 0
+    row = rows[0]
+    values = row.as_dict() if hasattr(row, "as_dict") else dict(row) if isinstance(row, dict) else {}
+    total = 0
+    found = False
+    for key, value in values.items():
+        normalized = str(key).lower().replace("_", " ").replace('"', "")
+        row_count_label = "number of rows" in normalized or "rows affected" in normalized
+        if row_count_label and any(word in normalized for word in ("insert", "update", "delete", "merge", "affect")):
+            total += int(value or 0)
+            found = True
+    return total if found else -1
+
+
+class SnowparkExecutor(SqlExecutor):
+    requires_statement_bound = True
+    runtime_name = "Warehouse Session"
+    _VALUES = re.compile(r"^(.*?\bVALUES\s*)(\(.*\))(\s*;?\s*)$", re.IGNORECASE | re.DOTALL)
+    _SELECT = re.compile(
+        r"^(\s*INSERT\s+INTO\s+.+?\))\s+(SELECT\s+.+?)(\s*;?\s*)$",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    def __init__(self, session, runtime_name: str | None = None):
+        self.session = session
+        self._execution_state = _session_execution_state(session)
+        if runtime_name:
+            self.runtime_name = runtime_name
+
+    @contextmanager
+    def intake_transaction(self):
+        """Owner-rights safe: no session SHOW/ALTER and no warehouse-wide timeout.
+
+        Only the serializing INTAKE_LOCK statement is bounded, via Snowpark
+        statement-level parameters (see execute_bounded). Engine support in the
+        warehouse runtime must be confirmed by the isolated probe.
+        """
+        state=self._execution_state
+        if not state.lock.acquire(timeout=30):
+            raise RepositoryError('System busy: no write transaction started within 30 seconds. Reload before trying again.')
+        try:
+            if state.transaction_depth:
+                raise RepositoryError('Cannot enter an intake transaction inside an ordinary transaction. Finish or roll back the outer transaction first; no session settings changed.')
+            if not callable(getattr(self,'execute_bounded',None)):
+                raise RepositoryError('Statement-bounded lock execution is unavailable; no write transaction started.')
+            with self.transaction() as tx:yield tx
+        finally:state.lock.release()
+
+    def execute_bounded(self, sql: str, params: Params = None, timeout_seconds: int = 30) -> int:
+        """Run one statement with a statement-level timeout; session state is unchanged."""
+        if isinstance(timeout_seconds,bool) or not isinstance(timeout_seconds,int) or not 1<=timeout_seconds<=30:
+            raise RepositoryError('A statement timeout must be a positive integer of at most 30 seconds; unbounded fallback is disabled.')
+        with self._execution_state.lock:
+            try:
+                statement, bound = _literalize_null_bindings(_qmark(sql), params or ())
+                rows=list(self.session.sql(statement, params=bound).collect(statement_params={'STATEMENT_TIMEOUT_IN_SECONDS':str(int(timeout_seconds))}))
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql) from exc
+        return _affected_rows(rows)
+
+    def _collect(self, sql: str, params: Params = None) -> list:
+        with self._execution_state.lock:
+            try:
+                statement, bound = _literalize_null_bindings(_qmark(sql), params or ())
+                return list(self.session.sql(statement, params=bound).collect())
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql) from exc
+
+    def query(self, sql: str, params: Params = None) -> pd.DataFrame:
+        from data.business_time import precise_version_sql
+        sql=precise_version_sql(sql)
+        with self._execution_state.lock:
+            try:
+                null_safe_sql, bound = _literalize_null_bindings(_qmark(sql), params or ())
+                statement = self.session.sql(null_safe_sql, params=bound)
+                rows = list(statement.collect())
+                columns = [field.name for field in statement.schema.fields]
+            except RepositoryError:
+                raise
+            except Exception as exc:
+                raise _operation_error(exc, sql) from exc
+        if not rows:
+            return pd.DataFrame(columns=columns)
+        dictionaries = [row.as_dict() if hasattr(row, "as_dict") else dict(row) for row in rows]
+        return pd.DataFrame(dictionaries, columns=columns)
+
+    def execute(self, sql: str, params: Params = None) -> int:
+        return _affected_rows(self._collect(sql, params))
+
+    def executemany(self, sql: str, rows: ParamRows, *, batch_size: int = 500) -> int:
+        with self._execution_state.lock:
+            if batch_size < 1:
+                raise RepositoryError("Snowpark bulk-write batch size must be at least one.")
+            qmark_sql = _qmark(sql)
+            values = _validated_rows(qmark_sql, rows, "?")
+            if not values:
+                return 0
+            values_match = self._VALUES.match(qmark_sql.strip())
+            select_match = self._SELECT.match(qmark_sql.strip())
+            if not values_match and not select_match:
+                raise RepositoryError(
+                    "Snowpark bulk writes require an INSERT statement with a VALUES or SELECT clause; row-by-row fallback is disabled."
+                )
+            prefix, group, suffix = (values_match or select_match).groups()
+            total = 0
+            for start in range(0, len(values), batch_size):
+                batch = values[start : start + batch_size]
+                separator = ", " if values_match else " UNION ALL "
+                groups: list[str] = []
+                parameters: list[object] = []
+                for row in batch:
+                    null_safe_group, bound = _literalize_null_bindings(group, row)
+                    groups.append(null_safe_group)
+                    parameters.extend(bound)
+                statement = prefix + ("" if values_match else " ") + separator.join(groups) + suffix
+                affected = self.execute(statement, parameters)
+                total += len(batch) if affected < 0 else affected
+            return total
+
+    def commit(self) -> None:
+        self._collect("COMMIT")
+
+    def rollback(self) -> None:
+        self._collect("ROLLBACK")
+
+    def put_stream(self, stream, stage_path: str) -> None:
+        with self._execution_state.lock:
+            try:
+                self.session.file.put_stream(stream, stage_path, auto_compress=False, overwrite=False)
+            except Exception as exc:
+                raise _operation_error(exc, "PUT_STREAM EIMS_MIGRATION_FILE") from exc
+
+    def get_stream(self, stage_path: str):
+        if not re.fullmatch(r"@[A-Za-z0-9_.$]+/[A-Za-z0-9_.$/-]+", stage_path):
+            raise RepositoryError("Invalid archive location.")
+        with self._execution_state.lock:
+            try:
+                with self.session.file.get_stream(stage_path, decompress=False) as stream:
+                    return io.BytesIO(stream.read())
+            except Exception as exc:
+                raise _operation_error(exc, "GET_STREAM ORIGINAL_FILE") from exc
+
+    @contextmanager
+    def transaction(self) -> Iterator["SnowparkExecutor"]:
+        state = self._execution_state
+        with state.lock:
+            owner = threading.get_ident()
+            if state.transaction_owner == owner:
+                state.transaction_depth += 1
+                try:
+                    yield self
+                finally:
+                    state.transaction_depth -= 1
+                return
+            self._collect("BEGIN")
+            state.transaction_owner = owner
+            state.transaction_depth = 1
+            try:
+                yield self
+                self._commit_result()
+            except Exception as primary:
+                try:
+                    self.rollback()
+                except Exception:
+                    _note_cleanup_failure(primary, "rollback")
+                raise
+            finally:
+                state.transaction_owner = None
+                state.transaction_depth = 0
+
+
+def _streamlit_runtime_active() -> bool:
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        return get_script_run_ctx(suppress_warning=True) is not None
+    except (ImportError, RuntimeError):
+        return False
+
+
+def streamlit_connection_configured(name: str | None = None) -> bool:
+    """Check for named Streamlit connection metadata without opening it."""
+    if not _streamlit_runtime_active():
+        return False
+    try:
+        import streamlit as st
+        connections = st.secrets.get("connections", {})
+        return (name or os.getenv("SNOWFLAKE_STREAMLIT_CONNECTION", "snowflake")) in connections
+    except Exception:
+        return False
+
+
+def _missing_runtime(exc: Exception) -> bool:
+    names = {type(exc).__name__, type(exc).__qualname__}
+    missing_streamlit_config = (
+        type(exc).__name__ == "StreamlitAPIException"
+        and getattr(exc, "error_id", None) == "snowflake-missing-connection-config"
+    )
+    return missing_streamlit_config or isinstance(exc, (ImportError, ModuleNotFoundError)) or bool(
+        names & {"StreamlitSecretNotFoundError", "SnowparkSessionException"}
+    )
+
+
+def _resolve_executor(settings: SnowflakeSettings) -> SqlExecutor:
+    if _streamlit_runtime_active():
+        try:
+            import streamlit as st
+            name = os.getenv("SNOWFLAKE_STREAMLIT_CONNECTION", "snowflake")
+            return SnowparkExecutor(st.connection(name, type="snowflake").session(), "Streamlit Connection")
+        except Exception as exc:
+            if not _missing_runtime(exc):
+                raise RepositoryConnectionError(
+                    "The configured Streamlit Snowflake connection could not be opened."
+                ) from exc
+    try:
+        from snowflake.snowpark.context import get_active_session
+        return SnowparkExecutor(get_active_session(), "Warehouse Session")
+    except (ImportError, ModuleNotFoundError):
+        pass
+    except Exception as exc:
+        if not _missing_runtime(exc):
+            raise RepositoryConnectionError("The active Snowflake warehouse session could not be opened.") from exc
+
+    kwargs = settings.connector_kwargs()
+
+    def connect():
+        import snowflake.connector
+        return snowflake.connector.connect(**kwargs)
+
+    return ConnectorExecutor(connect)
+
+
+class LazySqlExecutor(SqlExecutor):
+    """Resolve the supported Snowflake runtime on the first SQL operation."""
+
+    runtime_name = "Not connected"
+
+    def __init__(self, settings: SnowflakeSettings | None = None):
+        self.settings = settings or SnowflakeSettings.from_env()
+        self._resolved: SqlExecutor | None = None
+
+    @property
+    def is_resolved(self) -> bool:
+        return self._resolved is not None
+
+    @property
+    def resolved(self) -> SqlExecutor:
+        if self._resolved is None:
+            self._resolved = _resolve_executor(self.settings)
+            self.runtime_name = self._resolved.runtime_name
+        return self._resolved
+
+    def query(self, sql, params=None): return self.resolved.query(sql, params)
+    def execute(self, sql, params=None): return self.resolved.execute(sql, params)
+    def executemany(self, sql, rows, *, batch_size=500): return self.resolved.executemany(sql, rows, batch_size=batch_size)
+    def commit(self): self.resolved.commit()
+    def rollback(self): self.resolved.rollback()
+    def put_stream(self, stream, stage_path): return self.resolved.put_stream(stream, stage_path)
+
+    def get_stream(self, stage_path): return self.resolved.get_stream(stage_path)
+
+    @contextmanager
+    def transaction(self):
+        with self.resolved.transaction() as executor:
+            yield executor
+
+    @contextmanager
+    def intake_transaction(self):
+        with self.resolved.intake_transaction() as executor:yield executor
+
+
+def create_executor(settings: SnowflakeSettings | None = None) -> LazySqlExecutor:
+    return LazySqlExecutor(settings)

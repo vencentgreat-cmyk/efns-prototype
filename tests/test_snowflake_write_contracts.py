@@ -197,6 +197,7 @@ def _repo(executor) -> SnowflakeRepository:
     repo.schema_core = "CORE"
     repo.schema_raw = "RAW"
     repo.schema_reporting = "REPORTING"
+    repo._init_continuity()
     return repo
 
 
@@ -458,7 +459,7 @@ def test_import_write_parameter_order_and_server_timestamps():
         "VALIDATION_MESSAGES": [],
     }]) == 1
     _, raw_sql, raw_params = next(call for call in executor.calls if call[0] == "executemany")
-    assert len(raw_params[0]) == raw_sql.count("%s") == 7
+    assert len(raw_params[0]) == raw_sql.count("%s") == 10
     assert raw_params[0][1] == import_id
     assert raw_params[0][2] == 7
     assert raw_params[0][3] == '{"optional": null}'
@@ -625,6 +626,7 @@ def test_date_and_datetime_values_bind_as_dates():
 def test_flock_create_binds_unset_optional_dates_as_sql_null():
     executor = RecordingExecutor()
     repo = _repo(executor)
+    repo.get_account = lambda account_id: {"ACCOUNT_ID": account_id} if account_id == 'account-1' else None
     repo.get_facilities = lambda account_id=None: pd.DataFrame([
         {"ACCOUNT_ID": "account-1", "FACILITY_ID": "facility-1"}
     ])
@@ -656,7 +658,7 @@ def test_flock_create_binds_unset_optional_dates_as_sql_null():
         "EST_DISPOSAL": "None",
         "DISPOSAL_DATE": None,
     })
-    _, sql, params = next(call for call in executor.calls if call[0] == "execute")
+    _, sql, params = next(call for call in executor.calls if call[0] == "execute" and call[1].startswith('INSERT INTO EFNS_DEV.CORE.FLOCK '))
     fields = re.search(r"FLOCK \((.*?)\) VALUES", sql).group(1).split(", ")[:-2]
     bound = dict(zip(fields, params))
     assert bound["FLOCK_ID"] == result

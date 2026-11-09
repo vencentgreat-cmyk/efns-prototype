@@ -12,6 +12,29 @@ def test_snowflake_deployment_bundle_is_python_311_compatible():
     assert check() == []
 
 
+def test_audit_entity_identifier_is_widened_for_new_and_existing_dev_tables():
+    security = (ROOT / "sql" / "05_security_tables.sql").read_text(encoding="utf-8").upper()
+    deployment = (ROOT / "sql" / "10_EIMS_V3_DEV_Deployment.sql").read_text(encoding="utf-8").upper()
+
+    assert re.search(r"\bENTITY_ID\s+VARCHAR\(1000\)", security)
+    widen = "ALTER COLUMN ENTITY_ID SET DATA TYPE VARCHAR(1000)"
+    assert widen in security
+    assert widen in deployment
+    assert "INVALID_AUDIT_ENTITY_ID_COLUMNS" in deployment
+
+
+def test_historical_correction_schema_is_additive_and_keeps_unverified_rows_out_of_core():
+    correction = (ROOT / "sql" / "13_EIMS_Historical_Corrections.sql").read_text(encoding="utf-8").upper()
+
+    assert "ALTER COLUMN REGISTRATION_NUMBER DROP NOT NULL" in correction
+    assert "CREATE TABLE IF NOT EXISTS EFNS_DEV.RAW.MIGRATION_CORRECTION_BATCH" in correction
+    assert "CREATE TABLE IF NOT EXISTS EFNS_DEV.RAW.MIGRATION_CORRECTION_ROW" in correction
+    assert "RELATION_STATUS VARCHAR(30)" in correction
+    assert "MIGRATION_RAW_ROW_ID VARCHAR(64)" in correction
+    assert "DROP TABLE" not in correction
+    assert "TRUNCATE" not in correction
+
+
 def test_app_owner_grants_match_repository_access_and_keep_audit_append_only():
     grants = (ROOT / "sql" / "06_least_privilege_grants.sql").read_text(encoding="utf-8").upper()
 
@@ -38,7 +61,7 @@ def test_app_owner_grants_match_repository_access_and_keep_audit_append_only():
         ) in grants
 
     required_limited_grants = (
-        "GRANT SELECT ON TABLE EFNS_DEV.CORE.SALMONELLA_TEST_SAMPLE TO ROLE EFNS_DEV_APP_OWNER;",
+        "GRANT SELECT, INSERT, DELETE ON TABLE EFNS_DEV.CORE.SALMONELLA_TEST_SAMPLE TO ROLE EFNS_DEV_APP_OWNER;",
         "GRANT SELECT, INSERT ON TABLE EFNS_DEV.CORE.PRODUCTION_RECORD TO ROLE EFNS_DEV_APP_OWNER;",
         "GRANT SELECT, INSERT, UPDATE ON TABLE EFNS_DEV.RAW.IMPORT_BATCH TO ROLE EFNS_DEV_APP_OWNER;",
         "GRANT SELECT, INSERT ON TABLE EFNS_DEV.RAW.IMPORT_RAW_ROW TO ROLE EFNS_DEV_APP_OWNER;",
@@ -47,6 +70,12 @@ def test_app_owner_grants_match_repository_access_and_keep_audit_append_only():
     )
     for statement in required_limited_grants:
         assert statement in grants
+
+    post_deploy = (ROOT / "sql" / "08_post_deploy_grants.sql").read_text(encoding="utf-8").upper()
+    assert (
+        "GRANT SELECT, INSERT, DELETE ON TABLE EFNS_DEV.CORE.SALMONELLA_TEST_SAMPLE\n"
+        "    TO ROLE EFNS_DEV_APP_OWNER;"
+    ) in post_deploy
 
     assert (
         "GRANT SELECT, INSERT ON TABLE EFNS_DEV.APP.AUDIT_EVENT "
@@ -70,7 +99,8 @@ def test_app_owner_grants_match_repository_access_and_keep_audit_append_only():
 def test_ordinary_account_roles_receive_no_data_object_privileges():
     grants = (ROOT / "sql" / "08_post_deploy_grants.sql").read_text(encoding="utf-8").upper()
     assert not re.search(
-        r"GRANT\s+[^;]*(?:SELECT|INSERT|UPDATE|DELETE)[^;]*\s+ON\s+(?:TABLE|VIEW)",
+        r"GRANT\s+[^;]*(?:SELECT|INSERT|UPDATE|DELETE)[^;]*\s+ON\s+(?:TABLE|VIEW)"
+        r"[^;]*TO\s+ROLE\s+EFNS_DEV_(?:ADMIN|EDITOR|DEVELOPER|VIEWER)",
         grants,
     )
 

@@ -1,0 +1,37 @@
+﻿Schema,Table,Kind,Purpose,Rows
+APP,AUDIT_EVENT,BASE TABLE,"One audit event; ENTITY_ID is a polymorphic text reference, not a declared business FK.",102
+APP,RECORD_REVISION,BASE TABLE,"One attribute/quantity correction or parser-status transition, with before/after values; not a movement journal.",0
+CORE,ACCOUNT,BASE TABLE,One business organization/account identity.,159
+CORE,CONTACT,BASE TABLE,"One contact identity, optionally linked to an Account.",80
+CORE,DIM_EFC_DATE,BASE TABLE,One distinct DAY target; multiple original date source rows can map to it.,26310
+CORE,FACILITY,BASE TABLE,One Account-owned facility/building identity; optional farm location.,249
+CORE,FACILITY_DETAIL,BASE TABLE,"One facility detail/history record, not another Facility identity.",153
+CORE,FARM_LOCATION,BASE TABLE,One Account-owned farm-location identity.,48
+CORE,FLOCK,BASE TABLE,One Flock identity with one optional Facility reference; multiple Flocks may share a Facility.,2724
+CORE,FLOCK_EVENT,BASE TABLE,"One asserted movement or actual-end event; corrections append a superseding event, preserving earlier entries.",0
+CORE,FLOCK_TRANSACTION,BASE TABLE,One recorded activity/transaction referring to a Flock.,17455
+CORE,PRODUCTION_RECORD,BASE TABLE,One source/manual production observation; source GUID identifies historical marketing rows.,45182
+CORE,PRODUCTION_SIZE_BREAKDOWN,BASE TABLE,One size-band child row for a production record; historical wide sizes are separate storage.,0
+CORE,QUOTA_ALLOCATION,BASE TABLE,One historical allocation identity; no Account FK is declared.,28
+CORE,QUOTA_REGISTRATION,BASE TABLE,One quota registration identity; historical registration number may be unknown.,197
+CORE,QUOTA_TRANSACTION,BASE TABLE,One quota transaction identity; related quota and related transaction are separate roles.,1636
+CORE,SALMONELLA_TEST,BASE TABLE,One test identity; test and Flock Account roles remain distinct.,540
+CORE,SALMONELLA_TEST_SAMPLE,BASE TABLE,One sample record belonging to one test; not one sample per test by rule.,1
+RAW,IMPORT_BATCH,BASE TABLE,One production/operational import tracking identity.,5
+RAW,IMPORT_RAW_ROW,BASE TABLE,One preserved production/operational upload source row.,57
+RAW,INTAKE_LOCK,BASE TABLE,One provisioned transaction-control row. It is not a business/source record.,1
+RAW,MIGRATION_BATCH,BASE TABLE,"One historical package batch, not one daily upload.",2
+RAW,MIGRATION_CORRECTION_BATCH,BASE TABLE,One independent correction attempt/batch linked to an original historical batch.,1
+RAW,MIGRATION_CORRECTION_ROW,BASE TABLE,One source-row correction/review trace within a correction batch.,271
+RAW,MIGRATION_ERROR,BASE TABLE,One validation or runtime error record; multiple errors may refer to a source row.,349
+RAW,MIGRATION_FILE,BASE TABLE,One source-file metadata record within a historical batch.,23
+RAW,MIGRATION_ID_MAP,BASE TABLE,One Ready source-row lineage; many date lineages may share a DAY target.,95087
+RAW,MIGRATION_RAW_ROW,BASE TABLE,One original source row identified by batch plus RAW row ID.,95358
+RAW,MIGRATION_RECONCILIATION,BASE TABLE,"One batch/entity summary, not a target record.",14
+RAW,PRODUCTION_MATCH_DECISION,BASE TABLE,One recorded producer-resolution decision for a production identity; automatic and staff handling are distinct.,57
+RAW,SOURCE_FILE,BASE TABLE,"One unchanged archived original per route, filename and content digest; repeat attempts do not overwrite it.",16
+REPORTING,VW_ACCOUNT_FACILITY,VIEW,Reporting output; row grain follows its actual deployed view expression.,310
+REPORTING,VW_FLOCK_DETAIL,VIEW,Reporting output; row grain follows its actual deployed view expression.,2724
+REPORTING,VW_PRODUCTION_SIZE_DETAIL,VIEW,Reporting output; row grain follows its actual deployed view expression.,45182
+REPORTING,VW_PRODUCTION_SUMMARY,VIEW,Reporting output; row grain follows its actual deployed view expression.,45182
+SECURITY,APP_USER,BASE TABLE,One application user/security identity.,1

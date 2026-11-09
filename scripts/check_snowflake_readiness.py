@@ -26,8 +26,18 @@ def check() -> list[str]:
         "snowflake.yml", "environment.yml", "streamlit_app.py",
         "config/eims_migration_mapping.json", "config/eims_migration_mapping_v1.json",
         "config/eims_migration_mapping_v2.json", "config/eims_migration_mapping_v3.json",
+        "config/eims_migration_mapping_v3_disposal_r1.json",
+        "data/repositories/flock_date_repair.py", "app/services/flock_date_repair_workspace.py",
         "sql/10_EIMS_V3_DEV_Deployment.sql", "sql/11_eims_migration_foundation.sql",
-        "sql/12_real_eims_additive_migration.sql",
+        "sql/12_real_eims_additive_migration.sql", "sql/13_EIMS_Historical_Corrections.sql",
+        "sql/14_EIMS_Source_Identity.sql",
+        "sql/15_Block_Unverified_Migration_Cleanup.sql",
+        "sql/16_Source_Identity_and_Flock_History.sql",
+        "sql/17_Historical_Manual_Corrections.sql",
+        "data/correction_decisions.py", "data/repositories/correction_review.py",
+        "app/services/historical_correction_workspace.py",
+        "data/repositories/continuity.py", "data/producer_identity.py", "data/production_intake.py",
+        "app/pages/21_Record_History.py",
     )
     for name in required:
         if not (ROOT / name).is_file():
@@ -60,6 +70,16 @@ def check() -> list[str]:
         errors.append("Generated EIMS sample packages must not be deployed with Streamlit.")
 
     migration_sql = (ROOT / "sql" / "11_eims_migration_foundation.sql").read_text(encoding="utf-8").upper()
+    identity_sql = (ROOT / "sql" / "14_EIMS_Source_Identity.sql").read_text(encoding="utf-8").upper()
+    for required_identity in (
+        "PRIMARY KEY (MIGRATION_BATCH_ID, MIGRATION_RAW_ROW_ID)",
+        "FOREIGN KEY (ORIGINAL_MIGRATION_BATCH_ID, MIGRATION_RAW_ROW_ID)",
+        "UQ_MIGRATION_SOURCE_ROW", "MIGRATION_RAW_ROW_ID VARCHAR(64)",
+        "SOURCE_ID IS NOT DISTINCT FROM", "HAVING COUNT(*) > 1",
+    ):
+        if required_identity not in identity_sql:
+            errors.append(f"Source identity repair is missing: {required_identity}")
+    correction_sql = (ROOT / "sql" / "13_EIMS_Historical_Corrections.sql").read_text(encoding="utf-8").upper()
     eims_v3_deployment = (ROOT / "sql" / "10_EIMS_V3_DEV_Deployment.sql").read_text(encoding="utf-8").upper()
     for required_sql in (
         "USE ROLE ACCOUNTADMIN", "USE WAREHOUSE EFNS_DEV_WH", "USE DATABASE EFNS_DEV",
@@ -74,6 +94,8 @@ def check() -> list[str]:
         "ALTER TABLE IF EXISTS EFNS_DEV.CORE.QUOTA_TRANSACTION ADD COLUMN IF NOT EXISTS RELATED_TRANSACTION_ID",
         "FK_QUOTA_TRANSACTION_RELATED_TRANSACTION",
         "CREATE ROLE IF NOT EXISTS EFNS_DEV_APP_OWNER", "EFNS_DEV_APP_OWNER_ROLE",
+        "ALTER COLUMN ENTITY_ID SET DATA TYPE VARCHAR(1000)",
+        "INVALID_AUDIT_ENTITY_ID_COLUMNS",
         "ERROR_CATEGORY", "READY_FOR_EIMS_V3_VALIDATION",
     ):
         if required_sql not in eims_v3_deployment:
@@ -102,6 +124,18 @@ def check() -> list[str]:
         errors.append("The app owner needs only USAGE on the guarded cleanup procedure.")
     if re.search(r"GRANT\s+DELETE\s+ON\s+TABLE\s+EFNS_DEV\.(?:CORE\.PRODUCTION_RECORD|RAW\.IMPORT_BATCH)\s+TO\s+ROLE\s+EFNS_DEV_APP_OWNER", migration_sql):
         errors.append("The app owner must not receive broad direct DELETE for migration cleanup.")
+    for required_sql in (
+        "ALTER TABLE EFNS_DEV.CORE.QUOTA_REGISTRATION ALTER COLUMN REGISTRATION_NUMBER DROP NOT NULL",
+        "CREATE TABLE IF NOT EXISTS EFNS_DEV.RAW.MIGRATION_CORRECTION_BATCH",
+        "CREATE TABLE IF NOT EXISTS EFNS_DEV.RAW.MIGRATION_CORRECTION_ROW",
+        "FK_MIGRATION_CORRECTION_RAW_ROW",
+        "READY_FOR_HISTORICAL_CORRECTION_PREVIEW",
+    ):
+        if required_sql not in correction_sql:
+            errors.append(f"Historical correction deployment is missing: {required_sql}")
+    for forbidden_sql in ("DROP TABLE", "TRUNCATE", "CREATE OR REPLACE TABLE"):
+        if forbidden_sql in correction_sql:
+            errors.append(f"Historical correction deployment contains forbidden SQL: {forbidden_sql}")
 
     post_deploy_path = ROOT / "sql" / "08_post_deploy_grants.sql"
     if not post_deploy_path.is_file():
@@ -155,6 +189,31 @@ def check() -> list[str]:
         errors.append("APP.AUDIT_EVENT must grant only SELECT and INSERT to the app owner.")
     if "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE EFNS_DEV.CORE.FARM_LOCATION TO ROLE EFNS_DEV_APP_OWNER;" not in normalized_grants:
         errors.append("Farm Location must have one exact operational CRUD grant for the app owner.")
+    sample_grant = (
+        "GRANT SELECT, INSERT, DELETE ON TABLE EFNS_DEV.CORE.SALMONELLA_TEST_SAMPLE "
+        "TO ROLE EFNS_DEV_APP_OWNER;"
+    )
+    if sample_grant not in normalized_grants:
+        errors.append("Salmonella test samples require SELECT, INSERT, and parent-delete access.")
+
+    normalized_post_deploy = " ".join(
+        (ROOT / "sql" / "08_post_deploy_grants.sql").read_text(encoding="utf-8").upper().split()
+    )
+    if sample_grant not in normalized_post_deploy:
+        errors.append("Post-deployment grants must restore Salmonella test sample write access.")
+    for table in ("MIGRATION_CORRECTION_BATCH", "MIGRATION_CORRECTION_ROW"):
+        correction_grant = (
+            f"GRANT SELECT, INSERT, UPDATE ON TABLE EFNS_DEV.RAW.{table} "
+            "TO ROLE EFNS_DEV_APP_OWNER;"
+        )
+        if correction_grant not in normalized_post_deploy:
+            errors.append(f"Post-deployment grants must restore {table} access.")
+
+    security_ddl = (ROOT / "sql" / "05_security_tables.sql").read_text(encoding="utf-8").upper()
+    if not re.search(r"\bENTITY_ID\s+VARCHAR\(1000\)", security_ddl):
+        errors.append("APP.AUDIT_EVENT.ENTITY_ID must be declared as VARCHAR(1000).")
+    if "ALTER COLUMN ENTITY_ID SET DATA TYPE VARCHAR(1000)" not in security_ddl:
+        errors.append("Existing APP.AUDIT_EVENT tables must widen ENTITY_ID to VARCHAR(1000).")
 
     utc_ntz = "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP())::TIMESTAMP_NTZ"
     for ddl_name in ("02_core_tables.sql", "03_production_tables.sql"):
@@ -178,6 +237,8 @@ def check() -> list[str]:
         errors.append("SnowflakeRepository must declare the typed PRODUCTION_RECORD numeric contract.")
     if "normalize_numeric_bind" not in repository or "_NULL_NUMERIC_TEXT" not in repository:
         errors.append("SnowflakeRepository must normalize missing numeric bind values at its boundary.")
+    if "normalize_migration_identifier_bind" not in repository:
+        errors.append("SnowflakeRepository must normalize migration lineage identifiers as VARCHAR binds.")
 
     connection = (ROOT / "data" / "connection.py").read_text(encoding="utf-8")
     if "_literalize_null_bindings" not in connection:
@@ -222,6 +283,22 @@ def check() -> list[str]:
     if "CUSTOM_DATASETS" not in report_center or "require_permission" not in report_center:
         errors.append("Report Center must use allowlisted datasets and service-level permissions.")
 
+    manual_sql = (ROOT / 'sql/17_Historical_Manual_Corrections.sql').read_text(encoding='utf-8').upper()
+    for fragment in ('MIGRATION_CORRECTION_DECISION', 'BEFORE_DATA VARIANT', 'AFTER_DATA VARIANT',
+                     'ACTOR_EMAIL VARCHAR', 'RECORDED_AT TIMESTAMP_NTZ', 'CB12755',
+                     'ADD COLUMN IF NOT EXISTS DECISION_ID', 'ADD COLUMN IF NOT EXISTS DECISION_VERSION',
+                     'GRANT SELECT,INSERT ON TABLE EFNS_DEV.RAW.MIGRATION_CORRECTION_DECISION'):
+        if fragment not in manual_sql:
+            errors.append(f'Manual historical correction upgrade is missing: {fragment}')
+    if re.search(r'\b(DROP|TRUNCATE)\s+TABLE\b|CREATE\s+OR\s+REPLACE\s+TABLE|\bDELETE\s+FROM\b', manual_sql):
+        errors.append('Manual correction upgrade must not replace tables or delete data.')
+    supplement_sql=(ROOT/'sql/18_Flock_Transaction_Supplement.sql').read_text(encoding='utf-8').upper()
+    for fragment in ('CB12755','QDCTNKN','UW19058','ADD COLUMN IF NOT EXISTS COUNT_SOURCE_LABEL VARCHAR(255)',
+                     'EFNS_DEV.RAW.INTAKE_LOCK','GRANT INSERT ON TABLE EFNS_DEV.APP.AUDIT_EVENT'):
+        if fragment not in supplement_sql:
+            errors.append(f'Historical Flock supplement upgrade is missing: {fragment}')
+    if re.search(r'\b(DROP|TRUNCATE)\s+TABLE\b|CREATE\s+OR\s+REPLACE\s+TABLE|\b(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+EFNS_DEV\.',supplement_sql):
+        errors.append('Supplement upgrade must be additive DDL/grants only, without data DML.')
     for path in runtime_python_files():
         try:
             ast.parse(path.read_text(encoding="utf-8"), filename=str(path), feature_version=(3, 11))

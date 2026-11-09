@@ -1,0 +1,682 @@
+[
+  {
+    "file": "complete_core_poster",
+    "width": "2284pt",
+    "height": "823pt",
+    "nonwhite_sample_pixels": 9374,
+    "nonblank": true,
+    "labels": 96
+  },
+  {
+    "file": "overview",
+    "width": "588pt",
+    "height": "510pt",
+    "nonwhite_sample_pixels": 9422,
+    "nonblank": true,
+    "labels": 23
+  },
+  {
+    "file": "01_accounts_places",
+    "width": "1028pt",
+    "height": "712pt",
+    "nonwhite_sample_pixels": 6792,
+    "nonblank": true,
+    "labels": 33
+  },
+  {
+    "file": "02_flocks_tests",
+    "width": "1078pt",
+    "height": "712pt",
+    "nonwhite_sample_pixels": 8987,
+    "nonblank": true,
+    "labels": 36
+  },
+  {
+    "file": "03_quota",
+    "width": "684pt",
+    "height": "573pt",
+    "nonwhite_sample_pixels": 9868,
+    "nonblank": true,
+    "labels": 25
+  },
+  {
+    "file": "04_production_calendar",
+    "width": "1100pt",
+    "height": "569pt",
+    "nonwhite_sample_pixels": 8835,
+    "nonblank": true,
+    "labels": 30
+  },
+  {
+    "file": "05_import",
+    "width": "358pt",
+    "height": "311pt",
+    "nonwhite_sample_pixels": 10065,
+    "nonblank": true,
+    "labels": 10
+  },
+  {
+    "file": "06_migration",
+    "width": "1098pt",
+    "height": "483pt",
+    "nonwhite_sample_pixels": 9639,
+    "nonblank": true,
+    "labels": 28
+  },
+  {
+    "file": "07_corrections",
+    "width": "718pt",
+    "height": "512pt",
+    "nonwhite_sample_pixels": 12127,
+    "nonblank": true,
+    "labels": 21
+  },
+  {
+    "file": "08_support",
+    "width": "362pt",
+    "height": "168pt",
+    "nonwhite_sample_pixels": 14579,
+    "nonblank": true,
+    "labels": 8
+  },
+  {
+    "file": "full/APP_AUDIT_EVENT_1",
+    "width": "468pt",
+    "height": "462pt",
+    "nonwhite_sample_pixels": 9784,
+    "nonblank": true,
+    "labels": 22
+  },
+  {
+    "file": "full/CORE_ACCOUNT_1",
+    "width": "468pt",
+    "height": "842pt",
+    "nonwhite_sample_pixels": 10939,
+    "nonblank": true,
+    "labels": 42
+  },
+  {
+    "file": "full/CORE_ACCOUNT_2",
+    "width": "468pt",
+    "height": "842pt",
+    "nonwhite_sample_pixels": 13133,
+    "nonblank": true,
+    "labels": 42
+  },
+  {
+    "file": "full/CORE_ACCOUNT_3",
+    "width": "468pt",
+    "height": "424pt",
+    "nonwhite_sample_pixels": 11189,
+    "nonblank": true,
+    "labels": 20
+  },
+  {
+    "file": "full/CORE_CONTACT_1",
+    "width": "468pt",
+    "height": "842pt",
+    "nonwhite_sample_pixels": 10474,
+    "nonblank": true,
+    "labels": 42
+  },
+  {
+    "file": "full/CORE_CONTACT_2",
+    "width": "468pt",
+    "height": "348pt",
+    "nonwhite_sample_pixels": 11648,
+    "nonblank": true,
+    "labels": 16
+  },
+  {
+    "file": "full/CORE_DIM_EFC_DATE_1",
+    "width": "468pt",
+    "height": "842pt",
+    "nonwhite_sample_pixels": 11459,
+    "nonblank": true,
+    "labels": 42
+  },
+  {
+    "file": "full/CORE_DIM_EFC_DATE_2",
+    "width": "468pt",
+    "height": "500pt",
+    "nonwhite_sample_pixels": 11857,
+    "nonblank": true,
+    "labels": 24
+  },
+  {
+    "file": "full/CORE_FACILITY_1",
+    "width": "468pt",
+    "height": "842pt",
+    "nonwhite_sample_pixels": 10960,
+    "nonblank": true,
+    "labels": 42
+  },
+  {
+    "file": "full/CORE_FACILITY_DETAIL_1",
+    "width": "468pt",
+    "height": "842pt",
+    "nonwhite_sample_pixels": 11615,
+    "nonblank": true,
+    "labels": 42
+  },
+  {
+    "file": "full/CORE_FACILITY_DETAIL_2",
+    "width": "468pt",
+    "height": "196pt",
+    "nonwhite_sample_pixels": 12700,
+    "nonblank": true,
+    "labels": 8
+  },
+  {
+    "file": "full/CORE_FARM_LOCATION_1",
+    "width": "468pt",
+    "height": "690pt",
+    "nonwhite_sample_pixels": 10393,
+    "nonblank": true,
+    "labels": 34
+  },
+  {
+    "file": "full/CORE_FLOCK_1",
+    "width": "468pt",
+    "height": "842pt",
+    "nonwhite_sample_pixels": 10683,
+    "nonblank": true,
+    "labels": 42
+  },
+  {
+    "file": "full/CORE_FLOCK_2",
+    "width": "468pt",
+    "height": "538pt",
+    "nonwhite_sample_pixels": 11141,
+    "nonblank": true,
+    "labels": 26
+  },
+  {
+    "file": "full/CORE_FLOCK_TRANSACTION_1",
+    "width": "468pt",
+    "height": "462pt",
+    "nonwhite_sample_pixels": 11301,
+    "nonblank": true,
+    "labels": 22
+  },
+  {
+    "file": "full/CORE_PRODUCTION_RECORD_1",
+    "width": "468pt",
+    "height": "842pt",
+    "nonwhite_sample_pixels": 12339,
+    "nonblank": true,
+    "labels": 42
+  },
+  {
+    "file": "full/CORE_PRODUCTION_RECORD_2",
+    "width": "468pt",
+    "height": "842pt",
+    "nonwhite_sample_pixels": 11960,
+    "nonblank": true,
+    "labels": 42
+  },
+  {
+    "file": "full/CORE_PRODUCTION_RECORD_3",
+    "width": "468pt",
+    "height": "842pt",
+    "nonwhite_sample_pixels": 12583,
+    "nonblank": true,
+    "labels": 42
+  },
+  {
+    "file": "full/CORE_PRODUCTION_RECORD_4",
+    "width": "468pt",
+    "height": "386pt",
+    "nonwhite_sample_pixels": 12582,
+    "nonblank": true,
+    "labels": 18
+  },
+  {
+    "file": "full/CORE_PRODUCTION_SIZE_BREAKDOWN_1",
+    "width": "472pt",
+    "height": "386pt",
+    "nonwhite_sample_pixels": 11769,
+    "nonblank": true,
+    "labels": 18
+  },
+  {
+    "file": "full/CORE_QUOTA_ALLOCATION_1",
+    "width": "468pt",
+    "height": "538pt",
+    "nonwhite_sample_pixels": 11275,
+    "nonblank": true,
+    "labels": 26
+  },
+  {
+    "file": "full/CORE_QUOTA_REGISTRATION_1",
+    "width": "468pt",
+    "height": "576pt",
+    "nonwhite_sample_pixels": 11121,
+    "nonblank": true,
+    "labels": 28
+  },
+  {
+    "file": "full/CORE_QUOTA_TRANSACTION_1",
+    "width": "468pt",
+    "height": "728pt",
+    "nonwhite_sample_pixels": 11743,
+    "nonblank": true,
+    "labels": 36
+  },
+  {
+    "file": "full/CORE_SALMONELLA_TEST_1",
+    "width": "468pt",
+    "height": "804pt",
+    "nonwhite_sample_pixels": 11394,
+    "nonblank": true,
+    "labels": 40
+  },
+  {
+    "file": "full/CORE_SALMONELLA_TEST_SAMPLE_1",
+    "width": "468pt",
+    "height": "538pt",
+    "nonwhite_sample_pixels": 12170,
+    "nonblank": true,
+    "labels": 26
+  },
+  {
+    "file": "full/RAW_IMPORT_BATCH_1",
+    "width": "468pt",
+    "height": "766pt",
+    "nonwhite_sample_pixels": 11489,
+    "nonblank": true,
+    "labels": 38
+  },
+  {
+    "file": "full/RAW_IMPORT_RAW_ROW_1",
+    "width": "468pt",
+    "height": "690pt",
+    "nonwhite_sample_pixels": 11516,
+    "nonblank": true,
+    "labels": 34
+  },
+  {
+    "file": "full/RAW_MIGRATION_BATCH_1",
+    "width": "468pt",
+    "height": "614pt",
+    "nonwhite_sample_pixels": 10686,
+    "nonblank": true,
+    "labels": 30
+  },
+  {
+    "file": "full/RAW_MIGRATION_CORRECTION_BATCH_1",
+    "width": "468pt",
+    "height": "462pt",
+    "nonwhite_sample_pixels": 12202,
+    "nonblank": true,
+    "labels": 22
+  },
+  {
+    "file": "full/RAW_MIGRATION_CORRECTION_ROW_1",
+    "width": "468pt",
+    "height": "728pt",
+    "nonwhite_sample_pixels": 12062,
+    "nonblank": true,
+    "labels": 36
+  },
+  {
+    "file": "full/RAW_MIGRATION_ERROR_1",
+    "width": "468pt",
+    "height": "500pt",
+    "nonwhite_sample_pixels": 11423,
+    "nonblank": true,
+    "labels": 24
+  },
+  {
+    "file": "full/RAW_MIGRATION_FILE_1",
+    "width": "468pt",
+    "height": "500pt",
+    "nonwhite_sample_pixels": 10975,
+    "nonblank": true,
+    "labels": 24
+  },
+  {
+    "file": "full/RAW_MIGRATION_ID_MAP_1",
+    "width": "468pt",
+    "height": "500pt",
+    "nonwhite_sample_pixels": 10656,
+    "nonblank": true,
+    "labels": 24
+  },
+  {
+    "file": "full/RAW_MIGRATION_RAW_ROW_1",
+    "width": "468pt",
+    "height": "690pt",
+    "nonwhite_sample_pixels": 10903,
+    "nonblank": true,
+    "labels": 34
+  },
+  {
+    "file": "full/RAW_MIGRATION_RECONCILIATION_1",
+    "width": "468pt",
+    "height": "500pt",
+    "nonwhite_sample_pixels": 11353,
+    "nonblank": true,
+    "labels": 24
+  },
+  {
+    "file": "full/SECURITY_APP_USER_1",
+    "width": "468pt",
+    "height": "462pt",
+    "nonwhite_sample_pixels": 9899,
+    "nonblank": true,
+    "labels": 22
+  },
+  {
+    "file": "relationships/R01_FK_ACCOUNT_PARENT",
+    "width": "561pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 11115,
+    "nonblank": true,
+    "labels": 10
+  },
+  {
+    "file": "relationships/R02_FK_ACCOUNT_GRADING_STATION",
+    "width": "743pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 10601,
+    "nonblank": true,
+    "labels": 10
+  },
+  {
+    "file": "relationships/R03_FK_ACCOUNT_PULLET_GROWER",
+    "width": "722pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 10752,
+    "nonblank": true,
+    "labels": 10
+  },
+  {
+    "file": "relationships/R04_FK_FACILITY_ACCOUNT",
+    "width": "548pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12540,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R05_FK_PRODUCTION_ACCOUNT",
+    "width": "724pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12568,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R06_FK_QUOTA_ACCOUNT",
+    "width": "622pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12381,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R07_FK_FLOCK_ACCOUNT",
+    "width": "535pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12366,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R08_FK_QUOTA_TRANSACTION_OWNER",
+    "width": "707pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12968,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R09_FK_QUOTA_TRANSACTION_RELATED_ACCOUNT",
+    "width": "826pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12568,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R10_FK_SALMONELLA_TEST_ACCOUNT",
+    "width": "681pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12266,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R11_FK_FARM_LOCATION_ACCOUNT",
+    "width": "648pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12462,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R12_FK_CONTACT_ACCOUNT",
+    "width": "614pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12315,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R13_FK_PRODUCTION_GRADER_ACCOUNT",
+    "width": "762pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12557,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R14_FK_FACILITY_DETAIL_FACILITY",
+    "width": "633pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12426,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R15_FK_PRODUCTION_FACILITY",
+    "width": "645pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12681,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R16_FK_FLOCK_FACILITY",
+    "width": "574pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12055,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R17_FK_FLOCK_DETAIL",
+    "width": "688pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 11869,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R18_FK_FACILITY_FARM_LOCATION",
+    "width": "752pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12214,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R19_FK_FLOCK_TRANSACTION_FLOCK",
+    "width": "673pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12039,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R20_FK_PRODUCTION_FLOCK",
+    "width": "617pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12670,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R21_FK_SALMONELLA_TEST_FLOCK",
+    "width": "640pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12238,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R22_FK_SIZE_PRODUCTION",
+    "width": "791pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12287,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R23_FK_FLOCK_QUOTA",
+    "width": "654pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 11693,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R24_FK_QUOTA_TRANSACTION_QUOTA",
+    "width": "797pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 11974,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R25_FK_QUOTA_TRANSACTION_RELATED_QUOTA",
+    "width": "884pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12449,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R26_FK_QUOTA_TRANSACTION_RELATED_TRANSACTION",
+    "width": "795pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 11478,
+    "nonblank": true,
+    "labels": 10
+  },
+  {
+    "file": "relationships/R27_FK_SALMONELLA_SAMPLE_TEST",
+    "width": "806pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12614,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R28_FK_PRODUCTION_IMPORT",
+    "width": "680pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12258,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R29_FK_RAW_ROW_IMPORT",
+    "width": "631pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12328,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R30_FK_MIGRATION_RAW_ROW_BATCH",
+    "width": "771pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 13102,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R31_FK_MIGRATION_ID_MAP_BATCH",
+    "width": "727pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 13184,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R32_FK_MIGRATION_FILE_BATCH",
+    "width": "702pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 13063,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R33_FK_MIGRATION_RECONCILIATION_BATCH",
+    "width": "851pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 12937,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R34_FK_MIGRATION_ERROR_BATCH",
+    "width": "724pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 13272,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R35_FK_MIGRATION_CORRECTION_ORIGINAL_BATCH",
+    "width": "924pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 13456,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R36_FK_MIGRATION_CORRECTION_ROW_ORIGINAL_BATCH",
+    "width": "947pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 13320,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R37_FK_MIGRATION_CORRECTION_ROW_BATCH",
+    "width": "997pt",
+    "height": "215pt",
+    "nonwhite_sample_pixels": 13417,
+    "nonblank": true,
+    "labels": 12
+  },
+  {
+    "file": "relationships/R38_FK_MIGRATION_CORRECTION_RAW_ROW",
+    "width": "1017pt",
+    "height": "244pt",
+    "nonwhite_sample_pixels": 12990,
+    "nonblank": true,
+    "labels": 14
+  },
+  {
+    "file": "relationships/R39_FK_MIGRATION_ID_MAP_RAW_ROW",
+    "width": "891pt",
+    "height": "244pt",
+    "nonwhite_sample_pixels": 12798,
+    "nonblank": true,
+    "labels": 14
+  }
+]

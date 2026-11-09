@@ -1,0 +1,16 @@
+-- DEV safety repair: prefix-only cleanup cannot distinguish real historical data.
+-- Definition update only. This script performs no cleanup or data modification.
+USE ROLE ACCOUNTADMIN;
+USE DATABASE EFNS_DEV;
+
+CREATE OR REPLACE PROCEDURE EFNS_DEV.RAW.CLEANUP_SYNTHETIC_MIGRATION(BATCH_ID VARCHAR)
+COPY GRANTS
+RETURNS VARCHAR
+LANGUAGE SQL
+EXECUTE AS OWNER
+AS
+$$
+BEGIN
+    RETURN 'REJECTED_MANUAL_PROVENANCE_REVIEW_REQUIRED';
+END;
+$$;

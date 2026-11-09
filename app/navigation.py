@@ -12,7 +12,6 @@ import streamlit as st
 from app.auth import can_current
 from app.security import Permission
 
-
 VALID_VIEWS = {"list", "new", "detail", "edit"}
 DISPLAY_TIMEZONE = "America/Halifax"
 DISPLAY_TIMEZONE_LABEL = "America/Halifax"
@@ -28,6 +27,15 @@ _PAGE_FILES = {
     "Quota_Transactions": "8_Quota_Transactions.py",
     "Salmonella_Tests": "9_Salmonella_Tests.py",
 }
+
+
+def page_file(filename: str) -> str:
+    """Resolve the same source file for registration, links and page switches.
+
+    Absolute source paths work with both root streamlit_app.py and app/Home.py.
+    The process environment can be restored between reruns or callbacks.
+    """
+    return str(Path(__file__).resolve().parent / "pages" / filename)
 
 
 def saved_view_selector(
@@ -145,7 +153,8 @@ def open_module(
     for key, value in parameters.items():
         if value is not None and value != "":
             st.session_state[f"{parameter_prefix}{key}"] = value
-    st.switch_page(f"pages/{filename}")
+
+    st.switch_page(page_file(filename))
 
 
 def ensure_record_form_state(prefix: str, record_id: str | None) -> None:
@@ -159,30 +168,37 @@ def ensure_record_form_state(prefix: str, record_id: str | None) -> None:
         st.session_state[marker] = identity
 
 
-def to_display_timestamp(value):
-    """Interpret persisted timestamps as UTC and convert them for EFNS users."""
-    converted = pd.to_datetime(value, errors="coerce", utc=True)
-    return converted if pd.isna(converted) else converted.tz_convert(DISPLAY_TIMEZONE)
+def to_display_timestamp(value, *, naive_timezone=None):
+    """Convert known instants; retain historical NTZ values without guessing."""
+    converted = pd.to_datetime(value, errors="coerce")
+    if pd.isna(converted):
+        return converted
+    if converted.tzinfo is None:
+        if naive_timezone is None:
+            return converted
+        converted = converted.tz_localize(naive_timezone)
+    return converted.tz_convert(DISPLAY_TIMEZONE)
 
 
-def format_timestamp(value) -> str:
-    converted = to_display_timestamp(value)
+def format_timestamp(value, *, naive_timezone=None) -> str:
+    converted = to_display_timestamp(value, naive_timezone=naive_timezone)
     if pd.isna(converted):
         return "Not available"
+    if converted.tzinfo is None:
+        return f"{converted.strftime('%Y-%m-%d %H:%M')} (stored time; timezone unverified)"
     return f"{converted.strftime('%Y-%m-%d %H:%M %Z')} ({DISPLAY_TIMEZONE_LABEL})"
 
 
 def timestamp_column(label: str):
-    """Use an explicit timezone and label for every timestamp data column."""
+    """Mixed-age NTZ columns cannot be assigned a timezone without provenance."""
     return st.column_config.DatetimeColumn(
-        f"{label} ({DISPLAY_TIMEZONE_LABEL})",
+        f"{label} (stored time; timezone unverified)",
         format="YYYY-MM-DD HH:mm",
-        timezone=DISPLAY_TIMEZONE,
     )
 
 
 def timestamp_columns(columns) -> dict:
-    """Build explicit Halifax display configuration for timestamp fields."""
+    """Build stored-time display configuration for mixed historical fields."""
     configured = {}
     for column in columns:
         name = str(column)

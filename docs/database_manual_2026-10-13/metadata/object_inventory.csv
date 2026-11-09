@@ -1,0 +1,32 @@
+﻿Schema,Object,Type,Row grain,Actual COMMENT
+APP,AUDIT_EVENT,BASE TABLE,"One audit event; ENTITY_ID is a polymorphic text reference, not a declared business FK.",Append-only EFNS application audit events using viewer email
+CORE,ACCOUNT,BASE TABLE,One business organization/account identity.,DEV/provisional account model; Dataverse logical names are not confirmed.
+CORE,CONTACT,BASE TABLE,"One contact identity, optionally linked to an Account.",
+CORE,DIM_EFC_DATE,BASE TABLE,One distinct DAY target; multiple original date source rows can map to it.,
+CORE,FACILITY,BASE TABLE,One Account-owned facility/building identity; optional farm location.,
+CORE,FACILITY_DETAIL,BASE TABLE,"One facility detail/history record, not another Facility identity.",
+CORE,FARM_LOCATION,BASE TABLE,One Account-owned farm-location identity.,DEV/provisional Account-owned Farm Location (Dynamics Other Address); distinct from Facility.
+CORE,FLOCK,BASE TABLE,One Flock identity with one optional Facility reference; multiple Flocks may share a Facility.,
+CORE,FLOCK_TRANSACTION,BASE TABLE,One recorded activity/transaction referring to a Flock.,
+CORE,PRODUCTION_RECORD,BASE TABLE,One source/manual production observation; source GUID identifies historical marketing rows.,Normalized production; EIMS rows remain UNMATCHED until confirmed.
+CORE,PRODUCTION_SIZE_BREAKDOWN,BASE TABLE,One size-band child row for a production record; historical wide sizes are separate storage.,
+CORE,QUOTA_ALLOCATION,BASE TABLE,One historical allocation identity; no Account FK is declared.,
+CORE,QUOTA_REGISTRATION,BASE TABLE,One quota registration identity; historical registration number may be unknown.,Quota allocation model and choice values are provisional.
+CORE,QUOTA_TRANSACTION,BASE TABLE,One quota transaction identity; related quota and related transaction are separate roles.,Activity records only; no automatic quota balance calculation.
+CORE,SALMONELLA_TEST,BASE TABLE,One test identity; test and Flock Account roles remain distinct.,
+CORE,SALMONELLA_TEST_SAMPLE,BASE TABLE,One sample record belonging to one test; not one sample per test by rule.,Sample extension point; business fields remain provisional.
+RAW,IMPORT_BATCH,BASE TABLE,One production/operational import tracking identity.,
+RAW,IMPORT_RAW_ROW,BASE TABLE,One preserved production/operational upload source row.,
+RAW,MIGRATION_BATCH,BASE TABLE,"One historical package batch, not one daily upload.",
+RAW,MIGRATION_CORRECTION_BATCH,BASE TABLE,One independent correction attempt/batch linked to an original historical batch.,
+RAW,MIGRATION_CORRECTION_ROW,BASE TABLE,One source-row correction/review trace within a correction batch.,
+RAW,MIGRATION_ERROR,BASE TABLE,One validation or runtime error record; multiple errors may refer to a source row.,
+RAW,MIGRATION_FILE,BASE TABLE,One source-file metadata record within a historical batch.,
+RAW,MIGRATION_ID_MAP,BASE TABLE,One Ready source-row lineage; many date lineages may share a DAY target.,
+RAW,MIGRATION_RAW_ROW,BASE TABLE,One original source row identified by batch plus RAW row ID.,
+RAW,MIGRATION_RECONCILIATION,BASE TABLE,"One batch/entity summary, not a target record.",
+REPORTING,VW_ACCOUNT_FACILITY,VIEW,Flattened view; grain determined by LEFT JOINs in exported DDL.,
+REPORTING,VW_FLOCK_DETAIL,VIEW,Flattened view; grain determined by LEFT JOINs in exported DDL.,
+REPORTING,VW_PRODUCTION_SIZE_DETAIL,VIEW,Flattened view; grain determined by LEFT JOINs in exported DDL.,
+REPORTING,VW_PRODUCTION_SUMMARY,VIEW,Flattened view; grain determined by LEFT JOINs in exported DDL.,
+SECURITY,APP_USER,BASE TABLE,One application user/security identity.,EFNS application roles for Snowflake-authenticated @nsegg.ca viewers

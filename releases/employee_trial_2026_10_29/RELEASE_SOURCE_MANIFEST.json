@@ -1,0 +1,542 @@
+{
+  "release": "Employee trial 2026-10-29 (America/Halifax)",
+  "source": "Previously deployed and independently hash-verified employee-trial runtime; no Snowflake access during Git preparation",
+  "runtime_files": [
+    {
+      "path": ".streamlit/config.toml",
+      "captured_deployed_sha256": "d201803c6cce73748851884805aedc40ca3f4a732c69bf4ab7cba9792cacc362",
+      "captured_deployed_bytes": 439,
+      "repository_lf_sha256": "e629191d59cf2d4e9b77594a7c7ed5c1dcd6e11fb64307e18df8b5dcbe3c81b7"
+    },
+    {
+      "path": "app/Home.py",
+      "captured_deployed_sha256": "1b8660709ab948969ae90e0cd55eb656887d84a4ac6745f02d4f621f87268064",
+      "captured_deployed_bytes": 10547,
+      "repository_lf_sha256": "b32b99b494c5d83ae48dee173d87beb5f07782784930e5edbf4d9b7243da6ddf"
+    },
+    {
+      "path": "app/__init__.py",
+      "captured_deployed_sha256": "a220443f03f8f390d40258d89f720dea2faddcb5b529fda79419a87f1c86a1e9",
+      "captured_deployed_bytes": 43,
+      "repository_lf_sha256": "19b32750a5583ae87f7804b1d9de8e039ea5cf07113a213b94900fa554aafb0c"
+    },
+    {
+      "path": "app/auth.py",
+      "captured_deployed_sha256": "9f7b9578cdf8d8bbda5c6bef795bbbc2cabe6ea21276b38b01288d177210d48e",
+      "captured_deployed_bytes": 8845,
+      "repository_lf_sha256": "da6b1fb6e87699b9410c080d8c528fa08d232cb9af74df09183be7513c83d040"
+    },
+    {
+      "path": "app/navigation.py",
+      "captured_deployed_sha256": "711e9624c9e5f47aae0c5a7ff980ca2216e5785c2442420f5adf7bda7769c321",
+      "captured_deployed_bytes": 11633,
+      "repository_lf_sha256": "1a82a4a92aed31ed06fd8b0510203ab22e4f586f952b60515aa2d9016e6719c0"
+    },
+    {
+      "path": "app/pages/10_Salmonella_Report.py",
+      "captured_deployed_sha256": "dcf5b4915545fa0da024ab0f54434fd83edc38aed0d246cf77269e41738bc36e",
+      "captured_deployed_bytes": 4094,
+      "repository_lf_sha256": "83e5f95c8b5d029712938449aed6984cea2a4d639b68cd5aab47ce928e9e5f1e"
+    },
+    {
+      "path": "app/pages/11_Facilities.py",
+      "captured_deployed_sha256": "89b463ac4e3e669a49320c03897600545615ee85ea04d5970aba97597eaf17b4",
+      "captured_deployed_bytes": 11184,
+      "repository_lf_sha256": "029972a156e38efe9a6f92fef4cae4909af42df7506e36aba1fe6271ebe86f84"
+    },
+    {
+      "path": "app/pages/12_System_Status.py",
+      "captured_deployed_sha256": "faf18dd03d3b74ec0908e813d734ec0fa734c97944aa471c7f2093df779cd049",
+      "captured_deployed_bytes": 2962,
+      "repository_lf_sha256": "af24220239712cdbf739e03754c8a9ec7e5fe0a85e264956a8fb1ebf43d0b3a6"
+    },
+    {
+      "path": "app/pages/13_Facility_Details.py",
+      "captured_deployed_sha256": "403f6f8de5cfe2390a6c2587dd8549a074f48d6a23f453a382dcbcf7627f5fab",
+      "captured_deployed_bytes": 11089,
+      "repository_lf_sha256": "a21a8266cd0d09c0b130916acf219b375f2596e1dd31723903e517d08066a9e3"
+    },
+    {
+      "path": "app/pages/14_Source_Data_Profiler.py",
+      "captured_deployed_sha256": "4a340a8561c8393e9397ce093f45c502ceb9798d12868e46b9cf5056e8c50c8a",
+      "captured_deployed_bytes": 4834,
+      "repository_lf_sha256": "b2c7c1abfe3969fd4f1702adc81e0c8a95c302a5c8d81b6a26d41ed29d0e5d04"
+    },
+    {
+      "path": "app/pages/15_User_Management.py",
+      "captured_deployed_sha256": "3297cd3eb85143015f62bbad0c534ea86140a741c14853d5de122e3594f05a81",
+      "captured_deployed_bytes": 5653,
+      "repository_lf_sha256": "fc6331979725bdd8bb34e18eaa4db484234cce8545fe2e30810f94199561aaa0"
+    },
+    {
+      "path": "app/pages/16_Audit_Log.py",
+      "captured_deployed_sha256": "c7254afe6805ab922a247603463ba218803060e62ea4b76cf22cfe4b9f450c9f",
+      "captured_deployed_bytes": 2446,
+      "repository_lf_sha256": "196280caca24d4764f907add13869e875f6531e30fe954d2950c92fed790a85f"
+    },
+    {
+      "path": "app/pages/17_Migration_Import.py",
+      "captured_deployed_sha256": "e323ae8d3b7019333a51375dec9e7bcb1f41394f0a96144af651476d8c61b459",
+      "captured_deployed_bytes": 23131,
+      "repository_lf_sha256": "eaced910c4c6177e9904add9f7dcac9bedfb15285f56537b556b391bdf4a5d01"
+    },
+    {
+      "path": "app/pages/18_Farm_Locations.py",
+      "captured_deployed_sha256": "9b05d80c9e134d1906b19ee85571734566252141555406de5665659446b0681e",
+      "captured_deployed_bytes": 10808,
+      "repository_lf_sha256": "808a14a129a94805e2d3567d1f8cc957e12a0adb73f402f9539f1f8fbc534164"
+    },
+    {
+      "path": "app/pages/19_Daily_Flock_Quota_Import.py",
+      "captured_deployed_sha256": "164a879719568f28d015d2a7603dd2c42597f681d2b0a967fcb6ba6fb071adb4",
+      "captured_deployed_bytes": 10230,
+      "repository_lf_sha256": "164a879719568f28d015d2a7603dd2c42597f681d2b0a967fcb6ba6fb071adb4"
+    },
+    {
+      "path": "app/pages/1_Production_Import.py",
+      "captured_deployed_sha256": "2e53787bca9bf25f6cf52c8945a8273026de45254f60825c4eb02c94cbc275db",
+      "captured_deployed_bytes": 9050,
+      "repository_lf_sha256": "1d5a8b71bad741ae835bc9475f5b0c6e3e5b9819e95538fefb92b4e806054a05"
+    },
+    {
+      "path": "app/pages/20_EIMS_Reference_Data.py",
+      "captured_deployed_sha256": "38008ff1c58acd3a338001569942a3dd5357d6a5f5b7298871c2cc59e43a7147",
+      "captured_deployed_bytes": 2142,
+      "repository_lf_sha256": "38008ff1c58acd3a338001569942a3dd5357d6a5f5b7298871c2cc59e43a7147"
+    },
+    {
+      "path": "app/pages/21_Record_History.py",
+      "captured_deployed_sha256": "2032220b03c2aceeffd6bf7560b4b1580b6d4eb79172b485beacacfdd58541b0",
+      "captured_deployed_bytes": 14088,
+      "repository_lf_sha256": "cf9bd6b2bae4e2a90a4ad6891c6ed83bc811f300e2bafd0610cb99f5cae5d5d0"
+    },
+    {
+      "path": "app/pages/2_Production_Data.py",
+      "captured_deployed_sha256": "45e3269aa8b59bb902b5e25d313442aab4d960318d8069f165695eeeebcfa529",
+      "captured_deployed_bytes": 6770,
+      "repository_lf_sha256": "f28fded9410d627f9ec768f57c97bb52be8401559a60126551177b41bd80ee69"
+    },
+    {
+      "path": "app/pages/3_Accounts_Facilities_Flocks.py",
+      "captured_deployed_sha256": "3bfb5bc36882b83190b940dc43d2a2404dc9113438754a8606393bb40bd3e9f3",
+      "captured_deployed_bytes": 25750,
+      "repository_lf_sha256": "3bfb5bc36882b83190b940dc43d2a2404dc9113438754a8606393bb40bd3e9f3"
+    },
+    {
+      "path": "app/pages/4_Reports.py",
+      "captured_deployed_sha256": "ae3ffda8cb1d35406af175b4a597e6450c2a43601cad6f88fb9c432465f69dec",
+      "captured_deployed_bytes": 22149,
+      "repository_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0"
+    },
+    {
+      "path": "app/pages/5_Flocks.py",
+      "captured_deployed_sha256": "dac40f74007035d3c548811abd4e85cb7d2d3d40f817bb385d9efa10c96ac800",
+      "captured_deployed_bytes": 18785,
+      "repository_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3"
+    },
+    {
+      "path": "app/pages/6_Flock_Transactions.py",
+      "captured_deployed_sha256": "d62d12c65107d76faa89e5fab6925c530c3c67ced56ad6a590d230c852515a73",
+      "captured_deployed_bytes": 13517,
+      "repository_lf_sha256": "a5373c0ae327966158e0d1f14607cdbcee8aadb40bb8eceba8ccfa47b8dbce30"
+    },
+    {
+      "path": "app/pages/7_Quota_Registrations.py",
+      "captured_deployed_sha256": "fc652ac7fae2000bd2ba44fc8baa22e91b0f1626b226c99e8bf5e61acc43b9b1",
+      "captured_deployed_bytes": 13490,
+      "repository_lf_sha256": "bb1bcaffa0f851ce1f38b808ec540a0a6b686dfb13413e24fee1202dad2ce3f0"
+    },
+    {
+      "path": "app/pages/8_Quota_Transactions.py",
+      "captured_deployed_sha256": "f42cb3184fdf73d5f365a5e0ce656abb538a0b90502924ed439519201b7a41ff",
+      "captured_deployed_bytes": 17038,
+      "repository_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586"
+    },
+    {
+      "path": "app/pages/9_Salmonella_Tests.py",
+      "captured_deployed_sha256": "0365200f638eb6f2145e2a03bf7e646d76fd5b7f99751f423c9afb5a0a082eb9",
+      "captured_deployed_bytes": 13729,
+      "repository_lf_sha256": "ffbd36c984fbdf71f6451b0e97ede64322f5293ae61674e799b9a925d2625e3e"
+    },
+    {
+      "path": "app/runtime.py",
+      "captured_deployed_sha256": "066a03769b20a1c152ae8bb85a3b5df0437ba6f5a02416031f936121a1806304",
+      "captured_deployed_bytes": 2236,
+      "repository_lf_sha256": "6c0e10c8ca36b79cc3f75fd166afc388b98f61cba82fdd677bb5fd1744264534"
+    },
+    {
+      "path": "app/security.py",
+      "captured_deployed_sha256": "e130c85e92307fce54553ca2b8a122a3dd021eefe2275791c3fa6b8e6669b045",
+      "captured_deployed_bytes": 23500,
+      "repository_lf_sha256": "fd7da9702174c46527a3beb75413f208a47a3ddb0fad9261a9a2ae3f68409230"
+    },
+    {
+      "path": "app/services/__init__.py",
+      "captured_deployed_sha256": "010341e8ef26d5b500c53b0a06d00fcafefc583422451a91a8cf7c92eb93463a",
+      "captured_deployed_bytes": 55,
+      "repository_lf_sha256": "ce2a2c399177eef5032f1ff14876666da9a3a6cefd72e9a38459aa0cf8ac1f6e"
+    },
+    {
+      "path": "app/services/authorized_repository.py",
+      "captured_deployed_sha256": "fee29011c309c5563bc5ae5fd098900075fcd21dfc20daa0162303f712a52d76",
+      "captured_deployed_bytes": 15746,
+      "repository_lf_sha256": "98b4c6d7894706fbae345c107dfdee4050fc48ca74e7b502fc9c88051384564d"
+    },
+    {
+      "path": "app/services/export.py",
+      "captured_deployed_sha256": "3b70a3eab08668aadbaa06d18a74ac5ed6cd1b70a4ae38dc10006085ceaee1d6",
+      "captured_deployed_bytes": 674,
+      "repository_lf_sha256": "74f5e25d134b1d37aee84083fefe63677bd04a37cb961b86e9b15c2664c1eb98"
+    },
+    {
+      "path": "app/services/facility_source_description.py",
+      "captured_deployed_sha256": "19fad5cd5e7e0128bd270d350706c5c2d06d9536d1931723d5ce6530e35d1ca1",
+      "captured_deployed_bytes": 1490,
+      "repository_lf_sha256": "19fad5cd5e7e0128bd270d350706c5c2d06d9536d1931723d5ce6530e35d1ca1"
+    },
+    {
+      "path": "app/services/flock_date_repair_workspace.py",
+      "captured_deployed_sha256": "7a5cb7b61d78eb84122a694c500a156cbe2a13eadb07ce9dd8b500abaa588a48",
+      "captured_deployed_bytes": 7171,
+      "repository_lf_sha256": "7a5cb7b61d78eb84122a694c500a156cbe2a13eadb07ce9dd8b500abaa588a48"
+    },
+    {
+      "path": "app/services/flock_supplement_workspace.py",
+      "captured_deployed_sha256": "17c6da5aad01c2c165de19e4091a0782916a3a02015dfc54083347795cc030e5",
+      "captured_deployed_bytes": 3680,
+      "repository_lf_sha256": "17c6da5aad01c2c165de19e4091a0782916a3a02015dfc54083347795cc030e5"
+    },
+    {
+      "path": "app/services/form_safety.py",
+      "captured_deployed_sha256": "02427a239d539dbf83afdbde5e9cac17aad3d8cca816efd979ab18b04d973fee",
+      "captured_deployed_bytes": 5155,
+      "repository_lf_sha256": "02427a239d539dbf83afdbde5e9cac17aad3d8cca816efd979ab18b04d973fee"
+    },
+    {
+      "path": "app/services/historical_correction_workspace.py",
+      "captured_deployed_sha256": "c1f218fdadc524b9b7fb2f7929b38df4317ab2612f877e9d899b666bce71deff",
+      "captured_deployed_bytes": 5967,
+      "repository_lf_sha256": "c1f218fdadc524b9b7fb2f7929b38df4317ab2612f877e9d899b666bce71deff"
+    },
+    {
+      "path": "app/services/profiling_export.py",
+      "captured_deployed_sha256": "e07b1ac9903007d58b69992827364dd94e7a8a6d741747a5552eaaa21fb22642",
+      "captured_deployed_bytes": 2713,
+      "repository_lf_sha256": "82d8f5228c7efe4bbaaec07fb8ea188f48b35890771d6e47018eb806025ddd92"
+    },
+    {
+      "path": "app/services/quota_usage.py",
+      "captured_deployed_sha256": "d97d6796d388bee53cee470e0c14bcdc7d58a1f8d2159dac4c9439aca91a5c4c",
+      "captured_deployed_bytes": 8252,
+      "repository_lf_sha256": "452859f1faa2cfe43c1b6394ad517205ce63737c07c276f6ea11a433d5f17417"
+    },
+    {
+      "path": "app/services/report_builder.py",
+      "captured_deployed_sha256": "3d2e22b91b8076c90174dcb8f7ae9ab96824b0075d349e21d9def01840b29d61",
+      "captured_deployed_bytes": 15578,
+      "repository_lf_sha256": "5d8e563670d8ffb2546a6d14e4b67d1db4c2d9768e1e4755513e0d1c766af72c"
+    },
+    {
+      "path": "app/services/report_center.py",
+      "captured_deployed_sha256": "1043d673294ce3cd3524f6c282d1a1647492632f1915346ecc028c3d06e32ab1",
+      "captured_deployed_bytes": 21765,
+      "repository_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641"
+    },
+    {
+      "path": "app/services/report_relationships.py",
+      "captured_deployed_sha256": "8b70f820a63f70a2a5cbed74da085bac3d0a26a04355a79efe367750ac00820d",
+      "captured_deployed_bytes": 3792,
+      "repository_lf_sha256": "8b70f820a63f70a2a5cbed74da085bac3d0a26a04355a79efe367750ac00820d"
+    },
+    {
+      "path": "app/services/salmonella_reporting.py",
+      "captured_deployed_sha256": "eca03dcfb8d85ff5db981d0961d04c3b9751180f838ffee18170e6464870aaab",
+      "captured_deployed_bytes": 2085,
+      "repository_lf_sha256": "60515bf016e66b07f1a2b066cfbb6f40d2d567fd2d0eb2ce1379dda2324c8ae7"
+    },
+    {
+      "path": "app/snowflake_security.py",
+      "captured_deployed_sha256": "56a8c290f21c1e6cb9cc4437f52b5fed6bf7beba67dc0f570d510100943f048e",
+      "captured_deployed_bytes": 12603,
+      "repository_lf_sha256": "b986a13ca2e29f89ba3c3d0607aff5199147dd6932f2aed9b8450d804db8a3be"
+    },
+    {
+      "path": "app/ui.py",
+      "captured_deployed_sha256": "7c90f2848ee009b80ab03c98691471c43fc0597fb3472c46a172bbc715843ace",
+      "captured_deployed_bytes": 5959,
+      "repository_lf_sha256": "761a3b9a151bf9016c7af9345516e160ddf2e9cab0fa76c6833961a438b611d3"
+    },
+    {
+      "path": "config/account_relationship_supplement_v1.json",
+      "captured_deployed_sha256": "2793b239c9f303d158f6ace20997b181c782334b781550363dd6e60ddef39fa5",
+      "captured_deployed_bytes": 548,
+      "repository_lf_sha256": "635c43ff82870c3fd325e59230a542dc15f0bf5e26bfa1a2fc589bd0f019016e"
+    },
+    {
+      "path": "config/eims_migration_mapping.json",
+      "captured_deployed_sha256": "1b8a5bc36a1bf1c7773781c7fd43153db026a8b8f0eef1000960df08ea348eb9",
+      "captured_deployed_bytes": 12623,
+      "repository_lf_sha256": "f4d34df4e397a2dcaaa355018845e3596ab2194d35782ee18e38fac40da031c7"
+    },
+    {
+      "path": "config/eims_migration_mapping_v1.json",
+      "captured_deployed_sha256": "ae1b3549911e07e1d2fdd78e92e20089e22e03c4213dc9a21f7945655ea7e17c",
+      "captured_deployed_bytes": 7439,
+      "repository_lf_sha256": "c6b5019dc6347ba4bf74b5d1b0d566edf3d43a4ded01cfd6cd5d4d0da85e6b8b"
+    },
+    {
+      "path": "config/eims_migration_mapping_v2.json",
+      "captured_deployed_sha256": "1b8a5bc36a1bf1c7773781c7fd43153db026a8b8f0eef1000960df08ea348eb9",
+      "captured_deployed_bytes": 12623,
+      "repository_lf_sha256": "f4d34df4e397a2dcaaa355018845e3596ab2194d35782ee18e38fac40da031c7"
+    },
+    {
+      "path": "config/eims_migration_mapping_v3.json",
+      "captured_deployed_sha256": "c41c68a98e6066c9ac6d95a18b170ca86a0dc8fa21dc793fc185d6028e9d4fe1",
+      "captured_deployed_bytes": 18055,
+      "repository_lf_sha256": "c41c68a98e6066c9ac6d95a18b170ca86a0dc8fa21dc793fc185d6028e9d4fe1"
+    },
+    {
+      "path": "config/eims_migration_mapping_v3_count_source_r1.json",
+      "captured_deployed_sha256": "2132508e80b4de529e1e842e66707312ad8029af6c94c4f7d031f61120872463",
+      "captured_deployed_bytes": 515,
+      "repository_lf_sha256": "2132508e80b4de529e1e842e66707312ad8029af6c94c4f7d031f61120872463"
+    },
+    {
+      "path": "config/eims_migration_mapping_v3_disposal_r1.json",
+      "captured_deployed_sha256": "3c8680347c4339acf55d5a0f4cfd8335610e5fd8b8057ca39c2c28ba9ee1b5dc",
+      "captured_deployed_bytes": 463,
+      "repository_lf_sha256": "3c8680347c4339acf55d5a0f4cfd8335610e5fd8b8057ca39c2c28ba9ee1b5dc"
+    },
+    {
+      "path": "config/source_provenance.json",
+      "captured_deployed_sha256": "08c287eb29f2010edcf3af21bbeb2454ccf63f92e7c29cb1e3bf19485c2ca707",
+      "captured_deployed_bytes": 570,
+      "repository_lf_sha256": "08c287eb29f2010edcf3af21bbeb2454ccf63f92e7c29cb1e3bf19485c2ca707"
+    },
+    {
+      "path": "data/__init__.py",
+      "captured_deployed_sha256": "fd0c0d2e0921177dd5b0f648b203268f423bdfce31186c4d7e4ec3207b7145a6",
+      "captured_deployed_bytes": 80,
+      "repository_lf_sha256": "f54a737d16005af47c014aac16ec97dc45b44a84c860b1e9384e1174b6742593"
+    },
+    {
+      "path": "data/account_relationships.py",
+      "captured_deployed_sha256": "13ad4b35e99593e1003c2571b669289b6a9f176f112d05e81d2b78f411161330",
+      "captured_deployed_bytes": 3140,
+      "repository_lf_sha256": "13ad4b35e99593e1003c2571b669289b6a9f176f112d05e81d2b78f411161330"
+    },
+    {
+      "path": "data/business_time.py",
+      "captured_deployed_sha256": "e724918280394acf476259735a396bb99d939921917eefd67e65386db012f16e",
+      "captured_deployed_bytes": 2146,
+      "repository_lf_sha256": "e724918280394acf476259735a396bb99d939921917eefd67e65386db012f16e"
+    },
+    {
+      "path": "data/connection.py",
+      "captured_deployed_sha256": "4998d6f0f92ae5230e02eddf930344cfa43e95b9b4e792ffa25a68e983679bd7",
+      "captured_deployed_bytes": 35760,
+      "repository_lf_sha256": "8c3ee5b831623318fe39729e58c329670501905c39733b397e6bf7acc40f4564"
+    },
+    {
+      "path": "data/constants.py",
+      "captured_deployed_sha256": "563aff9de5ce37f3606eabb0f8fc48c59cdb2ab4b982e160c0c0ffca47a009d5",
+      "captured_deployed_bytes": 4571,
+      "repository_lf_sha256": "1a559581d60da2a165859fbe21fac6cb28dceb630ac3b7f28625d65f41a8bd04"
+    },
+    {
+      "path": "data/controlled_case.py",
+      "captured_deployed_sha256": "c0f83ca34dc05ad0661da038ad6a34788562285b45debcd9dbcd647d8fcc6c5c",
+      "captured_deployed_bytes": 11438,
+      "repository_lf_sha256": "c0f83ca34dc05ad0661da038ad6a34788562285b45debcd9dbcd647d8fcc6c5c"
+    },
+    {
+      "path": "data/controlled_primitives.py",
+      "captured_deployed_sha256": "b477ec994ad6bddfb997ee7d57e8edd6893baf4a70978a4be89a366c9a64cfc6",
+      "captured_deployed_bytes": 1083,
+      "repository_lf_sha256": "b477ec994ad6bddfb997ee7d57e8edd6893baf4a70978a4be89a366c9a64cfc6"
+    },
+    {
+      "path": "data/correction_decisions.py",
+      "captured_deployed_sha256": "ea172adecb8f3b7f734aa5222ad7ebe405fa9e62b8fbbcbff8f901a2ec283732",
+      "captured_deployed_bytes": 1031,
+      "repository_lf_sha256": "ea172adecb8f3b7f734aa5222ad7ebe405fa9e62b8fbbcbff8f901a2ec283732"
+    },
+    {
+      "path": "data/count_source_supplement.py",
+      "captured_deployed_sha256": "3e201dd428384f85f6ea8469fca11423d14282fc346f06034b3e77aff598fd28",
+      "captured_deployed_bytes": 5798,
+      "repository_lf_sha256": "3e201dd428384f85f6ea8469fca11423d14282fc346f06034b3e77aff598fd28"
+    },
+    {
+      "path": "data/flock_quantity.py",
+      "captured_deployed_sha256": "5fc2a989236c76b2e465d9bcbf7c49bf96d0cd52d30c3e6488647261540c7b4b",
+      "captured_deployed_bytes": 7945,
+      "repository_lf_sha256": "4334275688053a90605ed9939eb6b65840b5b7941e8689ee2e5be50ff64bbd55"
+    },
+    {
+      "path": "data/flock_quota_import.py",
+      "captured_deployed_sha256": "129637e2f1071d93281922bb34f290b5442a2864008ba05f41a7daa43dfc2559",
+      "captured_deployed_bytes": 31146,
+      "repository_lf_sha256": "129637e2f1071d93281922bb34f290b5442a2864008ba05f41a7daa43dfc2559"
+    },
+    {
+      "path": "data/flock_transaction_supplement.py",
+      "captured_deployed_sha256": "fc2636a6cdb28b2dbc9093395b15c745af69286986c206d06534df6f86e5400f",
+      "captured_deployed_bytes": 12522,
+      "repository_lf_sha256": "fc2636a6cdb28b2dbc9093395b15c745af69286986c206d06534df6f86e5400f"
+    },
+    {
+      "path": "data/historical_corrections.py",
+      "captured_deployed_sha256": "5d41637008cebbda6833d85175af36208323dbc4f82ba11f54baa38bc1ffc55c",
+      "captured_deployed_bytes": 21106,
+      "repository_lf_sha256": "5d41637008cebbda6833d85175af36208323dbc4f82ba11f54baa38bc1ffc55c"
+    },
+    {
+      "path": "data/importing.py",
+      "captured_deployed_sha256": "26ccd679f570246ec23ccd3f9e6bc557a99eced83d198b16033df314343c45a6",
+      "captured_deployed_bytes": 6238,
+      "repository_lf_sha256": "ebea23e692f104b07b48a8fa6c2fab8859c138785261cfadb6d26aebd05643fa"
+    },
+    {
+      "path": "data/migration.py",
+      "captured_deployed_sha256": "8a049e5f0dfb43d98e7f45023cc1acc474638da1942517dcaae71dd4297231e1",
+      "captured_deployed_bytes": 25951,
+      "repository_lf_sha256": "fabc9c148db0b869083644eaa4acc68ebede215b1f74a81905839c2530c46666"
+    },
+    {
+      "path": "data/migration_identity.py",
+      "captured_deployed_sha256": "8ff1896f6f6f89ee549d6a58ba23092b3be39a5e744ddac36dfa0ad70ebabf34",
+      "captured_deployed_bytes": 2191,
+      "repository_lf_sha256": "8ff1896f6f6f89ee549d6a58ba23092b3be39a5e744ddac36dfa0ad70ebabf34"
+    },
+    {
+      "path": "data/operational_flock_quota_import.py",
+      "captured_deployed_sha256": "1a8c3c9006a2ded13efbe0bda21622ee68466132a820cac20fc4cdc4456a5987",
+      "captured_deployed_bytes": 26771,
+      "repository_lf_sha256": "1a8c3c9006a2ded13efbe0bda21622ee68466132a820cac20fc4cdc4456a5987"
+    },
+    {
+      "path": "data/producer_identity.py",
+      "captured_deployed_sha256": "29c526dcdbd5c20f990ca2595bfc71d77c179f21383293e7f086908df6618b39",
+      "captured_deployed_bytes": 2944,
+      "repository_lf_sha256": "29c526dcdbd5c20f990ca2595bfc71d77c179f21383293e7f086908df6618b39"
+    },
+    {
+      "path": "data/production_intake.py",
+      "captured_deployed_sha256": "3df4810b197aee1047a55b1ba75511166e34b92047e7d4cc03e0067820d97683",
+      "captured_deployed_bytes": 2348,
+      "repository_lf_sha256": "3df4810b197aee1047a55b1ba75511166e34b92047e7d4cc03e0067820d97683"
+    },
+    {
+      "path": "data/profiling.py",
+      "captured_deployed_sha256": "87cf1aa18f97698deeec7f0ae70bb351b9e10a7ce30638d5d3f30e52bd93e930",
+      "captured_deployed_bytes": 10466,
+      "repository_lf_sha256": "29ab332738a3b74416fa4407ab4a3ea5f1c5dd764e7e63cab0f308e2de641fdf"
+    },
+    {
+      "path": "data/record_safety.py",
+      "captured_deployed_sha256": "814cc38fb0fba545d419a49e4132d3a5e10fe7d4f5ac6707725df04831e80579",
+      "captured_deployed_bytes": 19699,
+      "repository_lf_sha256": "814cc38fb0fba545d419a49e4132d3a5e10fe7d4f5ac6707725df04831e80579"
+    },
+    {
+      "path": "data/repositories/__init__.py",
+      "captured_deployed_sha256": "372091ac9822ebeafef85ea874e6128088f57e7c5ded4e98d5be06f39a761f95",
+      "captured_deployed_bytes": 1423,
+      "repository_lf_sha256": "e1ee0c92306ff0d549014ad2bd8393945d9757c2af3dcff51520bee122edabe1"
+    },
+    {
+      "path": "data/repositories/base.py",
+      "captured_deployed_sha256": "184d379497453abea06fb7769ade00617d14d0810011b960617a23b36e6e9008",
+      "captured_deployed_bytes": 21536,
+      "repository_lf_sha256": "cc19f4dc9f73d814331f1a63862419d2e4e277217008e1d27ff8fcafc0a0bf09"
+    },
+    {
+      "path": "data/repositories/continuity.py",
+      "captured_deployed_sha256": "933c5418dffd363f47126c7b0cbd21c0c1d4156156bc2921639a9c24454eedf4",
+      "captured_deployed_bytes": 50033,
+      "repository_lf_sha256": "2d542fd6d12a2ac9acab51b2ac55bb7c29dfe64364d2a42f80b4312f569e7b7d"
+    },
+    {
+      "path": "data/repositories/controlled_supplements.py",
+      "captured_deployed_sha256": "6b42eb3f3714c00b50d187687e2d6eb116d0e3b811e67ab06058b84e94f0f771",
+      "captured_deployed_bytes": 39215,
+      "repository_lf_sha256": "8fbf1c74fcfa0f7f77f7d60f86960ea6348014b3099f7d2765cd9e2e252c6009"
+    },
+    {
+      "path": "data/repositories/correction_review.py",
+      "captured_deployed_sha256": "6645582629ac66a4da55f4b043dfc033b66140962b5f0171436a451087e89bc3",
+      "captured_deployed_bytes": 16837,
+      "repository_lf_sha256": "6645582629ac66a4da55f4b043dfc033b66140962b5f0171436a451087e89bc3"
+    },
+    {
+      "path": "data/repositories/flock_date_repair.py",
+      "captured_deployed_sha256": "60c4b33274f079bc01af869292be1fce33d684ef69137007e27491dd14737d21",
+      "captured_deployed_bytes": 31149,
+      "repository_lf_sha256": "60c4b33274f079bc01af869292be1fce33d684ef69137007e27491dd14737d21"
+    },
+    {
+      "path": "data/repositories/flock_supplement.py",
+      "captured_deployed_sha256": "39ea611ed95a85f9c214a457b671ca3d941e26c1b379500dc0ce0948817a3882",
+      "captured_deployed_bytes": 11852,
+      "repository_lf_sha256": "39ea611ed95a85f9c214a457b671ca3d941e26c1b379500dc0ce0948817a3882"
+    },
+    {
+      "path": "data/repositories/mock.py",
+      "captured_deployed_sha256": "0c19af988ddc3596ae25e5e871740bb0b23fddcaceed72d0ec8c82c6d7532330",
+      "captured_deployed_bytes": 82583,
+      "repository_lf_sha256": "0c19af988ddc3596ae25e5e871740bb0b23fddcaceed72d0ec8c82c6d7532330"
+    },
+    {
+      "path": "data/repositories/snowflake.py",
+      "captured_deployed_sha256": "b7f42aa1c5f14fd888d8d7f3ea01f7baacf9850f9bfcb51b4ab04c184f7af5e3",
+      "captured_deployed_bytes": 109316,
+      "repository_lf_sha256": "b7f42aa1c5f14fd888d8d7f3ea01f7baacf9850f9bfcb51b4ab04c184f7af5e3"
+    },
+    {
+      "path": "data/source_evidence.py",
+      "captured_deployed_sha256": "7788e5f916d11e68621bfc885cb3a82a9fd536a6df4bfca1f388ed24a5055595",
+      "captured_deployed_bytes": 839,
+      "repository_lf_sha256": "7788e5f916d11e68621bfc885cb3a82a9fd536a6df4bfca1f388ed24a5055595"
+    },
+    {
+      "path": "data/source_scope.py",
+      "captured_deployed_sha256": "f98e9e93f5f5a937edb457f5866319d17b3b7ae8080ce2133666544feb99ae71",
+      "captured_deployed_bytes": 898,
+      "repository_lf_sha256": "f98e9e93f5f5a937edb457f5866319d17b3b7ae8080ce2133666544feb99ae71"
+    },
+    {
+      "path": "data/source_trace.py",
+      "captured_deployed_sha256": "949450ee4abd077e93a2fab3a4788ed0aa029d3e5ec5d3dd91f36373e6bd851f",
+      "captured_deployed_bytes": 12874,
+      "repository_lf_sha256": "949450ee4abd077e93a2fab3a4788ed0aa029d3e5ec5d3dd91f36373e6bd851f"
+    },
+    {
+      "path": "data/synthetic.py",
+      "captured_deployed_sha256": "552765f2b394b0b44e28b1baba95975f1a927b422db024aed9dbb79d50d17cbf",
+      "captured_deployed_bytes": 25426,
+      "repository_lf_sha256": "c935868b89b99175a843c9963a0a278cd3ebdfeecc81153697a0e4e13b0c8bda"
+    },
+    {
+      "path": "data/validation.py",
+      "captured_deployed_sha256": "97a381b7ef1ed7c844717e5561100894ef195a2b71f0fc96a49112f5b4f1c632",
+      "captured_deployed_bytes": 11466,
+      "repository_lf_sha256": "97a381b7ef1ed7c844717e5561100894ef195a2b71f0fc96a49112f5b4f1c632"
+    },
+    {
+      "path": "environment.yml",
+      "captured_deployed_sha256": "f12c79439c05488983c888f3bb82e9c1e92caa32227ab1774ffd0f21891d2048",
+      "captured_deployed_bytes": 165,
+      "repository_lf_sha256": "f8e7dc057099b6e783077ac7f2982a1b7f167692aa8689ac4af30e889107b79f"
+    },
+    {
+      "path": "streamlit_app.py",
+      "captured_deployed_sha256": "5f57b260db8a1fb8f74320fdd0a60853042efef7340419b4a964d64e85dc54bc",
+      "captured_deployed_bytes": 814,
+      "repository_lf_sha256": "bae502f652ca591bfc4afc72c92b8623c593ab32ea07a943d0904192be8678d0"
+    }
+  ],
+  "authentication": "Original production authentication bytes; not the disabled-seed review copy",
+  "hash_notes": "Captured deployed hashes describe the prior live byte snapshot. Git normalizes CRLF to LF. Repository hashes describe LF-normalized review files; one whitespace-only cleanup in data/repositories/__init__.py does not change Python behavior."
+}

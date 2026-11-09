@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import pandas as pd
 
 import streamlit as st
 
@@ -19,6 +20,7 @@ from data.importing import (
     validate_eims_records,
 )
 from data.repositories import get_repository
+from data.production_intake import prepare_workbook
 
 
 require_page_permission(Permission.IMPORT_DATA)
@@ -38,13 +40,13 @@ with st.container(border=True):
     col_a, col_b, col_c = st.columns(3)
     col_a.markdown("**File type**  \nExcel `.xlsx` or `.xlsm`")
     col_b.markdown(f"**Worksheet**  \n`{EIMS_WORKSHEET_NAME}`")
-    col_c.markdown("**Source area**  \nColumns A through AI")
+    col_c.markdown("**Source area**  \nStandard columns A through AI; additional saved columns remain in RAW")
     st.info(
         "The importer reads values already saved in Excel. It does not execute macros or recalculate formulas."
     )
 
 with st.container(border=True):
-    section_intro("Select workbook", "The file remains in the current in-memory session.")
+    section_intro("Select workbook", "The original file is archived unchanged before parsing.")
     uploaded = st.file_uploader(
         "EIMS production workbook",
         type=["xlsm", "xlsx"],
@@ -60,16 +62,26 @@ file_bytes = uploaded.getvalue()
 file_hash = hashlib.sha256(file_bytes).hexdigest()
 existing_import = repo.find_import_by_hash(file_hash)
 try:
+    archive = repo.archive_source_file(uploaded.name, file_bytes, "PRODUCTION_WORKBOOK")
     raw_df = read_eims_workbook(io.BytesIO(file_bytes))
+    repo.record_source_parse(archive["SOURCE_FILE_ID"], True)
 except ValueError:
+    if "archive" in locals(): repo.record_source_parse(archive["SOURCE_FILE_ID"], False)
     st.error(f"The workbook does not contain a readable '{EIMS_WORKSHEET_NAME}' worksheet.")
     st.stop()
 except Exception as exc:
+    if "archive" in locals(): repo.record_source_parse(archive["SOURCE_FILE_ID"], False)
     st.error(f"Unable to read the workbook: {exc}")
     st.stop()
 
-errors, warnings = validate_eims_records(raw_df)
-normalized_df = normalize_eims_records(raw_df)
+normalized_df, source_rows, errors, warnings = prepare_workbook(raw_df, archive["SOURCE_FILE_ID"], repo.get_accounts())
+prepared_id = repo.stage_production_upload({
+    "FILENAME": uploaded.name, "SOURCE": "EIMS Production Workbook - EIMS 3",
+    "FILE_HASH": file_hash, "FILE_SIZE_BYTES": len(file_bytes),
+    "WORKSHEET_NAME": EIMS_WORKSHEET_NAME, "SOURCE_RECORD_COUNT": len(raw_df),
+    "SOURCE_FILE_ID": archive["SOURCE_FILE_ID"], "ERROR_COUNT": len(errors),
+}, source_rows)
+already_committed = bool(existing_import and str(existing_import.get("STATUS", "")).lower() == "committed")
 
 metric_columns = st.columns(4)
 metric_columns[0].metric("Production Records", len(raw_df))
@@ -80,10 +92,10 @@ metric_columns[3].metric("Warnings", len(warnings))
 with st.container(border=True):
     section_intro(
         "Source and matching status",
-        "The workbook source is preserved. Account, facility, and flock relationships remain unmatched until reviewed.",
+        "Exact producer IDs or unique Account registration numbers can be matched automatically. Other relationships are not guessed.",
     )
     source_col, match_col = st.columns(2)
-    source_col.markdown(f"**Worksheet source**  \n`{EIMS_WORKSHEET_NAME}` · columns A through AI")
+    source_col.markdown(f"**Worksheet source**  \n`{EIMS_WORKSHEET_NAME}` · all saved source columns")
     match_counts = normalized_df.get("MATCH_STATUS")
     if match_counts is None:
         match_col.markdown("**Relationship status**  \nNot available")
@@ -95,9 +107,9 @@ with st.container(border=True):
 with st.container(border=True):
     section_intro("Technical validation", "Required columns, reporting period, and numeric checks.")
     allow_duplicate = False
-    if existing_import:
+    if already_committed:
         st.warning(f"This exact file was already imported as {existing_import['IMPORT_ID']}.")
-        allow_duplicate = st.checkbox("Import this duplicate file anyway")
+        st.caption("Repeat uploads reuse the archived original and cannot duplicate this committed batch.")
     if errors:
         st.error(f"{len(errors)} blocking validation error(s) found.")
         for error in errors[:30]:
@@ -108,6 +120,8 @@ with st.container(border=True):
         st.warning(f"{len(warnings)} non-blocking warning(s) found.")
         for warning in warnings[:30]:
             st.write(f"• {warning}")
+    if errors or warnings:
+        st.download_button("Download validation issues",pd.DataFrame({'Validation issue':errors+warnings}).to_csv(index=False).encode('utf-8-sig'),'production-validation.csv','text/csv')
 
 with st.expander("Source-preserving preview · first 50 rows", expanded=False):
     with st.container(border=True):
@@ -117,7 +131,7 @@ with st.expander("Normalized preview · first 50 rows", expanded=False):
     with st.container(border=True):
         section_intro(
             "Normalized import model",
-            "Relationships remain unmatched until authoritative Dataverse metadata is available.",
+            "Automatic matching is not staff confirmation. Invalid rows remain in RAW with their reasons.",
         )
         priority_columns = [
             "SOURCE_ROW_NUMBER",
@@ -151,39 +165,24 @@ with st.container(border=True):
     batch_week = int(weeks[0]) if len(weeks) == 1 else None
 
     if errors:
-        st.error("Import is disabled until all blocking errors are resolved.")
+        st.warning("Invalid rows are retained in RAW and excluded from the business commit. Review the errors before importing accepted rows.")
 
+    independent = st.checkbox("These are independent new observations, not corrections of previously accepted records.")
     confirm_import = st.checkbox(
         "I reviewed the validation results and want to import these records.",
-        disabled=bool(errors),
+        disabled=normalized_df.empty or already_committed or not independent,
     )
     if st.button(
         "Import validated records",
         type="primary",
-        disabled=bool(errors) or not confirm_import or bool(existing_import and not allow_duplicate),
+        disabled=normalized_df.empty or not confirm_import or already_committed or not independent,
     ):
         try:
-            import_id, imported_count = repo.import_production_bundle(
-                {
-                    "FILENAME": filename,
-                    "SOURCE": "EIMS Production Workbook - EIMS 3",
-                    "REPORTING_YEAR": batch_year,
-                    "REPORTING_WEEK": batch_week,
-                    "STATUS": "Validated",
-                    "ERROR_COUNT": len(errors),
-                    "NOTES": "Imported from the EIMS 3 worksheet.",
-                    "FILE_HASH": file_hash,
-                    "FILE_SIZE_BYTES": len(file_bytes),
-                    "WORKSHEET_NAME": EIMS_WORKSHEET_NAME,
-                    "SOURCE_RECORD_COUNT": len(raw_df),
-                },
-                build_raw_rows(raw_df, "VALID", warnings),
-                normalized_df,
-                allow_duplicate=allow_duplicate,
-            )
-            st.success(f"Imported {imported_count} production records.")
+            import_id, imported_count = repo.commit_staged_production(prepared_id, new_observations_confirmed=independent)
+            st.success(f"Imported {imported_count} production records. Invalid source rows remain traceable in RAW.")
             st.code(import_id, language=None)
+            if getattr(repo,'last_audit_warning',None): st.warning(repo.last_audit_warning)
         except RepositoryError as exc:
             show_data_error(exc)
         except Exception:
-            st.error("Import failed while processing the validated data.")
+            st.error("Import failed while processing the validated data; RAW and the original file remain saved.")

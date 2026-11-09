@@ -1,0 +1,10 @@
+{
+  "schema_version": "EFNS-EIMS-DATAVERSE-3-DISPOSAL-R1-COUNT-SOURCE-R1",
+  "extends": "EFNS-EIMS-DATAVERSE-3",
+  "revision": "COUNT_SOURCE_LABEL_2026_10_29",
+  "basis": "Retained efc_flockcounttype_displayname and Dataverse associated-view logical metadata; no numeric, ownership or lifecycle rule changes.",
+  "field_map_overrides": {
+    "FLOCK": {"EST_DISPOSAL": "new_disposaldate2", "DISPOSAL_DATE": "new_disposaldate"},
+    "FLOCK_TRANSACTION": {"COUNT_SOURCE_LABEL": "efc_flockcounttype_displayname"}
+  }
+}

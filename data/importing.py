@@ -46,19 +46,17 @@ def _source_number(value):
 
 
 def read_eims_workbook(file: BinaryIO) -> pd.DataFrame:
-    """Read the 35 source columns saved in the EIMS 3 worksheet."""
+    """Read saved source cells, retaining extra columns and invalid identity rows."""
     frame = pd.read_excel(
         file,
         sheet_name=EIMS_WORKSHEET_NAME,
         header=9,
-        usecols="A:AI",
         engine="openpyxl",
+        dtype=object,
     )
     frame.columns = [str(column).strip() for column in frame.columns]
     frame = frame.dropna(how="all").copy()
     frame["SOURCE_ROW_NUMBER"] = frame.index + 11
-    if "Producer #" in frame.columns:
-        frame = frame[frame["Producer #"].notna()].copy()
     return frame.reset_index(drop=True)
 
 
@@ -130,7 +128,7 @@ def validate_eims_records(raw: pd.DataFrame) -> tuple[list[str], list[str]]:
         for source_column, target_column in EIMS_COLUMN_MAPPING.items():
             if source_column in EIMS_NUMERIC_COLUMNS:
                 value = row.get(target_column)
-                if isinstance(value, str):
+                if value is not None and pd.notna(value) and (not isinstance(value,Decimal) or not value.is_finite()):
                     errors.append(
                         f"Excel row {source_row}: {source_column} must contain a valid number."
                     )
@@ -160,7 +158,7 @@ def build_raw_rows(
                 "RAW_DATA": values,
                 "VALIDATION_STATUS": validation_status,
                 "MATCH_STATUS": MATCH_STATUS_UNMATCHED,
-                "VALIDATION_MESSAGES": messages,
+                "VALIDATION_MESSAGES": [message for message in messages if message.startswith(f"Excel row {int(source_row)}:") or message.startswith("Missing required columns:")],
             }
         )
     return rows

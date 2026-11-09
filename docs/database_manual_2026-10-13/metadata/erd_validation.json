@@ -1,0 +1,9 @@
+{
+  "tables": 27,
+  "relationships": 39,
+  "columns": 520,
+  "table_columns": 440,
+  "view_columns": 80,
+  "view_expressions_verified": 80,
+  "basis": "Actual post-repair metadata; complete composite groups preserved"
+}

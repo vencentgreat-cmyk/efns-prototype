@@ -1,0 +1,465 @@
+{
+  "status": "LOCAL ONLY; no live query/deployment",
+  "baseline": "RELEASE_SOURCE_MANIFEST.json saved deployment, LF-normalized review comparison",
+  "baseline_files": 89,
+  "candidate_artifacts": 96,
+  "runtime_changes": [
+    {
+      "path": "data/importing.py",
+      "status": "MODIFIED",
+      "reason": "Drop all-blank or whitespace-only workbook rows before validation while retaining original source row numbers and populated invalid rows.",
+      "candidate_lf_sha256": "d27db19ea752b972150da174c5696cda1f3f9c83c5a9cf02c3daa5c0beef89c1"
+    },
+    {
+      "path": "data/producer_identity.py",
+      "status": "MODIFIED",
+      "reason": "Disambiguate duplicate exact registration matches only when exactly one candidate is Active; preserve GUID and missing-STATUS behavior.",
+      "candidate_lf_sha256": "955f61f15814b276d34935f8fd1cb85109afe65513be852cf50c33ea52accd0b"
+    },
+    {
+      "path": "app/pages/10_Salmonella_Report.py",
+      "status": "MODIFIED",
+      "reason": "R3 F5/F6: preserve distinct Account/Facility/Flock filter identities and include historical result values; existing report/export query unchanged.",
+      "baseline_lf_sha256": "83e5f95c8b5d029712938449aed6984cea2a4d639b68cd5aab47ce928e9e5f1e",
+      "candidate_lf_sha256": "126666e6051ea9c35c822e9997ec8fb6f5149d1af26c7b7f8a2cb0f688f4fb1f"
+    },
+    {
+      "path": "app/pages/11_Facilities.py",
+      "status": "MODIFIED",
+      "reason": "R3 F6: current-first historical Facility-type filter union only; unchanged new-entry type choices and all save paths.",
+      "baseline_lf_sha256": "029972a156e38efe9a6f92fef4cae4909af42df7506e36aba1fe6271ebe86f84",
+      "candidate_lf_sha256": "746dffbbe840daced5d99446467aee4979f3458a2d5722c71d37c6d271c7ad3c"
+    },
+    {
+      "path": "app/pages/13_Facility_Details.py",
+      "status": "MODIFIED",
+      "reason": "R3 F5: disambiguate colliding Facility selector labels; preserve distinct target IDs and existing save behavior.",
+      "baseline_lf_sha256": "a21a8266cd0d09c0b130916acf219b375f2596e1dd31723903e517d08066a9e3",
+      "candidate_lf_sha256": "f13213ad39240f236e0073527750f15854989cfce1b22ef319a7fd30de9160d9"
+    },
+    {
+      "path": "app/pages/15_User_Management.py",
+      "status": "MODIFIED",
+      "reason": "R3 F4: deletion checkbox scoped to selected user and cleared on switch; auth-store and permission logic unchanged.",
+      "baseline_lf_sha256": "fc6331979725bdd8bb34e18eaa4db484234cce8545fe2e30810f94199561aaa0",
+      "candidate_lf_sha256": "16c64a6e9dbfeff16fa751cad7b65040afd036b52561701cf87d1d5a15f41b2b"
+    },
+    {
+      "path": "app/pages/16_Audit_Log.py",
+      "status": "MODIFIED",
+      "reason": "R3 F7: caption states filters apply to the latest 5,000 loaded events; no query or permission change.",
+      "baseline_lf_sha256": "196280caca24d4764f907add13869e875f6531e30fe954d2950c92fed790a85f",
+      "candidate_lf_sha256": "ae974abdca91bd2bee5fd61fe938afe0d4abbae9de40e67f918c192a96630437"
+    },
+    {
+      "path": "app/pages/19_Daily_Flock_Quota_Import.py",
+      "status": "MODIFIED",
+      "reason": "R3 F1: distinguish explicit unknown COMMIT outcome, persist per-package resubmission guard; only claim no write for explicit pre-BEGIN marker; otherwise safe error rendering.",
+      "baseline_lf_sha256": "164a879719568f28d015d2a7603dd2c42597f681d2b0a967fcb6ba6fb071adb4",
+      "candidate_lf_sha256": "f8d1b5b34bd0540341efb1ed24b7a2719d85af11455e8a87f61fab3f4db72e61"
+    },
+    {
+      "path": "app/pages/21_Record_History.py",
+      "status": "MODIFIED",
+      "reason": "R3 confirmation protections retained; selected-record Change history now resolves only displayed actor IDs and uses record-specific staff labels; bounded flattened history is unchanged.",
+      "baseline_lf_sha256": "cf9bd6b2bae4e2a90a4ad6891c6ed83bc811f300e2bafd0610cb99f5cae5d5d0",
+      "candidate_lf_sha256": "839ed3b73d4e4058c2b05e1593f2722d1f05e30cd70e7a020c2cc46dab38b31c"
+    },
+    {
+      "path": "app/pages/4_Reports.py",
+      "status": "MODIFIED",
+      "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
+      "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
+      "candidate_lf_sha256": "4c9f35e77b24d9e7478c15e093c26ce93bbaaeff6797b60f6b0eacad78654c00"
+    },
+    {
+      "path": "app/pages/5_Flocks.py",
+      "status": "MODIFIED",
+      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged.",
+      "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
+      "candidate_lf_sha256": "7b28c323bd3bdad074e415d698085186de80f53495e3bb02e1953fcefaaa8dc1"
+    },
+    {
+      "path": "app/pages/6_Flock_Transactions.py",
+      "status": "MODIFIED",
+      "reason": "R3 F5: disambiguate colliding Flock labels while preserving normal labels, current-quantity confirmation, CAS and save paths.",
+      "baseline_lf_sha256": "a5373c0ae327966158e0d1f14607cdbcee8aadb40bb8eceba8ccfa47b8dbce30",
+      "candidate_lf_sha256": "2fb780052870eb738163e6b47f6e9ff69e3080395712be042b4e76d12e86ffe7"
+    },
+    {
+      "path": "app/pages/8_Quota_Transactions.py",
+      "status": "MODIFIED",
+      "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption.",
+      "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
+      "candidate_lf_sha256": "bd0c2c362f77461e044116893518e5c1642a3e367e017104e56bb49e33177e8f"
+    },
+    {
+      "path": "app/pages/9_Salmonella_Tests.py",
+      "status": "MODIFIED",
+      "reason": "R3 F5/F6: disambiguate colliding Flock/Account labels and offer stored result filters; legacy edit preservation and new-entry choices unchanged.",
+      "baseline_lf_sha256": "ffbd36c984fbdf71f6451b0e97ede64322f5293ae61674e799b9a925d2625e3e",
+      "candidate_lf_sha256": "03776afbb58fc3a35a7608dbb120adbb8a2adc141d5628ab28a1656e9ef380aa"
+    },
+    {
+      "path": "app/services/quota_usage.py",
+      "status": "MODIFIED",
+      "reason": "Account-wide Bird Count panel retained behind SHOW_QUOTA_USAGE_PANEL=False for the staff trial; existing contexts and calculations unchanged and can be re-enabled.",
+      "baseline_lf_sha256": "452859f1faa2cfe43c1b6394ad517205ce63737c07c276f6ea11a433d5f17417",
+      "candidate_lf_sha256": "a0948b154fdf923fa065c012e800834c3d68f4b2979e150b050394fc2b49d0cd"
+    },
+    {
+      "path": "app/services/report_builder.py",
+      "status": "MODIFIED",
+      "reason": "Credit Type display label in the older joined-field builder.",
+      "baseline_lf_sha256": "5d8e563670d8ffb2546a6d14e4b67d1db4c2d9768e1e4755513e0d1c766af72c",
+      "candidate_lf_sha256": "0ded30dbf3c71270b029f49d6d3b58c20ee062fbb7b0e5d790e2d41c6ccfd397"
+    },
+    {
+      "path": "app/services/report_center.py",
+      "status": "MODIFIED",
+      "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
+      "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
+      "candidate_lf_sha256": "1502571c7c9fc0a98f3ea17274cf873b4527d12ea8f46ef7155d2912fc97c54c"
+    },
+    {
+      "path": "app/services/revision_history.py",
+      "status": "NEW",
+      "reason": "Pure per-field history display projection with Halifax timestamps, page-scoped actor labels and record-specific selector labels; ignores technical metadata and never returns raw VARIANT columns.",
+      "baseline_lf_sha256": null,
+      "candidate_lf_sha256": "872a0bf1e5eff89b9c1944f823c1dfc19330f97c4268663f2fcdf7b4db1a9c56"
+    },
+    {
+      "path": "app/services/selector_options.py",
+      "status": "NEW",
+      "reason": "R3 F5/F6: pure collision-only stable ID suffixes plus current-first, sorted historical filter labels; no relationship inference or input-policy expansion.",
+      "baseline_lf_sha256": null,
+      "candidate_lf_sha256": "b490004eade791a652092179494e3048c031e11eafcf7fce3ed7206de6ccafa1"
+    },
+    {
+      "path": "config/quota_rules.json",
+      "status": "NEW",
+      "reason": "User-confirmed quota-position rule dated 2026-11-05; flock_stock remains PENDING and units_compatible remains false.",
+      "baseline_lf_sha256": null,
+      "candidate_lf_sha256": "6ba9aea7dafb4f86b1512fb7d768b3abd7d14f3d86071a003db0791b519035fa"
+    },
+    {
+      "path": "data/constants.py",
+      "status": "MODIFIED",
+      "reason": "Three canonical quota types and six current transaction choices, plus legacy lease input compatibility.",
+      "baseline_lf_sha256": "1a559581d60da2a165859fbe21fac6cb28dceb630ac3b7f28625d65f41a8bd04",
+      "candidate_lf_sha256": "b6f2c2f8ddc126488830c7b555e755be3d201188cc77aea16884c7b2fc62e27e"
+    },
+    {
+      "path": "data/flock_quota_import.py",
+      "status": "MODIFIED",
+      "reason": "Two daily-validation membership checks accept the known quota aliases; parser/normalization/identity untouched.",
+      "baseline_lf_sha256": "129637e2f1071d93281922bb34f290b5442a2864008ba05f41a7daa43dfc2559",
+      "candidate_lf_sha256": "179bd962eb8c2020b6a9fa88ab1a138f207b949d0fd3e56c5f2ec5c3b30f20df"
+    },
+    {
+      "path": "data/flock_stock.py",
+      "status": "NEW",
+      "reason": "Prior PENDING observation-only stock draft; unchanged by this delivery task.",
+      "baseline_lf_sha256": null,
+      "candidate_lf_sha256": "e923ddd990ed861b73a9b69150b59d35d8ef81502a8c43475160cbaaf21955c0"
+    },
+    {
+      "path": "data/migration.py",
+      "status": "MODIFIED",
+      "reason": "PRE-EXISTING local RAW-only Allocation guard, frozen at delivery branch start; not modified by this task.",
+      "baseline_lf_sha256": "fabc9c148db0b869083644eaa4acc68ebede215b1f74a81905839c2530c46666",
+      "candidate_lf_sha256": "6f2aee2b5b00f34e4b105e1cb501666448b0f72b676198e799a8d3164a5f2c09"
+    },
+    {
+      "path": "data/operational_flock_quota_import.py",
+      "status": "MODIFIED",
+      "reason": "Daily quota preview uses shared changed-field validation; existing parsing, identity, normalization and blank UPDATE contracts preserved.",
+      "baseline_lf_sha256": "1a8c3c9006a2ded13efbe0bda21622ee68466132a820cac20fc4cdc4456a5987",
+      "candidate_lf_sha256": "c8e3ac018bf9a0b744ccd23010722745b3fde35234bd3f005847aa73471ea060"
+    },
+    {
+      "path": "data/position_evidence.py",
+      "status": "NEW",
+      "reason": "Prior pure null/date/GUID/state helpers used by the PENDING draft.",
+      "baseline_lf_sha256": null,
+      "candidate_lf_sha256": "a19a68d21ab8672ee81acec3fefcdc4f88f8018e17dee605b79a3fe19eda04ff"
+    },
+    {
+      "path": "data/quota_position.py",
+      "status": "NEW",
+      "reason": "PENDING owner component/latest-Base draft plus logged built-in PENDING fallback for missing/invalid rules.",
+      "baseline_lf_sha256": null,
+      "candidate_lf_sha256": "fc40cc98eee47640eeba6da0cfc6044c5fe3a31f2b11b03c1b44d4f50d50ee38"
+    },
+    {
+      "path": "data/quota_types.py",
+      "status": "NEW",
+      "reason": "Read/comparison compatibility for canonical and legacy labels, without write-time relabeling.",
+      "baseline_lf_sha256": null,
+      "candidate_lf_sha256": "027cf6decf5f695610ba22eecde7b7f106ddbf22e9eb41409c70c9d3bffe078f"
+    },
+    {
+      "path": "data/record_safety.py",
+      "status": "MODIFIED",
+      "reason": "Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained.",
+      "baseline_lf_sha256": "814cc38fb0fba545d419a49e4132d3a5e10fe7d4f5ac6707725df04831e80579",
+      "candidate_lf_sha256": "6abda45d67e9bb83394652584c37a150f41427efe8c0abf00484cc66220793e4"
+    },
+    {
+      "path": "data/repositories/base.py",
+      "status": "MODIFIED",
+      "reason": "Bounded per-record history interface plus 2026-11-06 bounded complete production report read; existing read/write contracts unchanged.",
+      "baseline_lf_sha256": "cc19f4dc9f73d814331f1a63862419d2e4e277217008e1d27ff8fcafc0a0bf09",
+      "candidate_lf_sha256": "15b1adae91d9c2292087411de231b9be33502fe922a6e2af2e8d604cc1e66374"
+    },
+    {
+      "path": "data/repositories/continuity.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-02: parameterized entity/ID-filtered, ordered, limited revision read; equivalent bounded memory path. No transaction/write logic changes.",
+      "baseline_lf_sha256": "2d542fd6d12a2ac9acab51b2ac55bb7c29dfe64364d2a42f80b4312f569e7b7d",
+      "candidate_lf_sha256": "53dddf0bbd47d60b37857f34869c9f43b09c163decb4454024505b5d5b23baac"
+    },
+    {
+      "path": "data/repositories/mock.py",
+      "status": "MODIFIED",
+      "reason": "Existing alias-compatible reads plus shared daily quota validation at commit, before writer, preserving rollback behavior.",
+      "baseline_lf_sha256": "0c19af988ddc3596ae25e5e871740bb0b23fddcaceed72d0ec8c82c6d7532330",
+      "candidate_lf_sha256": "e7228f71085de31807b64be077106ab6a4a599b29f125c542ddbad483728e924"
+    },
+    {
+      "path": "data/repositories/snowflake.py",
+      "status": "MODIFIED",
+      "reason": "Existing alias-compatible reads plus shared daily quota validation and unique parent checks inside existing commit transaction; no executor/transaction implementation change.",
+      "baseline_lf_sha256": "b7f42aa1c5f14fd888d8d7f3ea01f7baacf9850f9bfcb51b4ab04c184f7af5e3",
+      "candidate_lf_sha256": "1c65c1fed7cf2977a82fd9a99771cee951e05b403e93762ce2379750b3199667"
+    },
+    {
+      "path": "data/validation.py",
+      "status": "MODIFIED",
+      "reason": "Shared finite signed nonzero Adjustment, optional Price/counterparty/date rules and changed-field daily quota review helper; comments now identify the enforced rules; behavior unchanged.",
+      "baseline_lf_sha256": "97a381b7ef1ed7c844717e5561100894ef195a2b71f0fc96a49112f5b4f1c632",
+      "candidate_lf_sha256": "63708ac4a5fe8417c3b215b6708db4b24063a040941ca836b9ade83cd220b6d0"
+    }
+  ],
+  "follow_up_runtime_changes": [
+    {
+      "path": "app/services/production_reports.py",
+      "status": "NEW",
+      "reason": "Pure Production Management family with retained source grain, exact component totals, provisional rounding/inclusion, one rounding summary and separate record diagnostics for collapsed display and an XLSX Notes sheet.",
+      "candidate_lf_sha256": "869b7a5c0841beb61338d700acadb2b303826ee87457a011660ec5485a7e51dd"
+    },
+    {
+      "path": "app/services/quota_reports.py",
+      "status": "NEW",
+      "reason": "Pure quota Transactions, Leases, End Date ordering and History projections; Active state evidence, explicit DEV_TEST exclusion, stored rows retained and confirmed signed contributions reused.",
+      "candidate_lf_sha256": "0aba7babc53d499499df32f7e19617e9420ff8ec3ac8fe7c0ff2cbd433d458f8"
+    },
+    {
+      "path": "app/services/flock_reports.py",
+      "status": "NEW",
+      "reason": "Pure flock reports; Disposals uses fixture-derived elapsed weeks +19, earliest Delivery Placed with fallback/conflict notes and stored Disposed/Plant values; other calculations unchanged.",
+      "candidate_lf_sha256": "45c8bc93ff02d5526e8a9a553ff0ed1986264d039afee0ac5ca49e4b8e0cba66"
+    },
+    {
+      "path": "data/confirmed_quota_position.py",
+      "status": "NEW",
+      "reason": "Pure confirmed owner quota calculation with Active state evidence, latest Base/Created At ordering and active lease bounds; per-type sums and per-transaction signed contributions share the exact net eligibility loop for quota reports.",
+      "candidate_lf_sha256": "1a929d786eef9d56dc8871ff10f659522b4109abe1cb31cd74c8719f45cb0566"
+    },
+    {
+      "path": "app/services/quota_state.py",
+      "status": "NEW",
+      "reason": "Read-only ID-scoped RAW transaction state evidence using existing query interface; Mock empty set and unavailable evidence unknown.",
+      "candidate_lf_sha256": "2abb2f0fc9525d209b06654aa56e235135ac95d5cf292fadb0413878f2b2f3d2"
+    },
+    {
+      "path": "app/services/flock_age_report.py",
+      "status": "NEW",
+      "reason": "Pure Flock Age projection using shared current calculations and supplied existing Quota Summary values; unavailable quota stays unknown.",
+      "candidate_lf_sha256": "7d81f18f2204eeeca4af0fd6e5833e703bbdb0e9ebd23dd85939ffca9ce7b626"
+    },
+    {
+      "path": "app/services/flock_current_report.py",
+      "status": "NEW",
+      "reason": "Read-only pure Flock Current report; exact mortality arithmetic and provisional inclusion; no PENDING rule changes.",
+      "candidate_lf_sha256": "3a2269cf1bb8da59dfb54c4629bfc8526ea2df4363263e1aabf96b5b35ec48db"
+    },
+    {
+      "path": "app/services/printable_forms.py",
+      "status": "NEW",
+      "reason": "Pure read-only printable form projections and legacy PDF layout; confirmed quota helper reused.",
+      "candidate_lf_sha256": "b20ff3f3ca6014a2e3a851df89eadfd6b494da1e9ebcd8c9743e11d8fb056042"
+    },
+    {
+      "path": "app/services/printable_form_text.py",
+      "status": "NEW",
+      "reason": "Centralized legacy PDF wording including original spelling and header colors.",
+      "candidate_lf_sha256": "7cffa7ce01b6fa522b62f4e6740ac78ba85b65723127e0585090268041b54f00"
+    },
+    {
+      "path": "app/services/printable_form_ui.py",
+      "status": "NEW",
+      "reason": "Printable form parameters, data preview, blank-field notes and permission-checked PDF downloads.",
+      "candidate_lf_sha256": "f39da30b3c20dbd831db12feb943fe3183f84733773e06869b0adc3cf49b2717"
+    },
+    {
+      "path": "environment.yml",
+      "status": "MODIFIED",
+      "reason": "Declare ReportLab 5.0.0 verified in the Snowflake package channel.",
+      "candidate_lf_sha256": "d3594dd4c9ef886498924ed1f516adbde7616d8b69795f4ea67295ce9826539d"
+    },
+    {
+      "path": "snowflake.yml",
+      "status": "MODIFIED",
+      "reason": "Package runtime PNG logo; no deployment/runtime/permissions change.",
+      "candidate_lf_sha256": "2d316409a17d778d02fd49ae5d7e53d24c1d44d49969430ee8f70471a03104da"
+    },
+    {
+      "path": "requirements-review.txt",
+      "status": "MODIFIED",
+      "reason": "Local ReportLab and pypdf pins for reproducible PDF tests.",
+      "candidate_lf_sha256": "f4625af957d49f6af7e4bfcbaa8b800315d0d0ab3d7f3e84cdda0d9b59a312fa"
+    },
+    {
+      "path": "app/services/report_pdf.py",
+      "status": "NEW",
+      "reason": "Shared presentation-only SSRS-style PDF renderer using exact CSV cell text, bounded row count, fitting, pagination and Halifax footer.",
+      "candidate_lf_sha256": "25c9c423ad1995bd6f0df5cbd4bf9cec349f76e38ffb6c3307e12df423866113"
+    },
+    {
+      "path": "app/services/report_pdf_ui.py",
+      "status": "NEW",
+      "reason": "Permission-checked PDF buttons and existing REPORT export audit pattern; no database or report calculation changes.",
+      "candidate_lf_sha256": "9b6032b1c5be27982fcc3cd0a24d5187a854d0fd4126ddbbe9e39a732072bf96"
+    }
+  ],
+  "deployment_metadata_changes": {
+    "snowflake.yml": "Include config/quota_rules.json and runtime app/assets/*.png logo. Existing target/runtime/entry/grants unchanged."
+  },
+  "protected_live_modules_retained": true,
+  "trial_readiness_artifacts": [
+    {
+      "path": "tests/test_report_smoke.py",
+      "status": "NEW",
+      "reason": "Catalog-wide offline builder/UI smoke scenarios and manifest artifact verification.",
+      "candidate_lf_sha256": "57947a3fb095228ce3b3642403204070f393e6fbffaff72645c144410632dc37"
+    },
+    {
+      "path": "docs/codex_reports/TRIAL_READINESS_STATIC_SCAN_20261109.md",
+      "status": "NEW",
+      "reason": "Report-only conditional NULL and empty-data risks; no source changes at these sites.",
+      "candidate_lf_sha256": "4c2da90237931521da6815a587ae414ddcf339bdfff7e4b0bbae5c4ee89183b8"
+    }
+  ],
+  "printable_form_artifacts": [
+    {
+      "path": "tests/test_printable_forms.py",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_lf_sha256": "2379c8e1600c0069cfdd5f634c146a0a899680205058433deee25b3a2d54d996"
+    },
+    {
+      "path": "docs/codex_reports/PRINTABLE_FORMS_20261109.md",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_lf_sha256": "08906d83ab54b853296c0a3f5781c5c988895e0071e576c5e483ceb5d9c07561"
+    },
+    {
+      "path": "app/assets/efns_logo.png",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_sha256": "674ed2f97cef8249e6803749b9e6c2c7ef0874cc260ce1aef55447ed49d83b61",
+      "candidate_lf_sha256": "7aa1ff10f2a5f710b851d4d84f1898f139cba6eba28479ed973b0333fd39331b"
+    },
+    {
+      "path": "tests/fixtures/legacy_forms/efns_logo.png",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_sha256": "917f4b53487ef014d20ac752ebcf663c7cff836f4d1ee9b9ea10011623c78cad",
+      "candidate_lf_sha256": "199806c33230de0cc843d8fc6943a18d3e7e41e9941f4cfd6abd6abd17166771"
+    },
+    {
+      "path": "tests/fixtures/legacy_forms/EIMSFlockPermitForm.pdf",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_sha256": "14eac4dcae037356bf359151290cc2ddf426f323bf1cbea5f027562080e67dbb",
+      "candidate_lf_sha256": "889826c811b0aa667d45047ee2b81fedd0379628e1f9da7f93e66a3099a0f562"
+    },
+    {
+      "path": "tests/fixtures/legacy_forms/EIMSFlockSalmonellaTestingForm.pdf",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_sha256": "e6528831b8f766bfa7a6a4f78dcde2a501f8bb8b16d1650dd088b82d63ebd49c",
+      "candidate_lf_sha256": "6d6b2cfac6585589b5be33d95677b5db50ff24601d221700d1ead15103ecd1f4"
+    },
+    {
+      "path": "tests/fixtures/legacy_forms/EIMSLicenseApplicationForm.pdf",
+      "status": "NEW",
+      "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
+      "candidate_sha256": "59be6b7ef16961a8bf87ad63db4d3e2b012a695c31b57a2eb89594f9a17a5497",
+      "candidate_lf_sha256": "3d174ac855f2c951744363cfc5bc0911b2095e2f6a0334f50fc5cca2bcdc4db2"
+    }
+  ],
+  "report_pdf_artifacts": [
+    {
+      "path": "tests/test_report_pdf.py",
+      "status": "NEW",
+      "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
+      "candidate_lf_sha256": "e213113c7596ddb4e1682a59208b52a1fa4ab12f41a101831cd24cccdb2217bc"
+    },
+    {
+      "path": "docs/codex_reports/REPORT_PDF_EXPORT_20261109.md",
+      "status": "NEW",
+      "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
+      "candidate_lf_sha256": "396518dac6b0fe5ea5cfc672f42ba51f20eea51a6af032f1e42191b0aba2cd3e"
+    },
+    {
+      "path": "tests/test_confirmed_quota_reports.py",
+      "status": "MODIFIED",
+      "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
+      "candidate_lf_sha256": "aa27707bf06d3e64b1fc2055ecfa8b309e3fbc897138a604d38807b8f9f55bcc"
+    },
+    {
+      "path": "tests/test_flock_current_report.py",
+      "status": "MODIFIED",
+      "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
+      "candidate_lf_sha256": "d26ac4a66cb2098f35e468ba8eedeb1f76eb55ad94aeb93a42d609358aebe30d"
+    },
+    {
+      "path": "tests/test_flock_reports.py",
+      "status": "MODIFIED",
+      "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
+      "candidate_lf_sha256": "525f636bb0b3403e8a4ce4020cf5a16356ad38ce217e5534e3b3ae40dcaf4596"
+    },
+    {
+      "path": "tests/test_flock_reports_2.py",
+      "status": "MODIFIED",
+      "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
+      "candidate_lf_sha256": "e642a0c95e6ba0d0a6349a7ca357e267754632bb826aa031dfc442a50dcdeb8b"
+    },
+    {
+      "path": "tests/test_flock_status_producer.py",
+      "status": "MODIFIED",
+      "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
+      "candidate_lf_sha256": "23e992b97799a78636b63a9dd969a91b8a7d517a8d8c624fe58873e1cf3af24e"
+    },
+    {
+      "path": "tests/test_production_reports.py",
+      "status": "MODIFIED",
+      "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
+      "candidate_lf_sha256": "0dc6c6c40d7861308e2c419610d78ecbcd41f7f79854deece7241bafedbac275"
+    },
+    {
+      "path": "tests/test_quota_reports.py",
+      "status": "MODIFIED",
+      "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
+      "candidate_lf_sha256": "e9fbd79bd874e9aa09d5c97a6b252037406dbdc72e050334fe24164bf3fa8a27"
+    },
+    {
+      "path": "tests/test_production_report_notes.py",
+      "status": "MODIFIED",
+      "reason": "Assert the new third PDF export button while retaining existing Production note/CSV/XLSX checks.",
+      "candidate_lf_sha256": "e13d9c45eb5bec4da29bc593f10ce4337f6430838a2946c81daa1528a79c2bbc"
+    }
+  ]
+}

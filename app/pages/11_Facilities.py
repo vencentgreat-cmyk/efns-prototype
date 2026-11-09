@@ -5,6 +5,8 @@ from __future__ import annotations
 import datetime as dt
 
 import pandas as pd
+import uuid
+from data.repositories.continuity import changed_attributes
 import streamlit as st
 
 from app.auth import require_operational_page
@@ -130,6 +132,9 @@ else:
             construction = right.date_input("Construction Date", value=current.get("CONSTRUCTION_DATE"), key="facility_form_construction")
             closure = right.date_input("Closure Date", value=current.get("CLOSURE_DATE"), key="facility_form_closure")
             inactive = right.date_input("Inactive Date", value=current.get("INACTIVE_DATE"), key="facility_form_inactive")
+            if view.record_id:
+                revision_reason = st.text_input("Reason for correction *",key="facility_form_revision_reason")
+                st.session_state.setdefault("facility_form_revision_request",uuid.uuid4().hex)
         if action == "save":
             if not facility_name.strip(): st.error("Facility Name is required.")
             else:
@@ -137,5 +142,9 @@ else:
                 if not view.record_id: record.pop("FACILITY_ID")
                 else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
                 try:
-                    saved_id = repo.upsert_facility(record); clear_widget_prefix("facility_form_"); open_view("detail", saved_id)
+                    if view.record_id:
+                        changes = changed_attributes(current,record)
+                        saved_id = repo.revise_record("FACILITY",view.record_id,changes,revision_reason,st.session_state.facility_form_revision_request,expected_updated_at=st.session_state.get(expected_key)) if changes else view.record_id
+                    else: saved_id = repo.upsert_facility(record)
+                    clear_widget_prefix("facility_form_"); open_view("detail", saved_id)
                 except (ValueError, RepositoryError) as exc: show_data_error(exc)

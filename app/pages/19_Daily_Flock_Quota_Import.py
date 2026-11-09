@@ -53,9 +53,25 @@ with st.container(border=True):
     ):
         try:
             with st.spinner("Checking the uploaded rows..."):
+                if may_import:
+                    archives = {}
+                    for upload in uploads:
+                        archived = repo.archive_source_file(upload.name, upload.getvalue(), "DAILY_FLOCK_QUOTA")
+                        archives[upload.name + "\0" + archived["FILE_HASH"]] = archived["SOURCE_FILE_ID"]
+                    st.session_state.daily_source_files = archives
                 report = analyze_operational_files(
                     uploads, selected_type, repo, max_file_bytes=max_upload_mb * 1024 * 1024
                 )
+                if may_import:
+                    for item in report.files:
+                        file_id = archives[item.filename + "\0" + item.file_hash]
+                        repo.record_source_parse(file_id,not any("could not be parsed" in error for error in item.errors))
+                    source_rows=[{**row,"SOURCE_FILE_ID":archives[row["RAW_DATA"]["source_filename"]+"\0"+(row["RAW_DATA"].get("source_file_hash") or "")]} for row in report.raw_rows]
+                    st.session_state.daily_prepared_import_id=repo.stage_operational_review({
+                        "FILENAME":report.files[0].filename if len(report.files)==1 else f"Operational upload ({len(report.files)} files)",
+                        "FILE_HASH":report.package_hash,"FILE_SIZE_BYTES":sum(item.file_size for item in report.files),
+                    },source_rows)
+                    st.session_state.daily_prepared_package_hash=report.package_hash
             st.session_state.daily_flock_quota_report = report
             st.session_state.pop("daily_flock_quota_result", None)
             st.session_state.pop("daily_flock_quota_submitted_hash", None)
@@ -66,26 +82,32 @@ with st.container(border=True):
 
 report = st.session_state.get("daily_flock_quota_report")
 if report is None:
-    st.info("Choose one or more files, then select Review and validate. Nothing is saved during review.")
+    st.info("Choose one or more files, then select Review and validate. Original files are archived for import users; no business records are written during review.")
     st.stop()
 
 existing_import = repo.find_import_by_hash(report.package_hash)
+already_committed = bool(existing_import and str(existing_import.get("STATUS","")).lower()=="committed")
+prepared_for_commit=st.session_state.get("daily_prepared_package_hash")==report.package_hash
 row_frame = report.rows_frame()
 
-metrics = st.columns(4)
+metrics = st.columns(5)
 metrics[0].metric("Files", len(report.files))
-metrics[1].metric("Source rows", sum(item.row_count for item in report.files))
-metrics[2].metric("Valid rows", len(report.ready_rows))
-metrics[3].metric("Rejected rows", len(report.rejected_rows))
+metrics[1].metric("Unsupported files", len(report.unsupported_files))
+metrics[2].metric("Source rows", sum(item.row_count for item in report.files))
+metrics[3].metric("Valid rows", len(report.ready_rows))
+metrics[4].metric("Rejected rows", len(report.rejected_rows))
 
 with st.container(border=True):
     section_intro("File review", "Detected contents and a short preview from each file.")
     summary = pd.DataFrame([
         {
             "File name": item.filename,
-            "Detected contents": ENTITY_DISPLAY.get(item.entity, "Could not detect"),
+            "Detected contents": (
+                f"Unsupported: {item.errors[0].removeprefix('Unsupported entity: ').rstrip('.')}"
+                if item.unsupported_entity else ENTITY_DISPLAY.get(item.entity, "Could not detect")
+            ),
             "Rows": item.row_count,
-            "File status": "Needs attention" if item.errors else "Ready for row checks",
+            "File status": "Unsupported" if item.unsupported_entity else ("Needs attention" if item.errors else "Ready for row checks"),
         }
         for item in report.files
     ])
@@ -99,10 +121,12 @@ with st.container(border=True):
                 st.dataframe(item.preview, hide_index=True, width="stretch", height=260)
 
 with st.container(border=True):
-    section_intro("Validation results", "Rejected rows are never imported. Download the report, correct the file, and try again.")
-    if existing_import:
+    section_intro("Validation results", "Unsupported files and rejected rows are never imported.")
+    if already_committed:
         st.error("This exact set of files has already been imported.")
-    elif report.rejected_rows:
+    elif report.unsupported_files and not report.ready_rows:
+        st.warning("The uploaded files contain data that this page does not support.")
+    elif report.rejected_rows or report.unsupported_files:
         st.warning("Some rows need correction. Valid rows may still be imported after review.")
     elif report.ready_rows:
         st.success("All rows passed validation.")
@@ -111,7 +135,7 @@ with st.container(border=True):
 
     status_filter = st.segmented_control(
         "Rows to show",
-        ("All rows", "Valid", "Rejected"),
+        ("All rows", "Valid", "Rejected", "Unsupported"),
         default="All rows",
         key="daily_flock_quota_status_filter",
     )
@@ -120,16 +144,18 @@ with st.container(border=True):
         shown = row_frame[row_frame["STATUS"] == "Ready"]
     elif status_filter == "Rejected":
         shown = row_frame[row_frame["STATUS"] == "Rejected"]
+    elif status_filter == "Unsupported":
+        shown = row_frame[row_frame["STATUS"] == "Unsupported"]
     st.dataframe(shown.head(500), hide_index=True, width="stretch", height=420)
     if len(shown) > 500:
         st.caption("The on-screen preview is limited to 500 rows. Counts include the full upload.")
 
-    rejected = row_frame[row_frame["STATUS"] == "Rejected"]
-    if not rejected.empty:
-        safe_rejected = spreadsheet_safe(rejected)
+    issues = row_frame[row_frame["STATUS"].isin(["Rejected", "Unsupported"])]
+    if not issues.empty:
+        safe_issues = spreadsheet_safe(issues)
         st.download_button(
-            "Download error report",
-            safe_rejected.to_csv(index=False).encode("utf-8-sig"),
+            "Download issue report",
+            safe_issues.to_csv(index=False).encode("utf-8-sig"),
             file_name="daily-flock-quota-errors.csv",
             mime="text/csv",
             icon=":material/download:",
@@ -153,27 +179,21 @@ with st.container(border=True):
     confirmed = st.checkbox(
         "I reviewed the validation results and confirm the valid rows for import.",
         key=f"daily_flock_quota_confirm_{report.package_hash[:16]}",
-        disabled=not may_import or not report.ready_rows or bool(existing_import),
+        disabled=not may_import or not prepared_for_commit or not report.ready_rows or already_committed,
     )
     already_submitted = st.session_state.get("daily_flock_quota_submitted_hash") == report.package_hash
     if st.button(
         "Confirm import",
         type="primary",
         icon=":material/publish:",
-        disabled=not may_import or not report.ready_rows or not confirmed or bool(existing_import) or already_submitted,
+        disabled=not may_import or not prepared_for_commit or not report.ready_rows or not confirmed or already_committed or already_submitted,
     ):
         st.session_state.daily_flock_quota_submitted_hash = report.package_hash
         try:
             with st.spinner("Saving the validated rows..."):
-                result = repo.import_operational_flock_quota_batch(
-                    {
-                        "FILENAME": ", ".join(item.filename for item in report.files),
-                        "FILE_HASH": report.package_hash,
-                        "FILE_SIZE_BYTES": sum(item.file_size for item in report.files),
-                        "NOTES": "Daily or incremental Flock and Quota operational import.",
-                    },
+                result = repo.commit_staged_operational(
+                    st.session_state.daily_prepared_import_id,
                     report.records_by_entity,
-                    report.raw_rows,
                 )
             st.session_state.daily_flock_quota_result = result
             st.success(
@@ -183,7 +203,7 @@ with st.container(border=True):
         except Exception:
             st.session_state.pop("daily_flock_quota_submitted_hash", None)
             reference = uuid.uuid4().hex[:12].upper()
-            st.error(f"Nothing was saved. Error reference: {reference}")
+            st.error(f"No business rows were committed. Original files and staged source rows remain available. Error reference: {reference}")
 
 result = st.session_state.get("daily_flock_quota_result")
 if result and result.get("file_hash") == report.package_hash:

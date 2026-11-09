@@ -1,0 +1,8 @@
+{
+  "schema_version": "EFNS-ACCOUNT-RELATIONSHIPS-1",
+  "entity": "ACCOUNT",
+  "source_id": "accountid",
+  "field_map": {"SPENT_FOWL_PLANS_ACCOUNT_ID": "efns_spentfowlplans"},
+  "display_only": {"SPENT_FOWL_PLANS_ACCOUNT_ID": "efns_spentfowlplansname"},
+  "rules": ["Only an original valid GUID is authoritative", "Display names produce review candidates only", "Blank source never clears an existing relationship", "Re-read source and target plus FF9 CAS before any approved update", "Original RAW and mapping contracts stay immutable"]
+}

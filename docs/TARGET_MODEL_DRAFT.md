@@ -9,8 +9,8 @@
 
 The model separates `RAW` ingestion, normalized `CORE` operational tables and derived `REPORTING` views. RAW rows retain source JSON, source row number, validation messages and match audit fields. Normalized EIMS production records keep nullable Account, Facility and Flock links and begin as `UNMATCHED`.
 
-Operational relationships are Account → Facility → Facility Detail/Flock, Account → Quota Registration → Quota Transaction, Flock → Flock Transaction/Salmonella Test, and Import Batch → RAW Row/Production Record. All names, requiredness and cardinalities remain subject to Dataverse metadata.
+Operational relationships are Account → Facility → Facility Detail/Flock, Account → Quota Registration → Quota Transaction, Flock → Flock Transaction/Salmonella Test, and Import Batch → RAW Row/Production Record. Sara confirmed on 8 October 2026 that Facility → Flock is one-to-many, including sequential and concurrent use with no confirmed maximum. A Flock still has one optional Facility reference in the historical model. See [the verified Facility/Flock review and editable ERD](FACILITY_FLOCK_DESIGN.md); other provisional cardinalities retain their own confirmation status.
 
 Snowflake standard tables are used for RAW, history, operational and reporting storage. Hybrid Tables may be evaluated later using measured workloads and verified constraints; the current design does not depend on them.
 
-All table scripts use `CREATE TABLE IF NOT EXISTS` and are DEV/provisional. They have not been executed against a real Snowflake environment.
+This draft is not evidence of deployment. DEV has since been deployed; use actual metadata exports and the dated read-only reviews, rather than this draft or setup SQL alone, as evidence of its physical structure.

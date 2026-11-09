@@ -21,6 +21,7 @@ from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro,
 from data.constants import ACCOUNT_ROLE_FIELDS, ACCOUNT_STATUSES
 from data.repositories import get_repository
 from data.repositories.base import RepositoryError
+from data.validation import parse_optional_coordinate
 
 
 require_operational_page()
@@ -210,7 +211,7 @@ else:
             section_intro("Address")
             with st.container(border=True):
                 st.write(" · ".join(str(value) for value in (current.get("ADDRESS_LINE1"), current.get("ADDRESS_LINE2"), current.get("ADDRESS_LINE3"), current.get("CITY"), current.get("PROVINCE"), current.get("POSTAL_CODE"), current.get("COUNTRY_REGION")) if value) or "No address recorded")
-                st.caption(f"Latitude: {current.get('LATITUDE') or '—'} · Longitude: {current.get('LONGITUDE') or '—'}")
+                st.caption(f"Latitude: {current.get('LATITUDE') if pd.notna(current.get('LATITUDE')) else '—'} · Longitude: {current.get('LONGITUDE') if pd.notna(current.get('LONGITUDE')) else '—'}")
             section_intro("Account Roles")
             with st.container(border=True, horizontal=True):
                 active_roles = [label for field, label in ROLE_FIELDS if current.get(field)]
@@ -293,8 +294,10 @@ else:
                 province = right.selectbox("Address 1: State/Province", PROVINCES, index=option_index(list(PROVINCES), current.get("PROVINCE") or "NS"), key="account_form_province")
                 postal_code = right.text_input("Address 1: ZIP/Postal Code", value=str(current.get("POSTAL_CODE") or ""), key="account_form_postal")
                 country = right.text_input("Address 1: Country/Region", value=str(current.get("COUNTRY_REGION") or "Canada"), key="account_form_country")
-                latitude = right.number_input("Address 1: Latitude", min_value=-90.0, max_value=90.0, value=float(current.get("LATITUDE") or 0.0), format="%.7f", key="account_form_latitude")
-                longitude = right.number_input("Address 1: Longitude", min_value=-180.0, max_value=180.0, value=float(current.get("LONGITUDE") or 0.0), format="%.7f", key="account_form_longitude")
+                latitude_text = right.text_input("Address 1: Latitude", value="" if pd.isna(current.get("LATITUDE")) else str(current["LATITUDE"]), key="account_form_latitude")
+                latitude_error = right.empty()
+                longitude_text = right.text_input("Address 1: Longitude", value="" if pd.isna(current.get("LONGITUDE")) else str(current["LONGITUDE"]), key="account_form_longitude")
+                longitude_error = right.empty()
         with roles_tab:
             with st.container(border=True):
                 role_values = {}
@@ -304,6 +307,17 @@ else:
 
         if action == "save":
             errors = []
+            coordinate_errors = []
+            coordinates = {}
+            for field, text, error_slot in (
+                ("LATITUDE", latitude_text, latitude_error),
+                ("LONGITUDE", longitude_text, longitude_error),
+            ):
+                try:
+                    coordinates[field] = parse_optional_coordinate(text, field)
+                except ValueError as exc:
+                    error_slot.error(str(exc))
+                    coordinate_errors.append(str(exc))
             if not account_name.strip():
                 errors.append("Account Name is required.")
             if registration.strip():
@@ -312,7 +326,7 @@ else:
                     duplicates = duplicates[duplicates["ACCOUNT_ID"] != view.record_id]
                 if not duplicates.empty:
                     errors.append("Registration Number is already used by another Account.")
-            if errors:
+            if errors or coordinate_errors:
                 for error in errors:
                     st.error(error)
             else:
@@ -340,8 +354,7 @@ else:
                     "PROVINCE": province,
                     "POSTAL_CODE": postal_code.strip() or None,
                     "COUNTRY_REGION": country.strip() or None,
-                    "LATITUDE": latitude if latitude else None,
-                    "LONGITUDE": longitude if longitude else None,
+                    **coordinates,
                     **role_values,
                 }
                 if not view.record_id:

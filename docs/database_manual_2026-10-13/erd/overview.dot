@@ -1,0 +1,16 @@
+digraph G { graph [rankdir=TB,bgcolor="white",pad=0.2,nodesep=0.35,ranksep=0.55,splines=polyline,label="Main business spine - other relations in module sheets
+EFNS_DEV declarations | 13 October 2026
+Dashed: non-identifying | Solid: identifying
+Grey: repeated table | Rxx: exact relation sheet",labelloc=t,fontname="Arial",fontsize=15];node [shape=plain,fontname="Arial",fontsize=14];edge [fontname="Arial",fontcolor="#303a40"];CORE_ACCOUNT [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.ACCOUNT</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">ACCOUNT_ID  [PK]</TD></TR></TABLE>>];
+CORE_FACILITY [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.FACILITY</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">FACILITY_ID  [PK]</TD></TR></TABLE>>];
+CORE_FLOCK [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.FLOCK</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">FLOCK_ID  [PK]</TD></TR></TABLE>>];
+CORE_PRODUCTION_RECORD [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.PRODUCTION_RECORD</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">PRODUCTION_ID  [PK]</TD></TR></TABLE>>];
+CORE_QUOTA_REGISTRATION [label=<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="6" BGCOLOR="#ffffff"><TR><TD ALIGN="LEFT" BGCOLOR="#dfeef0"><B>CORE.QUOTA_REGISTRATION</B></TD></TR><TR><TD ALIGN="LEFT" PORT="p0">QUOTA_ID  [PK]</TD></TR></TABLE>>];CORE_ACCOUNT -> CORE_FACILITY [dir=both,arrowtail="teetee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R04",fontsize=12];
+CORE_ACCOUNT -> CORE_PRODUCTION_RECORD [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R05",fontsize=12];
+CORE_ACCOUNT -> CORE_QUOTA_REGISTRATION [dir=both,arrowtail="teetee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R06",fontsize=12];
+CORE_ACCOUNT -> CORE_FLOCK [dir=both,arrowtail="teetee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R07",fontsize=12];
+CORE_ACCOUNT -> CORE_PRODUCTION_RECORD [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R13",fontsize=12];
+CORE_FACILITY -> CORE_PRODUCTION_RECORD [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R15",fontsize=12];
+CORE_FACILITY -> CORE_FLOCK [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R16",fontsize=12];
+CORE_FLOCK -> CORE_PRODUCTION_RECORD [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R20",fontsize=12];
+CORE_QUOTA_REGISTRATION -> CORE_FLOCK [dir=both,arrowtail="odottee",arrowhead="crowodot",style="dashed",color="#46545a",penwidth=1.2,label="R23",fontsize=12];}

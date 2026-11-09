@@ -1,0 +1,17 @@
+{
+  "captured_at": "2026-10-14T16:59:48.154042+00:00",
+  "tables": 32,
+  "table_columns": 494,
+  "views": 4,
+  "view_columns": 85,
+  "field_entries": 579,
+  "foreign_key_relationships": 46,
+  "preservation": {
+    "MIGRATION_BATCH": true,
+    "MIGRATION_RAW_ROW": true,
+    "MIGRATION_ERROR": true,
+    "MIGRATION_CORRECTION_BATCH": true,
+    "MIGRATION_CORRECTION_ROW": true
+  },
+  "integrity_issues": []
+}

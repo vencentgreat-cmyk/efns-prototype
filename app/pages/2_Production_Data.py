@@ -1,12 +1,16 @@
 """Searchable and filterable production records."""
 
 import streamlit as st
+import pandas as pd
+import io
 
 from app.auth import require_page_permission
 from app.security import Permission
 from app.services.export import spreadsheet_safe
 from app.ui import apply_theme, page_header, section_intro
 from data.repositories import get_repository
+from data.producer_identity import production_identities
+from data.source_scope import SOURCE_SCOPES, scope_production
 
 
 require_page_permission(Permission.VIEW_DATA)
@@ -22,6 +26,7 @@ page_header(
 )
 
 all_records = repo.get_production_records()
+source_scope = st.selectbox('Source scope',SOURCE_SCOPES)
 
 filter_keys = (
     "production_year_filter",
@@ -100,6 +105,12 @@ records = repo.get_production_records(
     barn_identity=barn,
     egg_colour=colour,
 )
+records = scope_production(production_identities(records),source_scope)
+known_total = records['TOTAL'].notna().sum() if 'TOTAL' in records else 0
+coverage = st.columns(3)
+coverage[0].metric('Selected records',len(records))
+coverage[1].metric('Source Total known count',int(known_total))
+coverage[2].metric('Source Total missing count',len(records)-int(known_total))
 
 metrics = st.columns(4)
 for column, label, field in zip(
@@ -107,8 +118,8 @@ for column, label, field in zip(
     ("Total Received", "Total Accepted", "Total Rejected", "Total Loss"),
     ("TOTAL_RECEIVED", "TOTAL_ACCEPTED", "REJECTED", "LOSS"),
 ):
-    value = records[field].sum() if field in records else None
-    column.metric(label, "N/A" if value is None else f"{value:,.1f}")
+    value = records[field].sum(min_count=1) if field in records else None
+    column.metric(label, "N/A" if pd.isna(value) else f"{value:,.1f}")
 
 with st.container(border=True):
     section_intro(
@@ -122,6 +133,8 @@ with st.container(border=True):
             "REPORTING_YEAR",
             "REPORTING_WEEK",
             "PRODUCER_NUMBER",
+            "PRODUCER_IDENTITY_LABEL",
+            "PRODUCER_IDENTITY_STATUS",
             "GRADER_NUMBER",
             "BARN_IDENTITY",
             "EGG_COLOUR",
@@ -131,6 +144,7 @@ with st.container(border=True):
             "TOTAL_ACCEPTED",
             "TOTAL",
             "SOURCE_TYPE",
+            "SOURCE_SCOPE",
             "MATCH_STATUS",
             "SOURCE_ROW_NUMBER",
             "IMPORT_ID",
@@ -166,3 +180,7 @@ with st.container(border=True):
             "production_export.csv",
             "text/csv",
         )
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer,engine="openpyxl") as writer:
+            spreadsheet_safe(records[display_columns]).to_excel(writer,index=False,sheet_name="Production")
+        st.download_button("Export filtered XLSX",buffer.getvalue(),"production_export.xlsx","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

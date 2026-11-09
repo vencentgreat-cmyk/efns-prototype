@@ -1,0 +1,103 @@
+{
+  "baseline_commit": "19a4a9c16503185294271a633ae72eb5459a5481",
+  "status": "LOCAL ONLY - NOT DEPLOYED; rules PENDING",
+  "baseline_runtime_count": 89,
+  "runtime_modified": [
+    "app/pages/5_Flocks.py",
+    "app/pages/8_Quota_Transactions.py",
+    "app/services/quota_usage.py",
+    "data/migration.py"
+  ],
+  "runtime_unchanged_count": 85,
+  "runtime_added": [
+    "config/quota_rules.json",
+    "data/position_evidence.py",
+    "data/quota_position.py",
+    "data/flock_stock.py"
+  ],
+  "protected_unchanged": [
+    "app/security.py",
+    "app/auth.py",
+    "app/navigation.py",
+    "app/Home.py",
+    "data/connection.py",
+    "data/repositories/snowflake.py",
+    "data/repositories/flock_date_repair.py",
+    "data/repositories/controlled_supplements.py",
+    "data/historical_corrections.py",
+    "data/constants.py",
+    "config/eims_migration_mapping_v3.json",
+    "config/eims_migration_mapping_v3_disposal_r1.json",
+    "config/eims_migration_mapping_v3_count_source_r1.json"
+  ],
+  "files_changed_or_added": [
+    {
+      "path": "README.md",
+      "lf_sha256": "cdf4101d94ff0e05262cf874beb390d45488ca4a162c2c88b9254880d9563fec"
+    },
+    {
+      "path": "app/pages/5_Flocks.py",
+      "lf_sha256": "48ffb1d62b19e9b8428f3d4b720fdb7cc9d6c3456cf4b8ac352730530f68e372"
+    },
+    {
+      "path": "app/pages/8_Quota_Transactions.py",
+      "lf_sha256": "a4e1194d8af7506c9a32aec57a255fe287ca465f82c3ff24775c74511cba684c"
+    },
+    {
+      "path": "app/services/quota_usage.py",
+      "lf_sha256": "3e623d7aaa24578855ff5ee84bcdbb600f21777b2f4ab6db8b6595566a7d1a68"
+    },
+    {
+      "path": "config/quota_rules.json",
+      "lf_sha256": "6b9dd10087403d456904ce56fe67870febaa078ece267fccd727fcf4871afda9"
+    },
+    {
+      "path": "data/flock_stock.py",
+      "lf_sha256": "e923ddd990ed861b73a9b69150b59d35d8ef81502a8c43475160cbaaf21955c0"
+    },
+    {
+      "path": "data/migration.py",
+      "lf_sha256": "6f2aee2b5b00f34e4b105e1cb501666448b0f72b676198e799a8d3164a5f2c09"
+    },
+    {
+      "path": "data/position_evidence.py",
+      "lf_sha256": "a19a68d21ab8672ee81acec3fefcdc4f88f8018e17dee605b79a3fe19eda04ff"
+    },
+    {
+      "path": "data/quota_position.py",
+      "lf_sha256": "c1ff0315060f2c164b70f3dbf8702a7d8f0bd9668102ece9a0ff5e473a35eaa1"
+    },
+    {
+      "path": "docs/quota_flock_review_20261029.md",
+      "lf_sha256": "b24101af35c762d16253706f88be673f8c07244ccee1ed4550663263c9317ec6"
+    },
+    {
+      "path": "docs/quota_rules_confirmation_20261029.md",
+      "lf_sha256": "f61c9e64c33ae35bb92603f29764a45fd3af46f6dc7cf1a07e9bf8fe7a6ce24f"
+    },
+    {
+      "path": "sql/review/quota_flock_reconciliation_20261029.sql",
+      "lf_sha256": "f76e930720a1da318677f4542ac7373f27b70bece29507994752cd3b520290a0"
+    },
+    {
+      "path": "tests/test_quota_flock_position.py",
+      "lf_sha256": "4d5dc655563c91c2983863dbee29fa3c570c2c9c884a2a9194e31b5727d0059e"
+    },
+    {
+      "path": "tests/test_quota_position_ui.py",
+      "lf_sha256": "b552d06ed454592940d8d709321b79b97ca8f9ddc4b8643da28a37d850b6f049"
+    },
+    {
+      "path": "tests/test_quota_reconciliation_sql.py",
+      "lf_sha256": "9fd8422c09bb83042d93d2b43d523a2a85253ced80474bc9f1dae5820d96e575"
+    },
+    {
+      "path": "tests/test_staff_workflow_ui.py",
+      "lf_sha256": "25a2158752b8988b9f8cb7df678a247feb04261c51297e752e16c25f89651102"
+    }
+  ],
+  "tests": "143 passed; later SQL-only contract checks rerun separately",
+  "no_company_connection_or_write": true,
+  "no_schema_change": true,
+  "no_commit_or_push": true
+}

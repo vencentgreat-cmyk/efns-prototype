@@ -5,3 +5,14 @@ backgroundColor = "#F6F8FC"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#172033"
 font = "sans serif"
+borderColor = "#C7D0DF"
+dataframeHeaderBackgroundColor = "#E8EEF7"
+showWidgetBorder = true
+linkColor = "#2453BE"
+
+[theme.sidebar]
+primaryColor = "#3F56D9"
+backgroundColor = "#F1F5F9"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#172033"
+borderColor = "#C7D0DF"

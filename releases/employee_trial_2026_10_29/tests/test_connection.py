@@ -1,0 +1,747 @@
+"""Fully offline coverage for Snowflake runtime discovery and SQL executors."""
+
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+import datetime as dt
+from decimal import Decimal
+import sys
+import threading
+from types import SimpleNamespace
+
+import pandas as pd
+import pytest
+
+import data.connection as connection
+from data.repositories.base import (
+    RepositoryConfigurationError,
+    RepositoryConnectionError,
+    RepositoryError,
+    RepositoryOperationError,
+)
+
+
+ENV_NAMES = (
+    "SNOWFLAKE_CONNECTION_NAME",
+    "SNOWFLAKE_ACCOUNT",
+    "SNOWFLAKE_USER",
+    "SNOWFLAKE_PASSWORD",
+    "SNOWFLAKE_AUTHENTICATOR",
+    "SNOWFLAKE_PRIVATE_KEY_FILE",
+    "SNOWFLAKE_PRIVATE_KEY_FILE_PWD",
+    "SNOWFLAKE_WAREHOUSE",
+    "SNOWFLAKE_DATABASE",
+    "SNOWFLAKE_ROLE",
+    "SNOWFLAKE_STREAMLIT_CONNECTION",
+)
+
+
+@pytest.fixture(autouse=True)
+def clean_snowflake_environment(monkeypatch):
+    for name in ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_settings_defaults_are_unconfigured():
+    settings = connection.SnowflakeSettings.from_env()
+    assert settings.database == "EFNS_DEV"
+    assert settings.connection_name is None
+    assert settings.configured is False
+
+
+@pytest.mark.parametrize(
+    ("values", "expected"),
+    [
+        ({"SNOWFLAKE_CONNECTION_NAME": "efns_dev"}, {"connection_name": "efns_dev", "autocommit": False}),
+        (
+            {"SNOWFLAKE_ACCOUNT": "org-account", "SNOWFLAKE_USER": "dev", "SNOWFLAKE_PASSWORD": "secret"},
+            {"account": "org-account", "user": "dev", "password": "secret"},
+        ),
+        (
+            {"SNOWFLAKE_ACCOUNT": "org-account", "SNOWFLAKE_USER": "dev", "SNOWFLAKE_AUTHENTICATOR": "externalbrowser"},
+            {"account": "org-account", "user": "dev", "authenticator": "externalbrowser"},
+        ),
+        (
+            {"SNOWFLAKE_ACCOUNT": "org-account", "SNOWFLAKE_USER": "dev", "SNOWFLAKE_PRIVATE_KEY_FILE": "key.p8"},
+            {"account": "org-account", "user": "dev", "private_key_file": "key.p8"},
+        ),
+    ],
+)
+def test_supported_settings_are_configured(monkeypatch, values, expected):
+    for name, value in values.items():
+        monkeypatch.setenv(name, value)
+    settings = connection.SnowflakeSettings.from_env()
+    assert settings.configured is True
+    kwargs = settings.connector_kwargs()
+    assert all(kwargs[key] == value for key, value in expected.items())
+    assert all(value is not None and value != "" for value in kwargs.values())
+
+
+def test_settings_require_account_and_user(monkeypatch):
+    monkeypatch.setenv("SNOWFLAKE_PASSWORD", "secret")
+    with pytest.raises(RepositoryConfigurationError, match="account and user"):
+        connection.SnowflakeSettings.from_env().connector_kwargs()
+
+
+def test_settings_require_authentication(monkeypatch):
+    monkeypatch.setenv("SNOWFLAKE_ACCOUNT", "org-account")
+    monkeypatch.setenv("SNOWFLAKE_USER", "dev")
+    with pytest.raises(RepositoryConfigurationError, match="authentication"):
+        connection.SnowflakeSettings.from_env().connector_kwargs()
+
+
+class FakeCursor:
+    def __init__(self, *, rows=None, description=None, rowcount=0, failure=None):
+        self.rows = list(rows or [])
+        self.description = description or []
+        self.rowcount = rowcount
+        self.failure = failure
+        self.calls = []
+        self.closed = False
+
+    def execute(self, sql, params=()):
+        self.calls.append(("execute", sql, params))
+        if self.failure:
+            raise self.failure
+        return self
+
+    def executemany(self, sql, rows):
+        self.calls.append(("executemany", sql, list(rows)))
+        if self.failure:
+            raise self.failure
+        return self
+
+    def fetchall(self):
+        return self.rows
+
+    def close(self):
+        self.closed = True
+
+
+class FakeConnection:
+    def __init__(self, cursor=None):
+        self.cursor_value = cursor or FakeCursor()
+        self.commits = 0
+        self.rollbacks = 0
+
+    def cursor(self):
+        return self.cursor_value
+
+    def commit(self):
+        self.commits += 1
+
+    def rollback(self):
+        self.rollbacks += 1
+
+
+def test_connector_query_labels_dataframe():
+    cursor = FakeCursor(rows=[(1, "A")], description=[("ID",), ("NAME",)])
+    executor = connection.ConnectorExecutor(lambda: FakeConnection(cursor))
+    result = executor.query("SELECT %s, %s", (1, "A"))
+    pd.testing.assert_frame_equal(result, pd.DataFrame({"ID": [1], "NAME": ["A"]}))
+
+
+def test_connector_execute_and_executemany_counts():
+    cursor = FakeCursor(rowcount=2)
+    executor = connection.ConnectorExecutor(lambda: FakeConnection(cursor))
+    assert executor.execute("DELETE FROM T WHERE ID = %s", (1,)) == 2
+    assert executor.executemany("INSERT INTO T VALUES (%s, %s)", ((i, str(i)) for i in range(3))) == 2
+
+
+def test_connector_commit_rollback_and_transaction():
+    db = FakeConnection()
+    executor = connection.ConnectorExecutor(lambda: db)
+    executor.commit()
+    executor.rollback()
+    with executor.transaction():
+        pass
+    assert (db.commits, db.rollbacks) == (2, 1)
+
+
+def test_connector_failed_transaction_rolls_back():
+    db = FakeConnection()
+    executor = connection.ConnectorExecutor(lambda: db)
+    with pytest.raises(RuntimeError, match="failed"):
+        with executor.transaction():
+            raise RuntimeError("failed")
+    assert (db.commits, db.rollbacks) == (0, 1)
+
+
+def test_connector_rollback_failure_does_not_replace_initial_operation_error():
+    initial = RepositoryOperationError(
+        "INSERT", "MIGRATION_RAW_ROW", query_id="01c7704a-0002-dbb1-0003-b706000bc696", error_code="640"
+    )
+
+    class RollbackFailureConnection(FakeConnection):
+        def rollback(self):
+            raise RuntimeError("secondary rollback failure")
+
+    executor = connection.ConnectorExecutor(
+        lambda: RollbackFailureConnection(FakeCursor(failure=initial))
+    )
+    with pytest.raises(RepositoryOperationError) as captured:
+        with executor.transaction() as tx:
+            tx.execute("INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (%s)", ("guid-1",))
+
+    assert captured.value is initial
+    assert any("original operation error is preserved" in note for note in captured.value.__notes__)
+
+
+def test_connector_wraps_operation_and_connection_failures():
+    executor = connection.ConnectorExecutor(lambda: (_ for _ in ()).throw(RuntimeError("network secret")))
+    with pytest.raises(RepositoryConnectionError, match="connection failed"):
+        executor.query("SELECT 1")
+
+    original = RepositoryError("safe existing error")
+    executor = connection.ConnectorExecutor(lambda: FakeConnection(FakeCursor(failure=original)))
+    with pytest.raises(RepositoryError) as captured:
+        executor.execute("SELECT 1")
+    assert captured.value is original
+
+
+def test_connector_operation_error_exposes_only_safe_correlation_fields():
+    class DriverFailure(RuntimeError):
+        sfqid = "01b12345-0000-abcd-0000-000000000001"
+        errno = 2003
+        sqlstate = "42501"
+
+    cursor = FakeCursor(failure=DriverFailure("password=never-display bound-value=secret"))
+    executor = connection.ConnectorExecutor(lambda: FakeConnection(cursor))
+    with pytest.raises(RepositoryOperationError) as captured:
+        executor.execute("INSERT INTO EFNS_DEV.CORE.ACCOUNT (ACCOUNT_ID) VALUES (%s)", ("secret-id",))
+    error = captured.value
+    assert error.operation == "INSERT"
+    assert error.entity == "ACCOUNT"
+    assert error.query_id == DriverFailure.sfqid
+    assert error.error_code == "2003"
+    assert error.sql_state == "42501"
+    assert "01b12345-0000-abcd-0000-000000000001" in str(error)
+    assert "password" not in str(error)
+    assert "secret-id" not in str(error)
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [(1,), (2, 3)],
+        [(1,)],
+    ],
+)
+def test_connector_executemany_rejects_bad_row_shapes(rows):
+    executor = connection.ConnectorExecutor(lambda: FakeConnection())
+    with pytest.raises(RepositoryError, match="number of values|bind count"):
+        executor.executemany("INSERT INTO T VALUES (%s, %s)", rows)
+
+
+def test_connector_placeholder_count_ignores_quoted_text_and_empty_rows():
+    cursor = FakeCursor(rowcount=-1)
+    executor = connection.ConnectorExecutor(lambda: FakeConnection(cursor))
+    sql = "INSERT INTO T VALUES (%s, 'literal %s', \"identifier%s\")"
+    assert executor.executemany(sql, [(1,)]) == 1
+    before = len(cursor.calls)
+    assert executor.executemany("INSERT INTO T VALUES (%s)", []) == 0
+    assert len(cursor.calls) == before
+
+
+class FakeRow:
+    def __init__(self, **values):
+        self.values = values
+
+    def as_dict(self):
+        return dict(self.values)
+
+
+class FakeStatement:
+    def __init__(self, rows, columns):
+        self._rows = list(rows)
+        self.schema = SimpleNamespace(fields=[SimpleNamespace(name=name) for name in columns])
+
+    statement_params = None
+
+    def collect(self, statement_params=None):
+        # Mirrors snowflake.snowpark.DataFrame.collect(statement_params=...).
+        FakeStatement.last_statement_params = statement_params
+        return list(self._rows)
+
+
+class FakeSession:
+    def __init__(self, responder=None):
+        self.calls = []
+        self.responder = responder or (lambda sql, params: FakeStatement([], []))
+
+    def sql(self, text, params=None):
+        parameters = list(params or [])
+        self.calls.append((text, parameters))
+        return self.responder(text, parameters)
+
+
+def test_snowpark_query_converts_binds_and_preserves_schema():
+    def respond(sql, params):
+        assert sql == "SELECT ? AS ID, '%s' AS EXAMPLE"
+        assert params == [7]
+        return FakeStatement([FakeRow(ID=7, NAME="A")], ["ID", "NAME"])
+
+    executor = connection.SnowparkExecutor(FakeSession(respond))
+    result = executor.query("SELECT %s AS ID, '%s' AS EXAMPLE", (7,))
+    pd.testing.assert_frame_equal(result, pd.DataFrame({"ID": [7], "NAME": ["A"]}))
+
+    empty = connection.SnowparkExecutor(
+        FakeSession(lambda sql, params: FakeStatement([], ["ID", "NAME"]))
+    ).query("SELECT 1")
+    assert list(empty.columns) == ["ID", "NAME"]
+
+
+def test_snowpark_execute_and_transactions():
+    def respond(sql, params):
+        if sql.startswith("UPDATE"):
+            return FakeStatement([FakeRow(**{"number of rows updated": 3})], ["number of rows updated"])
+        return FakeStatement([], [])
+
+    session = FakeSession(respond)
+    executor = connection.SnowparkExecutor(session)
+    assert executor.execute("UPDATE T SET A = %s", (1,)) == 3
+    with executor.transaction():
+        pass
+    assert [call[0] for call in session.calls[-2:]] == ["BEGIN", "COMMIT"]
+
+
+@pytest.mark.parametrize("operation", ["execute", "query"])
+def test_snowpark_single_statement_renders_optional_numbers_as_sql_null(operation):
+    session = FakeSession()
+    executor = connection.SnowparkExecutor(session)
+    getattr(executor, operation)(
+        "SELECT %s AS LATITUDE, %s AS LONGITUDE, '%s ?' AS LITERAL",
+        (None, 0.0),
+    )
+    assert session.calls == [
+        ("SELECT NULL AS LATITUDE, ? AS LONGITUDE, '%s ?' AS LITERAL", [0.0])
+    ]
+
+
+def test_snowpark_failed_transaction_rolls_back():
+    session = FakeSession()
+    executor = connection.SnowparkExecutor(session)
+    with pytest.raises(RuntimeError):
+        with executor.transaction():
+            raise RuntimeError("failed")
+    assert [call[0] for call in session.calls] == ["BEGIN", "ROLLBACK"]
+
+
+def test_snowpark_shared_session_serializes_audit_until_migration_commit_finishes():
+    commit_started = threading.Event()
+    release_commit = threading.Event()
+    audit_started = threading.Event()
+    commit_count = 0
+    ordered_calls = []
+
+    def respond(sql, params):
+        nonlocal commit_count
+        ordered_calls.append(sql)
+        if sql == "COMMIT":
+            commit_count += 1
+            if commit_count == 1:
+                commit_started.set()
+                assert release_commit.wait(timeout=5)
+        return FakeStatement([], [])
+
+    shared_connection = SimpleNamespace()
+    migration_session = FakeSession(respond)
+    audit_session = FakeSession(respond)
+    migration_session._conn = SimpleNamespace(_conn=shared_connection)
+    audit_session._conn = SimpleNamespace(_conn=shared_connection)
+    migration = connection.SnowparkExecutor(migration_session)
+    audit = connection.SnowparkExecutor(audit_session)
+
+    def write_migration():
+        with migration.transaction() as tx:
+            tx.execute("INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (%s)", ("guid-1",))
+
+    def write_audit():
+        audit_started.set()
+        with audit.transaction() as tx:
+            tx.execute("INSERT INTO AUDIT_EVENT (ENTITY_ID) VALUES (%s)", ("batch-1",))
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        migration_future = pool.submit(write_migration)
+        assert commit_started.wait(timeout=5)
+        audit_future = pool.submit(write_audit)
+        assert audit_started.wait(timeout=5)
+        try:
+            assert ordered_calls == [
+                "BEGIN",
+                "INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (?)",
+                "COMMIT",
+            ]
+        finally:
+            release_commit.set()
+        migration_future.result(timeout=5)
+        audit_future.result(timeout=5)
+
+    assert ordered_calls == [
+        "BEGIN",
+        "INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (?)",
+        "COMMIT",
+        "BEGIN",
+        "INSERT INTO AUDIT_EVENT (ENTITY_ID) VALUES (?)",
+        "COMMIT",
+    ]
+
+
+def test_snowpark_nested_transaction_on_shared_session_has_one_owner():
+    session = FakeSession()
+    repository = connection.SnowparkExecutor(session)
+    audit = connection.SnowparkExecutor(session)
+
+    with repository.transaction() as tx:
+        tx.execute("INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (%s)", ("guid-1",))
+        with audit.transaction() as audit_tx:
+            audit_tx.execute("INSERT INTO AUDIT_EVENT (ENTITY_ID) VALUES (%s)", ("batch-1",))
+
+    assert [call[0] for call in session.calls] == [
+        "BEGIN",
+        "INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (?)",
+        "INSERT INTO AUDIT_EVENT (ENTITY_ID) VALUES (?)",
+        "COMMIT",
+    ]
+
+
+def test_snowpark_rollback_failure_does_not_replace_initial_insert_error():
+    initial = RepositoryOperationError(
+        "INSERT", "MIGRATION_RAW_ROW", query_id="01c7704a-0002-dbb1-0003-b706000bc696", error_code="640"
+    )
+
+    def respond(sql, params):
+        if sql.startswith("INSERT"):
+            raise initial
+        if sql == "ROLLBACK":
+            raise RuntimeError("secondary rollback failure")
+        return FakeStatement([], [])
+
+    executor = connection.SnowparkExecutor(FakeSession(respond))
+    with pytest.raises(RepositoryOperationError) as captured:
+        with executor.transaction() as tx:
+            tx.execute("INSERT INTO MIGRATION_RAW_ROW (SOURCE_ID) VALUES (%s)", ("guid-1",))
+
+    assert captured.value is initial
+    assert captured.value.query_id == "01c7704a-0002-dbb1-0003-b706000bc696"
+    assert captured.value.error_code == "640"
+    assert any("original operation error is preserved" in note for note in captured.value.__notes__)
+
+
+def test_snowpark_preserves_repository_errors_and_wraps_other_errors():
+    existing = RepositoryError("safe")
+    with pytest.raises(RepositoryError) as captured:
+        connection.SnowparkExecutor(FakeSession(lambda sql, params: (_ for _ in ()).throw(existing))).query("SELECT 1")
+    assert captured.value is existing
+
+    with pytest.raises(RepositoryError, match="Snowflake SELECT failed"):
+        connection.SnowparkExecutor(FakeSession(lambda sql, params: (_ for _ in ()).throw(RuntimeError("secret")))).query("SELECT 1")
+
+
+def test_snowpark_executemany_batches_nested_values():
+    def respond(sql, params):
+        count = sql.count("PARSE_JSON(?)")
+        return FakeStatement([FakeRow(**{"number of rows inserted": count})], [])
+
+    session = FakeSession(respond)
+    executor = connection.SnowparkExecutor(session)
+    rows = [(1, '{"a":1}'), (2, '{"a":2}'), (3, '{"a":3}')]
+    result = executor.executemany(
+        "INSERT INTO T (ID, RAW) VALUES (%s, PARSE_JSON(%s))",
+        (row for row in rows),
+        batch_size=2,
+    )
+    assert result == 3
+    assert len(session.calls) == 2
+    assert session.calls[0][1] == [1, '{"a":1}', 2, '{"a":2}']
+    assert session.calls[1][1] == [3, '{"a":3}']
+
+
+def test_snowpark_executemany_batches_insert_select_for_variant_values():
+    def respond(sql, params):
+        count = sql.count("SELECT ?, PARSE_JSON(?)")
+        return FakeStatement([FakeRow(**{"number of rows inserted": count})], [])
+
+    session = FakeSession(respond)
+    executor = connection.SnowparkExecutor(session)
+    rows = [(1, '{"a":1}'), (2, '{"a":2}'), (3, '{"a":3}')]
+    result = executor.executemany(
+        "INSERT INTO T (ID, RAW) SELECT %s, PARSE_JSON(%s)",
+        rows,
+        batch_size=2,
+    )
+    assert result == 3
+    assert "SELECT ?, PARSE_JSON(?) UNION ALL SELECT ?, PARSE_JSON(?)" in session.calls[0][0]
+    assert session.calls[0][1] == [1, '{"a":1}', 2, '{"a":2}']
+
+
+def test_snowpark_values_bulk_renders_single_null_integer_as_sql_null():
+    session = FakeSession(
+        lambda sql, params: FakeStatement(
+            [FakeRow(**{"number of rows inserted": 1})], []
+        )
+    )
+    executor = connection.SnowparkExecutor(session)
+
+    assert executor.executemany(
+        "INSERT INTO T (ID, FLOCK_AGE) VALUES (%s, %s)",
+        [("production-1", None)],
+    ) == 1
+    assert session.calls == [
+        ("INSERT INTO T (ID, FLOCK_AGE) VALUES (?, NULL)", ["production-1"])
+    ]
+
+
+def test_snowpark_values_bulk_supports_different_null_positions_and_types():
+    session = FakeSession(
+        lambda sql, params: FakeStatement(
+            [FakeRow(**{"number of rows inserted": 2})], []
+        )
+    )
+    executor = connection.SnowparkExecutor(session)
+    day = dt.date(2026, 9, 14)
+
+    assert executor.executemany(
+        "INSERT INTO T (I, N, D, S, OPTIONAL_N) VALUES (%s, %s, %s, %s, %s)",
+        [
+            (1, Decimal("12.50"), day, "first", None),
+            (2, None, day, "second", Decimal("3.25")),
+        ],
+    ) == 2
+    sql, params = session.calls[0]
+    assert sql.endswith(
+        "VALUES (?, ?, ?, ?, NULL), (?, NULL, ?, ?, ?)"
+    )
+    assert params == [
+        1, Decimal("12.50"), day, "first",
+        2, day, "second", Decimal("3.25"),
+    ]
+    assert None not in params and "None" not in params
+
+
+def test_snowpark_values_bulk_supports_all_null_optional_numbers():
+    session = FakeSession(
+        lambda sql, params: FakeStatement(
+            [FakeRow(**{"number of rows inserted": 2})], []
+        )
+    )
+    executor = connection.SnowparkExecutor(session)
+    executor.executemany(
+        "INSERT INTO T (ID, A, B) VALUES (%s, %s, %s)",
+        [(1, None, None), (2, None, None)],
+    )
+    assert session.calls[0] == (
+        "INSERT INTO T (ID, A, B) VALUES (?, NULL, NULL), (?, NULL, NULL)",
+        [1, 2],
+    )
+
+
+def test_snowpark_insert_select_bulk_renders_row_specific_nulls():
+    session = FakeSession(
+        lambda sql, params: FakeStatement(
+            [FakeRow(**{"number of rows inserted": 2})], []
+        )
+    )
+    executor = connection.SnowparkExecutor(session)
+    executor.executemany(
+        "INSERT INTO T (ID, RAW, OPTIONAL_N) SELECT %s, PARSE_JSON(%s), %s",
+        [(1, '{"a":1}', None), (2, None, Decimal("4.5"))],
+    )
+    assert session.calls[0] == (
+        "INSERT INTO T (ID, RAW, OPTIONAL_N) SELECT ?, PARSE_JSON(?), NULL "
+        "UNION ALL SELECT ?, PARSE_JSON(NULL), ?",
+        [1, '{"a":1}', 2, Decimal("4.5")],
+    )
+
+
+def test_null_literalization_is_quote_aware_and_keeps_non_nulls_bound():
+    sql, params = connection._literalize_null_bindings(
+        "(?, '?' || ?, \"?\", '%s')",
+        [None, "bound-value"],
+    )
+    assert sql == "(NULL, '?' || ?, \"?\", '%s')"
+    assert params == ["bound-value"]
+
+
+def test_complete_production_insert_keeps_flock_age_null_out_of_snowpark_binds():
+    from data.repositories.snowflake import (
+        PRODUCTION_COLUMNS,
+        PRODUCTION_DECIMAL_COLUMNS,
+        PRODUCTION_INTEGER_COLUMNS,
+        SnowflakeRepository,
+    )
+
+    session = FakeSession(
+        lambda sql, params: FakeStatement(
+            [FakeRow(**{"number of rows inserted": 1})], []
+        )
+    )
+    executor = connection.SnowparkExecutor(session)
+    repo = SnowflakeRepository.__new__(SnowflakeRepository)
+    repo.database = "EFNS_DEV"
+    repo.schema_core = "CORE"
+    repo.schema_raw = "RAW"
+    repo.schema_reporting = "REPORTING"
+    record = {column: "value" for column in PRODUCTION_COLUMNS}
+    record.update({column: 1 for column in PRODUCTION_INTEGER_COLUMNS})
+    record.update({column: Decimal("1.25") for column in PRODUCTION_DECIMAL_COLUMNS})
+    record.update({
+        "PRODUCTION_ID": "DEV_VERIFY_PRODUCTION_NULL_1",
+        "FLOCK_AGE": None,
+        "SOURCE_TYPE": "EIMS_IMPORT",
+        "MATCH_STATUS": "UNMATCHED",
+        "SOURCE_ROW_NUMBER": 14,
+    })
+
+    assert repo._insert_production(executor, [record], "DEV_VERIFY_IMPORT_NULL_1") == 1
+    sql, params = session.calls[0]
+    assert "INSERT INTO EFNS_DEV.CORE.PRODUCTION_RECORD" in sql
+    assert sql.count("NULL") == 1
+    assert None not in params and "None" not in params
+    assert len(params) == sql.count("?")
+
+
+def test_snowpark_executemany_rejects_invalid_input_without_execution():
+    session = FakeSession()
+    executor = connection.SnowparkExecutor(session)
+    with pytest.raises(RepositoryError, match="INSERT statement"):
+        executor.executemany("UPDATE T SET A = %s", [(1,)])
+    with pytest.raises(RepositoryError, match="same number"):
+        executor.executemany("INSERT INTO T VALUES (%s, %s)", [(1, 2), (3,)])
+    with pytest.raises(RepositoryError, match="bind count"):
+        executor.executemany("INSERT INTO T VALUES (%s, %s)", [(1,)])
+    assert executor.executemany("INSERT INTO T VALUES (%s)", []) == 0
+    assert session.calls == []
+
+
+@pytest.mark.parametrize(
+    ("rows", "expected"),
+    [
+        ([], 0),
+        ([FakeRow(**{"number of rows inserted": 2})], 2),
+        ([FakeRow(**{"number of rows updated": 3})], 3),
+        ([FakeRow(**{"number of rows deleted": 4})], 4),
+        ([FakeRow(**{"number of rows inserted": 2, "number of rows updated": 3})], 5),
+        ([FakeRow(**{"ROWS_AFFECTED": 6})], 6),
+        ([FakeRow(**{'"number of rows deleted"': 7})], 7),
+        ([FakeRow(status="ok")], -1),
+    ],
+)
+def test_affected_row_formats(rows, expected):
+    assert connection._affected_rows(rows) == expected
+
+
+def configured_settings():
+    return connection.SnowflakeSettings(
+        connection_name="efns_dev", account=None, user=None, password=None,
+        authenticator=None, private_key_file=None, private_key_file_pwd=None,
+        warehouse=None, database="EFNS_DEV", role=None,
+    )
+
+
+def test_runtime_resolution_prefers_streamlit_connection(monkeypatch):
+    session = FakeSession()
+    fake_streamlit = SimpleNamespace(connection=lambda name, type: SimpleNamespace(session=lambda: session))
+    monkeypatch.setattr(connection, "_streamlit_runtime_active", lambda: True)
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+    resolved = connection._resolve_executor(configured_settings())
+    assert isinstance(resolved, connection.SnowparkExecutor)
+    assert resolved.runtime_name == "Streamlit Connection"
+
+
+def test_missing_streamlit_runtime_falls_through_to_warehouse(monkeypatch):
+    import snowflake.snowpark.context as context
+
+    class StreamlitAPIException(Exception):
+        error_id = "snowflake-missing-connection-config"
+
+    monkeypatch.setattr(connection, "_streamlit_runtime_active", lambda: True)
+    monkeypatch.setitem(
+        sys.modules,
+        "streamlit",
+        SimpleNamespace(connection=lambda *args, **kwargs: (_ for _ in ()).throw(StreamlitAPIException())),
+    )
+    monkeypatch.setattr(context, "get_active_session", lambda: FakeSession())
+    assert connection._resolve_executor(configured_settings()).runtime_name == "Warehouse Session"
+
+
+def test_runtime_resolution_uses_warehouse_then_connector(monkeypatch):
+    import snowflake.snowpark.context as context
+
+    monkeypatch.setattr(connection, "_streamlit_runtime_active", lambda: False)
+    monkeypatch.setattr(context, "get_active_session", lambda: FakeSession())
+    assert connection._resolve_executor(configured_settings()).runtime_name == "Warehouse Session"
+
+    class SnowparkSessionException(Exception):
+        pass
+
+    monkeypatch.setattr(context, "get_active_session", lambda: (_ for _ in ()).throw(SnowparkSessionException()))
+    assert isinstance(connection._resolve_executor(configured_settings()), connection.ConnectorExecutor)
+
+
+def test_runtime_resolution_does_not_hide_real_errors(monkeypatch):
+    monkeypatch.setattr(connection, "_streamlit_runtime_active", lambda: True)
+    monkeypatch.setitem(
+        sys.modules,
+        "streamlit",
+        SimpleNamespace(connection=lambda *args, **kwargs: (_ for _ in ()).throw(PermissionError("denied"))),
+    )
+    with pytest.raises(RepositoryConnectionError, match="Streamlit"):
+        connection._resolve_executor(configured_settings())
+
+
+def test_missing_runtime_contract():
+    class SnowparkSessionException(Exception):
+        pass
+
+    class StreamlitAPIException(Exception):
+        error_id = "snowflake-missing-connection-config"
+
+    assert connection._missing_runtime(ImportError())
+    assert connection._missing_runtime(SnowparkSessionException())
+    assert connection._missing_runtime(StreamlitAPIException())
+    assert not connection._missing_runtime(PermissionError())
+
+
+class DelegatedExecutor(connection.SqlExecutor):
+    runtime_name = "Fake Runtime"
+
+    def __init__(self):
+        self.calls = []
+
+    def query(self, sql, params=None): self.calls.append(("query", sql)); return pd.DataFrame()
+    def execute(self, sql, params=None): self.calls.append(("execute", sql)); return 1
+    def executemany(self, sql, rows, *, batch_size=500): self.calls.append(("executemany", sql)); return 1
+    def commit(self): self.calls.append(("commit", None))
+    def rollback(self): self.calls.append(("rollback", None))
+
+    @contextmanager
+    def transaction(self):
+        self.calls.append(("transaction", None))
+        yield self
+
+
+def test_lazy_executor_resolves_once_and_delegates(monkeypatch):
+    delegated = DelegatedExecutor()
+    resolutions = []
+    monkeypatch.setattr(connection, "_resolve_executor", lambda settings: resolutions.append(settings) or delegated)
+    lazy = connection.LazySqlExecutor(configured_settings())
+    assert lazy.is_resolved is False
+    assert lazy.runtime_name == "Not connected"
+    lazy.execute("UPDATE T")
+    lazy.query("SELECT 1")
+    lazy.check_connection()
+    with lazy.transaction() as executor:
+        assert executor is delegated
+    assert len(resolutions) == 1
+    assert lazy.runtime_name == "Fake Runtime"
+    assert [call[0] for call in delegated.calls] == ["execute", "query", "query", "transaction"]
+
+
+def test_repository_mode_defaults_to_mock(monkeypatch):
+    monkeypatch.delenv("REPOSITORY_MODE", raising=False)
+    from data.repositories import get_repository
+    from data.repositories.mock import MockRepository
+
+    assert isinstance(get_repository(), MockRepository)
