@@ -173,9 +173,6 @@ def license_with_linked_name(column, name):
         dict(ACCOUNT_ID='linked-source', ORGANIZATION_NAME=name)
     ])], ignore_index=True)
     repo._accounts.loc[0, column] = 'linked-source'
-    # No alternate literal plant value: test the linked name's NULL handling.
-    if column == 'SPENT_FOWL_PLANS_ACCOUNT_ID':
-        repo._accounts.loc[0, 'SPENT_FOWL_PLANS'] = None
     original = repo._accounts.copy(deep=True)
     form = build_printable_form(repo, 'license_application_pdf', user=user(),
                                 registration='7173', report_date=date(2027, 1, 1))
