@@ -288,7 +288,7 @@
       "path": "app/services/printable_forms.py",
       "status": "NEW",
       "reason": "Pure read-only printable form projections and legacy PDF layout; confirmed quota helper reused.",
-      "candidate_lf_sha256": "e3f7110f3252dba4742c2e4393a2377947a23609a9fce35c920116e6d3547052"
+      "candidate_lf_sha256": "57dfa32192bf2d636b305bd401ba37baabb8d1c4223a516781b084423f29a060"
     },
     {
       "path": "app/services/printable_form_text.py",
@@ -344,13 +344,13 @@
       "path": "tests/test_printable_forms.py",
       "status": "NEW",
       "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
-      "candidate_lf_sha256": "e7b46f2e9006148061c4c0e3dc6d5d818817104d455724af66b4bf117406ff4c"
+      "candidate_lf_sha256": "a7f84ced9a7e3a907d1c603f4ae94131ba1389cc242f8a7f6b1b9b95dba24fd6"
     },
     {
       "path": "docs/codex_reports/PRINTABLE_FORMS_20261109.md",
       "status": "NEW",
       "reason": "Printable form asset, legacy source fixture, documentation or offline regression coverage.",
-      "candidate_lf_sha256": "8ab836fd311cd2c4cab0795535e1c4556435c9658a1e3483fb8fb583d95274db"
+      "candidate_lf_sha256": "08906d83ab54b853296c0a3f5781c5c988895e0071e576c5e483ceb5d9c07561"
     },
     {
       "path": "app/assets/efns_logo.png",
