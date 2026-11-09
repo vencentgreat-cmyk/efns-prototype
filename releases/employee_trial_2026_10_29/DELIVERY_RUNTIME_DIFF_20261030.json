@@ -324,13 +324,13 @@
       "path": "app/services/report_pdf.py",
       "status": "NEW",
       "reason": "Shared presentation-only SSRS-style PDF renderer using exact CSV cell text, bounded row count, fitting, pagination and Halifax footer.",
-      "candidate_lf_sha256": "25c9c423ad1995bd6f0df5cbd4bf9cec349f76e38ffb6c3307e12df423866113"
+      "candidate_lf_sha256": "dd2fe0df2f94919cd68d1ab20f7f7c677dd55199e38c125031bd0fcabe162b19"
     },
     {
       "path": "app/services/report_pdf_ui.py",
       "status": "NEW",
       "reason": "Permission-checked PDF buttons and existing REPORT export audit pattern; no database or report calculation changes.",
-      "candidate_lf_sha256": "9b6032b1c5be27982fcc3cd0a24d5187a854d0fd4126ddbbe9e39a732072bf96"
+      "candidate_lf_sha256": "1e52e26c0743c8d4f8a825402b7cca7b1538b0a14614d7172819319b8e2295ac"
     }
   ],
   "deployment_metadata_changes": {
@@ -405,7 +405,7 @@
       "path": "tests/test_report_pdf.py",
       "status": "NEW",
       "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
-      "candidate_lf_sha256": "e213113c7596ddb4e1682a59208b52a1fa4ab12f41a101831cd24cccdb2217bc"
+      "candidate_lf_sha256": "8ff6e48dcfa4d03ad14ca95be78d7a66043dc40b78edb31b7c3340f06ae3fe25"
     },
     {
       "path": "docs/codex_reports/REPORT_PDF_EXPORT_20261109.md",

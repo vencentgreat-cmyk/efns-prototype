@@ -140,13 +140,23 @@ def note_lines(frame, notes=None):
     return list(dict.fromkeys([*flatten(frame.attrs.get('notes',[])),*flatten(notes)]))
 
 
-def table_layout(rows, available_width):
+def identifier_cell(header, value):
+    """Custom builder IDs/keys and GUIDs are atomic display values, not prose."""
+    if not value or re.search(r'\s', value) or NUMERIC.fullmatch(value):
+        return False
+    return (header.casefold().endswith((' id', ' key', ' number', ' no')) or
+            bool(re.fullmatch(r'[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}', value)))
+
+
+def table_layout(rows, available_width, *, keep_identifiers=False):
     """Fit every column, wrapping text and preserving a minimum 7pt font."""
     from reportlab.pdfbase.pdfmetrics import stringWidth
     columns=len(rows[0])
     # A bounded sample avoids measuring millions of strings; all actual cells
     # still wrap inside their assigned widths when the table is rendered.
     sample=rows[:101]+rows[-1:]
+    identifier_rows=[(row,'Helvetica-Bold' if is_total_row(rows[0],row) else 'Helvetica')
+                     for row in rows[1:]] if keep_identifiers else []
     for size in (10,9,8,MIN_FONT_SIZE):
         desired=[]
         minimum=[]
@@ -160,10 +170,12 @@ def table_layout(rows, available_width):
             # Do not break identifiers such as week codes or numeric totals into
             # separate lines. Check all numeric cells, including sparse outliers.
             numeric_width=max((stringWidth(row[col],'Helvetica-Bold',size) for row in rows[1:] if NUMERIC.fullmatch(row[col])),default=0)+5
-            required=max(size+4,widest_char+5,numeric_width)
+            identifier_width=max((stringWidth(row[col],font,size) for row,font in identifier_rows
+                if identifier_cell(rows[0][col],row[col])),default=0)+5
+            required=max(size+4,widest_char+5,numeric_width,identifier_width)
             essential.append(required)
             word_width=max((stringWidth(word,'Helvetica-Bold',size) for text in texts for word in text.split()),default=0)+5
-            minimum.append(max(required,min(28,word_width)))
+            minimum.append(max(required,min(28,word_width),header_word+5 if keep_identifiers else 0))
             desired.append(max(minimum[-1],22,min(150,max(header_word,preferred)+7)))
         if (sum(minimum)<=available_width and sum(desired)<=available_width*1.1) or size==MIN_FONT_SIZE:
             break
@@ -197,7 +209,18 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
     timestamp=when.astimezone(ZoneInfo('America/Halifax')).strftime('%Y-%m-%d %H:%M:%S %Z')+' (America/Halifax)'
     title=display_text(title)
     subtitles=[display_text(value) for value in ([subtitle_lines] if isinstance(subtitle_lines,str) else subtitle_lines or []) if display_text(value)]
+    rows=pdf_display_rows(frame,report_id)
+    keep_identifiers=report_id=='custom-builder'
     pagesize=landscape(letter) if len(frame.columns)>7 else letter
+    layout=None
+    if rows:
+        try:
+            layout=table_layout(rows,pagesize[0]-48,keep_identifiers=keep_identifiers)
+        except PDFExportError:
+            if not keep_identifiers or pagesize!=letter:
+                raise
+            pagesize=landscape(letter)
+            layout=table_layout(rows,pagesize[0]-48,keep_identifiers=True)
     page_width,page_height=pagesize
     available=page_width-48
     title_style=ParagraphStyle('report-title',fontName='Helvetica-Bold',fontSize=14,leading=17)
@@ -251,14 +274,15 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
         topMargin=page_height-body_top,bottomMargin=32,title=title,author='Egg Farmers of Nova Scotia')
     doc.addPageTemplates(PageTemplate(id='report',frames=[Frame(24,32,available,body_top-32,
         leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)],onPage=header))
-    rows=pdf_display_rows(frame,report_id)
     story=[]
     if rows:
-        size,widths=table_layout(rows,available)
+        size,widths=layout
         normal=ParagraphStyle('cell',fontName='Helvetica',fontSize=size,leading=size+2,splitLongWords=True)
         right=ParagraphStyle('number',parent=normal,alignment=TA_RIGHT)
         bold=ParagraphStyle('total',parent=normal,fontName='Helvetica-Bold')
         bold_right=ParagraphStyle('total-number',parent=bold,alignment=TA_RIGHT)
+        atomic=ParagraphStyle('identifier',parent=normal,splitLongWords=False)
+        bold_atomic=ParagraphStyle('total-identifier',parent=bold,splitLongWords=False)
         cell_rows=[]
         styles=[('BACKGROUND',(0,0),(-1,0),colors.Color(*FORM_BLUE)),
             ('GRID',(0,0),(-1,-1),.35,colors.HexColor('#999999')),('VALIGN',(0,0),(-1,-1),'TOP'),
@@ -268,8 +292,10 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
             total=index>0 and is_total_row(rows[0],row)
             if total:styles.append(('BACKGROUND',(0,index),(-1,index),colors.HexColor('#dddddd')))
             cell_rows.append([paragraph(value,bold if index==0 else
+                bold_atomic if total and keep_identifiers and identifier_cell(rows[0][col],value) else
+                atomic if keep_identifiers and identifier_cell(rows[0][col],value) else
                 bold_right if total and NUMERIC.fullmatch(value) else bold if total else
-                right if NUMERIC.fullmatch(value) else normal) for value in row])
+                right if NUMERIC.fullmatch(value) else normal) for col,value in enumerate(row)])
         table=LongTable(cell_rows,colWidths=widths,repeatRows=1,splitByRow=1,splitInRow=1,hAlign='LEFT')
         table.setStyle(TableStyle(styles))
         story.append(table)
