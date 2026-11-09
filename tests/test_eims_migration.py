@@ -4,6 +4,8 @@ import hashlib
 import io
 import json
 import datetime as dt
+import xml.etree.ElementTree as ET
+import zipfile
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -261,6 +263,25 @@ def test_generator_is_deterministic_and_manifest_hashes_match(generated, tmp_pat
         for filename, metadata in manifest["datasets"][dataset]["files"].items():
             content = (root / dataset / filename).read_bytes()
             assert hashlib.sha256(content).hexdigest() == metadata["sha256"]
+
+
+def test_generated_workbook_preserves_timestamp_xml_namespaces():
+    from openpyxl import load_workbook
+    from scripts.generate_fake_eims_export import deterministic_xlsx
+
+    content = deterministic_xlsx(pd.DataFrame({"VALUE": [1]}), "production")
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        root = ET.fromstring(archive.read("docProps/core.xml"))
+    for field in ("created", "modified"):
+        node = root.find("{http://purl.org/dc/terms/}" + field)
+        assert node is not None
+        assert node.text == "2026-09-15T00:00:00Z"
+        assert node.attrib["{http://www.w3.org/2001/XMLSchema-instance}type"] == "dcterms:W3CDTF"
+    book = load_workbook(io.BytesIO(content), read_only=True)
+    try:
+        assert list(book["production"].values) == [("VALUE",), (1,)]
+    finally:
+        book.close()
 
 
 def test_clean_package_counts_and_relationships(generated):

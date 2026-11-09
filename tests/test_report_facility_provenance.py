@@ -149,6 +149,12 @@ def test_page_displays_provenance_and_row_period_filters(repo, tmp_path, monkeyp
     app.switch_page("pages/4_Reports.py").run()
     app.radio(key="report_center_section").set_value("Customize Report").run()
     app.selectbox(key="custom_report_dataset").set_value("Production Records").run()
+    # Dataset changes can reset the keyed multiselect on newer Streamlit.
+    # Select the fields this provenance/filtering test actually exercises.
+    app.multiselect(key="custom_report_columns").set_value([
+        "Production ID", "Reporting Year", "Reporting Week", "Facility Source",
+        "Facility Reference Comparison", "Flock Facility ID",
+    ]).run()
     assert not app.exception
     assert app.checkbox(key="custom_filter_use_dates").disabled
     app.selectbox(key="custom_filter_reporting_year").set_value(2026).run()

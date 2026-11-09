@@ -1,9 +1,11 @@
 """Smoke coverage for the application shell and safe exports."""
 
 from pathlib import Path
+import re
 import tomllib
 
 import pandas as pd
+import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.services.export import spreadsheet_safe
@@ -64,12 +66,57 @@ def test_native_light_theme_and_scoped_custom_css():
         "secondaryBackgroundColor": "#FFFFFF",
         "textColor": "#172033",
         "font": "sans serif",
+        "borderColor": "#C7D0DF",
+        "dataframeHeaderBackgroundColor": "#E8EEF7",
+        "showWidgetBorder": True,
+        "linkColor": "#2453BE",
+        "sidebar": {
+            "primaryColor": "#3F56D9",
+            "backgroundColor": "#F1F5F9",
+            "secondaryBackgroundColor": "#FFFFFF",
+            "textColor": "#172033",
+            "borderColor": "#C7D0DF",
+        },
     }
 
     ui_source = (project_root / "app" / "ui.py").read_text(encoding="utf-8")
-    assert "data-testid" not in ui_source
-    assert "!important" not in ui_source
-    assert "header[" not in ui_source
+    styles = re.findall(r'<style>(.*?)</style>', ui_source, re.S)
+    assert len(styles) == 1
+    _assert_scoped_custom_css(styles[0])
+    assert 'class="efns-page-title"' in ui_source
+
+
+def _assert_scoped_custom_css(css):
+    """Allow the intentional title override, never native-widget-wide CSS."""
+    title = '[data-testid="stMarkdownContainer"] .efns-page-header h1.efns-page-title'
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+    rules = re.findall(r'([^{}]+)\{([^{}]*)\}', css)
+    assert rules
+    assert 'header[' not in css
+    assert not re.search(r'@(import|font-face|keyframes)\b', css)
+    important = []
+    for selectors, declarations in rules:
+        for selector in selectors.split(','):
+            selector = selector.strip()
+            assert selector == title or re.fullmatch(r'\.efns-[\w-]+(?:\s+(?:small|strong|span))?', selector), selector
+            for declaration in declarations.split(';'):
+                if '!important' in declaration:
+                    assert selector == title
+                    assert declaration.strip() == 'color: #172033 !important'
+                    important.append(declaration.strip())
+    assert important == ['color: #172033 !important']
+
+
+@pytest.mark.parametrize('selector',[
+    '[data-testid="stButton"] button',
+    'header[data-testid="stHeader"]',
+    '[data-testid="stMarkdownContainer"] h1',
+    '.efns-brand, button',
+    '.efns-brand',
+])
+def test_scoped_css_guard_rejects_native_selectors_and_other_important_rules(selector):
+    with pytest.raises(AssertionError):
+        _assert_scoped_custom_css(selector+' { color: #172033 !important; }')
 
 
 def test_primary_workflows_expose_clear_controls(tmp_path, monkeypatch):
