@@ -156,7 +156,7 @@ def test_catalog_page_and_formula_safe_exports(layout,tmp_path,monkeypatch):
     accounts.loc[0,'ORGANIZATION_NAME']='=1+1'
     report_id='production-nest-run' if layout=='nest_run' else 'production-management-'+layout
     definition=report_definition(report_id)
-    assert definition.status=='Available' and definition.export_formats==('CSV','XLSX')
+    assert definition.status=='Available' and definition.export_formats==('CSV','XLSX','PDF')
     repo=Repository()
     repo.accounts=accounts
     repo.get_production_report_records=lambda start,end:records
@@ -177,7 +177,7 @@ def test_catalog_page_and_formula_safe_exports(layout,tmp_path,monkeypatch):
         app.run()
     app.button(key='run_'+prefix).click().run()
     assert not app.error and not app.exception and len(app.dataframe)==1
-    assert len(app.get('download_button'))==2
+    assert len(app.get('download_button'))==3
     assert 'PRODUCTION_ID' not in app.dataframe[0].value
     frame=app.session_state[prefix+'_result']
     if layout!='nest_run':

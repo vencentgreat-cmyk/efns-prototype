@@ -85,5 +85,8 @@ def render_printable_form(repo, user, handler):
         except Exception as exc:
             st.info('The PDF could not be generated: '+str(exc))
         else:
-            st.download_button('Download PDF',pdf,handler+'.pdf','application/pdf',key=key+'_download')
+            if st.download_button('Export PDF',pdf,handler+'.pdf','application/pdf',key=key+'_download'):
+                from app.services.report_pdf_ui import audit_pdf_export
+                report_ids={'license_application_pdf':'license-application','flock_permit_pdf':'flock-permit','salmonella_form_pdf':'salmonella-form'}
+                audit_pdf_export(user,report_ids[handler],sum(len(rows) for rows in form.tables.values()))
     else:st.info('Your role can preview this form but cannot export it.')

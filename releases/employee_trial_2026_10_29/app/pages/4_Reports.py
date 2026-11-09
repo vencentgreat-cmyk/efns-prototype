@@ -26,6 +26,7 @@ from app.services.production_reports import (build_production_report, build_nest
     PRODUCTION_CAPTION, production_rounding_summary, production_compact_caption, production_notes_frame)
 from app.services.flock_age_report import build_flock_age_report, build_flock_age_quotas
 from app.services.quota_state import get_inactive_quota_transaction_ids
+from app.services.report_pdf_ui import pdf_download_button, custom_parameter_lines
 from app.services.flock_reports import (
     build_flock_status_report, build_flocks_counted_report,
     build_flocks_needing_counts_report, build_flock_disposals_report,
@@ -56,15 +57,17 @@ def audit(action: str, report_id: str, details=None):
     get_auth_store().record_action(user, action, "REPORT", report_id, details or {})
 
 
-def downloads(frame: pd.DataFrame, stem: str, report_id: str):
+def downloads(frame: pd.DataFrame, stem: str, report_id: str, *, subtitle_lines=(), notes=None):
     if not can_current(Permission.EXPORT_REPORT):
         st.info("Your role can view this report but cannot export report data.")
         return
-    left, right = st.columns(2)
+    left, right, pdf_col = st.columns(3)
     if left.download_button("Export CSV", report_csv(user, frame), f"{stem}.csv", "text/csv", width="stretch"):
         audit("EXPORT", report_id, {"format": "CSV", "row_count": len(frame)})
     if right.download_button("Export XLSX", report_xlsx(user, frame), f"{stem}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch"):
         audit("EXPORT", report_id, {"format": "XLSX", "row_count": len(frame)})
+    pdf_download_button(user,frame,report_definition(report_id).name,subtitle_lines,f'{stem}.pdf',report_id,
+        notes=notes,key=stem+'_pdf',target=pdf_col)
 
 
 def load_flock_report_quotas(accounts, as_of):
@@ -188,8 +191,11 @@ if section == "Report Library":
                     formats = {column:lambda value:'' if quota_number(value) is None else f'{quota_number(value):,}' for column in [*AMOUNTS,*NEST_FIELDS] if column in result}
                     st.dataframe(result.style.format(formats),hide_index=True,width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
-                    st.download_button('Export CSV',report_csv(user,result),prefix+'.csv','text/csv',key=prefix+'_csv')
-                    st.download_button('Export XLSX',report_xlsx(user,result,notes=production_notes_frame(metadata)),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
+                    csv_col,xlsx_col,pdf_col=st.columns(3)
+                    csv_col.download_button('Export CSV',report_csv(user,result),prefix+'.csv','text/csv',key=prefix+'_csv')
+                    xlsx_col.download_button('Export XLSX',report_xlsx(user,result,notes=production_notes_frame(metadata)),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
+                    pdf_download_button(user,result,definition.name,metadata['headers'],prefix+'.pdf',definition.report_id,
+                        notes=production_notes_frame(metadata),key=prefix+'_pdf',target=pdf_col)
             else:
                 notes_caption.caption(PRODUCTION_CAPTION)
         elif definition.handler in {'quota_transactions', 'quota_leases', 'quota_leases_by_end_date', 'quota_history'}:
@@ -241,8 +247,11 @@ if section == "Report Library":
                     formats = {column:lambda value: '' if quota_number(value) is None else f'{quota_number(value):,}' for column in ('Price','Bird Count','Quota Count Adjust','Running Balance','Current Quota') if column in result}
                     st.dataframe(result.style.format(formats), hide_index=True, width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
-                    st.download_button('Export CSV',report_csv(user,result),prefix+'.csv','text/csv',key=prefix+'_csv')
-                    st.download_button('Export XLSX',report_xlsx(user,result),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
+                    csv_col,xlsx_col,pdf_col=st.columns(3)
+                    csv_col.download_button('Export CSV',report_csv(user,result),prefix+'.csv','text/csv',key=prefix+'_csv')
+                    xlsx_col.download_button('Export XLSX',report_xlsx(user,result),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
+                    pdf_download_button(user,result,definition.name,[metadata['header'],*(['Account: '+st.session_state[prefix+'_applied_account']] if prefix=='quota_history' else [])],
+                        prefix+'.pdf',definition.report_id,notes=metadata['notes'],key=prefix+'_pdf',target=pdf_col)
         elif definition.handler in {"quota_summary", "quota_summary_details"}:
             prefix = definition.handler
             accounts = repo.get_accounts()
@@ -293,7 +302,8 @@ if section == "Report Library":
                 st.caption(f"{max(len(result)-1, 0):,} report row(s), plus Totals where applicable")
                 if result.empty: st.info("No quota report rows match the selected parameters.")
                 else: st.dataframe(result, width="stretch", hide_index=True)
-                downloads(result, prefix+"_report", definition.report_id)
+                downloads(result, prefix+"_report", definition.report_id,
+                    subtitle_lines=[f'Quota Type: {applied.get("quota_type", "")} · As of: {applied.get("as_of", "")} · Account: {applied.get("account", "")} · Status: {applied.get("status", "")}'],notes=metrics['notes'])
         elif definition.handler in {'flock_status', 'flock_status_producer', 'flocks_counted', 'flocks_needing_counts', 'flock_disposals', 'flock_salmonella_schedule', 'scheduled_flock_placements'}:
             handler = definition.handler
             source_flocks, source_accounts = repo.get_flocks(), repo.get_accounts()
@@ -397,8 +407,11 @@ if section == "Report Library":
                     st.caption(f'{len(result):,} report row(s), including totals where applicable.')
                     st.dataframe(result, hide_index=True, width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
-                    st.download_button('Export CSV', report_csv(user, result), handler+'_report.csv', 'text/csv', key=handler+'_csv')
-                    st.download_button('Export XLSX', report_xlsx(user, result), handler+'_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key=handler+'_xlsx')
+                    csv_col,xlsx_col,pdf_col=st.columns(3)
+                    csv_col.download_button('Export CSV', report_csv(user, result), handler+'_report.csv', 'text/csv', key=handler+'_csv')
+                    xlsx_col.download_button('Export XLSX', report_xlsx(user, result), handler+'_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key=handler+'_xlsx')
+                    pdf_download_button(user,result,definition.name,[st.session_state[handler+'_parameters']],handler+'_report.pdf',definition.report_id,
+                        notes=[*st.session_state.get(handler+'_reasons',[]),*( [summary['Notes']] if summary else [])],key=handler+'_pdf',target=pdf_col)
         elif definition.handler == 'flock_age':
             age_flocks = repo.get_flocks()
             age_accounts = repo.get_accounts()
@@ -431,8 +444,11 @@ if section == "Report Library":
                     st.caption(reason)
                 st.dataframe(result, hide_index=True, width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
-                    st.download_button('Export CSV', report_csv(user, result), 'flock_age_report.csv', 'text/csv', key='flock_age_csv')
-                    st.download_button('Export XLSX', report_xlsx(user, result), 'flock_age_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key='flock_age_xlsx')
+                    csv_col,xlsx_col,pdf_col=st.columns(3)
+                    csv_col.download_button('Export CSV', report_csv(user, result), 'flock_age_report.csv', 'text/csv', key='flock_age_csv')
+                    xlsx_col.download_button('Export XLSX', report_xlsx(user, result), 'flock_age_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key='flock_age_xlsx')
+                    pdf_download_button(user,result,definition.name,[st.session_state.flock_age_parameters],'flock_age_report.pdf',definition.report_id,
+                        notes=[summary['Notes'],*st.session_state.get('flock_age_quota_reasons',[])],key='flock_age_pdf',target=pdf_col)
         elif definition.handler in ('flock_current', 'flock_current_producer'):
             source_flocks = repo.get_flocks()
             prefix = 'flock_current_producer' if definition.handler == 'flock_current_producer' else 'flock_current'
@@ -465,8 +481,10 @@ if section == "Report Library":
                 else:
                     st.dataframe(result, hide_index=True, width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
-                    st.download_button('Export CSV', report_csv(user, result), prefix+'_report.csv', 'text/csv', key=prefix+'_csv')
-                    st.download_button('Export XLSX', report_xlsx(user, result), prefix+'_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key=prefix+'_xlsx')
+                    csv_col,xlsx_col,pdf_col=st.columns(3)
+                    csv_col.download_button('Export CSV', report_csv(user, result), prefix+'_report.csv', 'text/csv', key=prefix+'_csv')
+                    xlsx_col.download_button('Export XLSX', report_xlsx(user, result), prefix+'_report.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key=prefix+'_xlsx')
+                    pdf_download_button(user,result,definition.name,[st.session_state[prefix+'_parameters']],prefix+'_report.pdf',definition.report_id,key=prefix+'_pdf',target=pdf_col)
         elif definition.handler == 'custom':
             st.info('Use the Customize Report section to choose fields and run a preview.')
         elif definition.handler == "salmonella_report":
@@ -584,7 +602,7 @@ elif section == "Customize Report":
             st.warning('Source Total sums known values only. Missing values remain unknown; these counts do not establish that all observations were reported or that units are uniform.')
         if result.empty: st.info("No records match the selected configuration.")
         else: st.dataframe(result, width="stretch", hide_index=True, column_config=timestamp_columns(result.columns))
-        downloads(result, "efns_custom_report", "custom-builder")
+        downloads(result, "efns_custom_report", "custom-builder",subtitle_lines=custom_parameter_lines(st.session_state.custom_report_configuration))
         save_name = st.text_input("Save this configuration for this session", key="custom_report_save_name")
         if st.button("Save configuration", disabled=not save_name.strip(), key="custom_report_save"):
             saved = st.session_state.setdefault("session_saved_reports", {})
@@ -610,6 +628,7 @@ else:
                     result = build_custom_report(repo, user=user, **configuration)
                     st.session_state.saved_report_result = result
                     st.session_state.saved_report_result_name = name
+                    st.session_state.saved_report_pdf_parameters = custom_parameter_lines(configuration)
                     audit("RUN_REPORT", "custom-builder", {"saved_name": name, "row_count": len(result)})
                 except Exception as exc:
                     show_data_error(exc)
@@ -624,4 +643,4 @@ else:
             st.info("No records match the saved configuration.")
         else:
             st.dataframe(saved_result, width="stretch", hide_index=True, column_config=timestamp_columns(saved_result.columns))
-        downloads(saved_result, "efns_saved_report", "custom-builder")
+        downloads(saved_result, "efns_saved_report", "custom-builder",subtitle_lines=st.session_state.get('saved_report_pdf_parameters',[]))

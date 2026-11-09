@@ -9,12 +9,13 @@ from app.auth import require_page_permission
 from app.security import Permission
 from app.services.export import spreadsheet_safe
 from app.services.salmonella_reporting import build_salmonella_report
+from app.services.report_pdf_ui import pdf_download_button
 from app.ui import apply_theme, page_header, section_intro
 from data.constants import SALMONELLA_RESULTS
 from data.repositories import get_repository
 from app.services.selector_options import unique_identity_options, historical_filter_options
 
-require_page_permission(Permission.VIEW_REPORTS)
+user = require_page_permission(Permission.VIEW_REPORTS)
 apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()
@@ -61,9 +62,14 @@ if report.empty:
 else:
     st.dataframe(report, width="stretch", height=470, hide_index=True)
     export = spreadsheet_safe(report)
-    csv_col, excel_col = st.columns(2)
+    csv_col, excel_col, pdf_col = st.columns(3)
     csv_col.download_button("Export report as CSV", export.to_csv(index=False), "salmonella_test_report.csv", "text/csv", width="stretch")
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         export.to_excel(writer, index=False, sheet_name="Salmonella Tests")
     excel_col.download_button("Export report as Excel", buffer.getvalue(), "salmonella_test_report.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
+pdf_download_button(user,report,'Salmonella Test Report',[
+    f'Account: {account} · Facility: {facility} · Flock: {flock} · Permit: {permit}',
+    f'Sample dates: {date_from or "All"} to {date_to or "All"} · Result: {result} · Inspector: {inspector}',
+    f'Case / File Number: {case_number} · Invoice Number: {invoice_number}'],
+    'salmonella_test_report.pdf','salmonella-report',key='salmonella_report_pdf',target=pdf_col if not report.empty else st)

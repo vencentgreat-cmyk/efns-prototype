@@ -204,6 +204,8 @@ def test_every_available_report_page_smoke(definition,case,tmp_path,monkeypatch)
     elif case=='no_rows':
         app.date_input(key='sal_rpt_dates').set_value((date(1900,1,1),date(1900,1,2))).run()
     assert not app.exception and not app.error
+    if case=='normal' and definition.handler not in FORM_HANDLERS:
+        assert any(button.label=='Export PDF' for button in app.get('download_button')),(definition.report_id,case)
     for frame in app.dataframe:
         for value in rendered_strings(frame.value):
             assert not re.search(r'(?<!\w)(?:None|nan|NaT|<NA>)(?!\w)',value),(definition.report_id,case,value)

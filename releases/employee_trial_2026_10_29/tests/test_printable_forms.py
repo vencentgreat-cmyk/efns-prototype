@@ -225,7 +225,7 @@ def test_form_page_generates_download(handler,tmp_path,monkeypatch):
         app.selectbox(key='print_'+handler+'_registration').set_value('7173' if handler=='license_application_pdf' else '7107').run()
     app.button(key='run_'+handler).click().run()
     assert not app.exception and not app.error
-    assert any(button.label=='Download PDF' for button in app.get('download_button'))
+    assert any(button.label=='Export PDF' for button in app.get('download_button'))
     assert app.dataframe
 
 

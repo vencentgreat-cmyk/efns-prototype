@@ -238,7 +238,7 @@ def test_catalog_exports_and_page_wiring(report_id,tmp_path,monkeypatch):
         frame,_ = build_quota_leases_report(a,r,t,set(),'2026-01-01',by_end_date=report_id.endswith('by-end-date'))
     definition = report_definition(report_id)
     assert definition.permission == Permission.VIEW_REPORTS and definition.status == 'Available'
-    assert definition.export_formats == ('CSV','XLSX')
+    assert definition.export_formats == ('CSV','XLSX','PDF')
     for exported in (pd.read_csv(BytesIO(report_csv(user(),frame)),keep_default_na=False),
                      pd.read_excel(BytesIO(report_xlsx(user(),frame)),keep_default_na=False)):
         assert "'=1+1" in exported['Account Name'].tolist()
@@ -261,7 +261,7 @@ def test_catalog_exports_and_page_wiring(report_id,tmp_path,monkeypatch):
         app.date_input(key=prefix+'_date').set_value(date(2026,1,1) if prefix.startswith('quota_leases') else DAY)
     app.button(key='run_'+prefix).click().run()
     assert not app.exception and not app.error and len(app.dataframe) == 1
-    assert len(app.get('download_button')) == 2
+    assert len(app.get('download_button')) == 3
     assert 'QUOTA_TRANSACTION_ID' not in app.dataframe[0].value
     import pyarrow.ipc as ipc
     display = ipc.open_stream(app.dataframe[0].proto.styler.display_values).read_all().to_pandas()

@@ -137,5 +137,5 @@ def test_page_notes_are_one_summary_with_collapsed_details_and_notes_export(layo
         assert not any(identity in item.value for identity in records.PRODUCTION_ID)
     expander=next(item for item in app.expander if item.label=='Rounding differences')
     assert not expander.proto.expanded
-    assert len(app.get('download_button'))==2
+    assert len(app.get('download_button'))==3
     assert exports and pd.ExcelFile(BytesIO(exports[-1])).sheet_names[-1]=='Notes'

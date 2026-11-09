@@ -248,6 +248,8 @@ def build_printable_form(repo, handler, *, user=None, registration=None, report_
 
 def render_form_pdf(form):
     """Render fixed legacy wording, escaped data, repeating table headers and pagination."""
+    from app.services.report_pdf import ensure_pdf_row_limit
+    ensure_pdf_row_limit(sum(len(rows) for rows in form.tables.values()))
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER
     from reportlab.lib.pagesizes import letter, landscape

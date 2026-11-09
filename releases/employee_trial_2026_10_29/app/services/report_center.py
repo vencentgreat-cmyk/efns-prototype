@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import datetime as dt
 import io
 import unicodedata
@@ -65,6 +65,13 @@ REPORT_CATALOG = (
     ReportDefinition("flock-permit", "Flock Permit Form", "Forms and Letters", "Form", "Legacy Pullet Placement Permit for paired Layer and Pullet permits.", ("Layer permit number", "Pullet permit number"), Permission.VIEW_REPORTS, "Available", "flock_permit_pdf", ("PDF",), "FLOCK"),
     ReportDefinition("custom-builder", "Customize Report", "Custom", "Custom Report", "Build a report from curated datasets and allowlisted fields.", ("Dataset", "Fields", "Filters", "Grouping", "Sorting", "Aggregations"), Permission.USE_REPORT_BUILDER, "Available", "custom", ("CSV", "XLSX")),
 )
+
+
+# Every available tabular export shares the same PDF presentation capability.
+# Printable forms retain their specialized PDF-only layouts.
+REPORT_CATALOG = tuple(replace(report, export_formats=(*report.export_formats, 'PDF'))
+    if report.status == 'Available' and 'CSV' in report.export_formats else report
+    for report in REPORT_CATALOG)
 
 
 @dataclass(frozen=True)

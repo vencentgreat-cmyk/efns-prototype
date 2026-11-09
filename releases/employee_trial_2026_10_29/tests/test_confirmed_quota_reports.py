@@ -182,7 +182,7 @@ def test_catalog_and_page_wiring(report_id,tmp_path,monkeypatch):
     from tests.auth_support import authenticated_app
     root = Path(__file__).resolve().parents[1]
     definition = report_definition(report_id)
-    assert definition.status == 'Available' and definition.export_formats == ('CSV','XLSX')
+    assert definition.status == 'Available' and definition.export_formats == ('CSV','XLSX','PDF')
     assert 'provisional' not in definition.description.lower()
     app = authenticated_app(root/'streamlit_app.py',tmp_path,monkeypatch)
     app.session_state['_base_repo'] = Repository({'7022':34526,'7114':0})
@@ -193,7 +193,7 @@ def test_catalog_and_page_wiring(report_id,tmp_path,monkeypatch):
     app.date_input(key=prefix+'_as_of').set_value(DAY)
     app.button(key='run_'+prefix).click().run()
     assert not app.error and not app.exception
-    assert len(app.dataframe) == 1 and len(app.get('download_button')) == 2
+    assert len(app.dataframe) == 1 and len(app.get('download_button')) == 3
     assert not any('pending confirmation' in caption.value.lower() for caption in app.caption)
     assert 'QUOTA_TRANSACTION_ID' not in app.dataframe[0].value
     app.selectbox(key=prefix+'_account').set_value('7022 · 7022')
@@ -263,6 +263,6 @@ def test_page_null_registration_name_and_address(report_id,tmp_path,monkeypatch)
     assert not any('None' in label or '<NA>' in label or 'nan' in label for label in labels)
     app.button(key='run_'+prefix).click().run()
     assert not app.error and not app.exception
-    assert len(app.get('download_button')) == 2
+    assert len(app.get('download_button')) == 3
     assert app.dataframe[0].value['Reg No'].tolist() == ['', '7022','']
     assert app.dataframe[0].value.iloc[-1][QUOTA_ACCOUNT_COLUMNS].eq('').all()

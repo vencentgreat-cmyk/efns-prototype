@@ -157,7 +157,7 @@ def test_new_reports_catalog_and_formula_safe_exports(kind):
     else:
         result = build_scheduled_flock_placements(f,pd.DataFrame(),a,facilities(),{},DAY,DAY)
     definition = report_definition(kind)
-    assert definition.status == 'Available' and definition.export_formats == ('CSV','XLSX')
+    assert definition.status == 'Available' and definition.export_formats == ('CSV','XLSX','PDF')
     for exported in (pd.read_csv(BytesIO(report_csv(user(),result))),pd.read_excel(BytesIO(report_xlsx(user(),result)))):
         assert exported.iloc[0]['Reg No'] == "'=1+1"
         assert exported.iloc[0]['Account Name'] == "'@SUM(1)"

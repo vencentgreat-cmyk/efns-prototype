@@ -152,7 +152,7 @@ def test_exports_escape_formulas_and_catalog_is_available():
     assert csv.iloc[0].Account==xlsx.iloc[0].Account=="'=1+1"
     definition=report_definition('flock-current')
     assert definition.status=='Available'
-    assert definition.export_formats==('CSV','XLSX')
+    assert definition.export_formats==('CSV','XLSX','PDF')
 
 
 def test_report_center_renders_only_result_and_does_not_audit(tmp_path,monkeypatch):

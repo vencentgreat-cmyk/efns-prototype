@@ -113,7 +113,7 @@ def test_catalog_and_formula_safe_exports():
     definition = report_definition('flock-status-producer')
     assert definition.name == 'Flock Status Report by Producer'
     assert definition.status == 'Available' and definition.permission == Permission.VIEW_REPORTS
-    assert definition.export_formats == ('CSV','XLSX')
+    assert definition.export_formats == ('CSV','XLSX','PDF')
     f,t,a,b,q = bayview()
     a.loc[0,'ORGANIZATION_NAME'] = '=1+1'
     result,_ = build_flock_status_by_producer_report(f,t,a,b,q,DAY,'a')
@@ -160,7 +160,7 @@ def test_page_selection_summary_exports_and_empty_message(tmp_path,monkeypatch):
     assert {metric.label:metric.value for metric in app.metric} == {
         'Inventory Birds':'16560','NFPMC Allocation':'1027985','Provincial Utilization':'1.61%',
         'Issuance for Province':'16152','Producers with Quota':'1'}
-    assert len(app.get('download_button')) == 2
+    assert len(app.get('download_button')) == 3
     app.selectbox(key='flock_status_producer_account').set_value(None).run()
     assert not app.exception and not app.error and not app.dataframe
     assert any('Select an Account' in info.value for info in app.info)

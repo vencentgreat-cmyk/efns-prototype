@@ -196,7 +196,7 @@ def test_all_new_reports_formula_safe_exports_and_available_catalog():
     for report_id, frame in zip(('flock-status','flocks-counted','flocks-needing-counts','flock-disposals'),
                                  (status,counted,needing,disposed)):
         definition = report_definition(report_id)
-        assert definition.status == 'Available' and definition.export_formats == ('CSV','XLSX')
+        assert definition.status == 'Available' and definition.export_formats == ('CSV','XLSX','PDF')
         assert pd.read_csv(BytesIO(report_csv(user(),frame))).iloc[0,0] == "'=1+1"
         assert pd.read_excel(BytesIO(report_xlsx(user(),frame))).iloc[0,0] == "'=1+1"
 
