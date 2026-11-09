@@ -16,6 +16,7 @@ def unavailable(*args,**kwargs):
     ('3_Accounts_Facilities_Flocks.py','3_Accounts_Facilities_Flocks','account'),
     ('5_Flocks.py','5_Flocks','flock'),('7_Quota_Registrations.py','7_Quota_Registrations','quota')])
 def test_position_failure_leaves_detail_usable(chain,tmp_path,monkeypatch,page,key,which):
+    monkeypatch.setattr('app.services.quota_usage.SHOW_QUOTA_USAGE_PANEL',True)
     repo,account,other,facility,quota,flock,*_=chain
     before=repo._flocks.copy(deep=True)
     from app.services import quota_usage

@@ -7,6 +7,7 @@ from tests.test_staff_workflows import chain
 
 
 def test_employee_pages_save_cancel_and_refresh(chain,tmp_path,monkeypatch):
+    monkeypatch.setattr('app.services.quota_usage.SHOW_QUOTA_USAGE_PANEL',True)
     r,a,o,f,q,flock,record=chain
     monkeypatch.setenv('EFNS_RUNTIME_MODE','local'); monkeypatch.setenv('REPOSITORY_MODE','mock')
     root=Path(__file__).resolve().parents[1]

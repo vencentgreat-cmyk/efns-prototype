@@ -103,6 +103,7 @@ def test_historical_lease_notes_edit_preserves_stored_values(chain,tmp_path,monk
 
 
 def test_flock_shows_latest_observation_not_established_usage(chain,tmp_path,monkeypatch):
+    monkeypatch.setattr('app.services.quota_usage.SHOW_QUOTA_USAGE_PANEL',True)
     from data.business_time import halifax_today
     repo,account,other,facility,quota,flock,*_=chain
     repo.upsert_flock_transaction(dict(FLOCK_ID=flock,TRANSACTION_TYPE='Count',QUANTITY=7,

@@ -86,6 +86,7 @@ def test_zero_observation_does_not_clear_other_flocks_in_shared_account(chain):
 
 
 def test_zero_count_ui_save_refresh_and_account_summary(chain,tmp_path,monkeypatch):
+    monkeypatch.setattr('app.services.quota_usage.SHOW_QUOTA_USAGE_PANEL',True)
     r,a,o,f,q,flock,record=chain
     monkeypatch.setenv('EFNS_RUNTIME_MODE','local');monkeypatch.setenv('REPOSITORY_MODE','mock')
     root=Path(__file__).resolve().parents[1]

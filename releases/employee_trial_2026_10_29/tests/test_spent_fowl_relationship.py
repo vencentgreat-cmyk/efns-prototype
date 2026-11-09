@@ -116,6 +116,7 @@ def test_viewer_cannot_save_lookup(accounts):
 
 
 def test_quota_presentation_distinguishes_two_unknown_definitions(chain,tmp_path,monkeypatch):
+ monkeypatch.setattr('app.services.quota_usage.SHOW_QUOTA_USAGE_PANEL',True)
  r,a,*_=chain;app=_app(r,tmp_path,monkeypatch)
  app=_open(app,'app/pages/3_Accounts_Facilities_Flocks.py',a,'detail')
  assert not app.exception

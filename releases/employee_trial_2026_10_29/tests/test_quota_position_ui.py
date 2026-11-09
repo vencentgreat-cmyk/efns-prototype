@@ -36,6 +36,7 @@ def test_historical_type_filter_and_credit_label_without_blind_sum(chain, tmp_pa
 
 
 def test_flock_latest_multisource_observation_is_not_auto_selected(chain, tmp_path, monkeypatch):
+    monkeypatch.setattr('app.services.quota_usage.SHOW_QUOTA_USAGE_PANEL',True)
     repo, account, other, facility, quota, flock, _ = chain
     from data.business_time import halifax_today
     for i, source in enumerate(('Producer', 'Board')):

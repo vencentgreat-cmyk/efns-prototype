@@ -103,9 +103,9 @@
     {
       "path": "app/services/quota_usage.py",
       "status": "MODIFIED",
-      "reason": "PENDING Account-wide recorded Bird Count and guarded draft calculation; current stock/percentage remain unestablished; detailed limitations moved into expander.",
+      "reason": "Account-wide Bird Count panel retained behind SHOW_QUOTA_USAGE_PANEL=False for the staff trial; existing contexts and calculations unchanged and can be re-enabled.",
       "baseline_lf_sha256": "452859f1faa2cfe43c1b6394ad517205ce63737c07c276f6ea11a433d5f17417",
-      "candidate_lf_sha256": "020c632f7f994abb4e2e09bfd3af2cb328ce06b187d024dd29e25058fe358f19"
+      "candidate_lf_sha256": "a0948b154fdf923fa065c012e800834c3d68f4b2979e150b050394fc2b49d0cd"
     },
     {
       "path": "app/services/report_builder.py",

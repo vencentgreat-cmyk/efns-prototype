@@ -7,6 +7,9 @@ from data.quota_position import quota_position, load_rules
 from data.business_time import halifax_today
 from data.quota_types import quota_type_key
 
+# Staff trial: hide this provisional panel; retain contexts and rendering for re-enabling.
+SHOW_QUOTA_USAGE_PANEL = False
+
 
 def usage_numbers(known_total, missing, baseline=None, *, compatible_units=False):
     result=dict(applicable_quota=baseline,current_occupancy=known_total if not missing else None,
@@ -104,6 +107,8 @@ def quota_usage_context(repo, flock):
 
 
 def render_account_usage(repo, account_id, *, quota_type=None):
+    if not SHOW_QUOTA_USAGE_PANEL:
+        return None
     import streamlit as st
     context=account_usage_context(repo,account_id)
     if context.get('draft_unavailable'):
