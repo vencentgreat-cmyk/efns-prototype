@@ -267,28 +267,55 @@ def build_flocks_needing_counts_report(flocks, transactions, accounts, report_da
     return _frame(output, NEEDING_COLUMNS)
 
 
-def provisional_disposal_age(hatch_date, disposal_date):
-    """PROVISIONAL: whole elapsed weeks; NOT validated against legacy Disposal Age."""
-    return _weeks(hatch_date, disposal_date)
+def legacy_disposal_age(hatch_date, disposal_date):
+    """Elapsed whole weeks +19, derived from 30 legacy fixtures, not a business rule."""
+    weeks = _weeks(hatch_date, disposal_date)
+    return weeks + 19 if weeks is not None else None
 
 
 def build_flock_disposals_report(flocks, accounts, quotas, start_date, end_date,
-                                  quota_type='Egg Production'):
-    """Actual disposal dates only, independent of current flock status/estimates."""
+                                  quota_type='Egg Production', *, transactions=None):
+    """Actual disposals with earliest Delivery quantity; notes in DataFrame.attrs.
+
+    Empty/missing transaction input means no Delivery available. Same-day
+    conflicting earliest quantities or undated Deliveries remain unknown.
+    """
     start, end = _range(start_date, end_date)
     _index(flocks, 'FLOCK_ID')
     owners, groups = _index(accounts, 'ACCOUNT_ID'), {}
+    deliveries = {}
+    for transaction in (transactions.to_dict('records') if transactions is not None else []):
+        if text(transaction.get('TRANSACTION_TYPE')) == 'Delivery':
+            deliveries.setdefault(str(transaction.get('FLOCK_ID')), []).append(transaction)
+    multiple, fallback, ambiguous = [], [], []
     for flock in flocks.to_dict('records'):
         disposal = day(flock.get('DISPOSAL_DATE'))
         if disposal is None or not start <= disposal <= end or not _matches_type(flock, quota_type):
             continue
         identity, registration, name = _owner(flock, owners)
+        permit = text(flock.get('PERMIT_NUMBER')) or '—'
+        observations = deliveries.get(str(flock['FLOCK_ID']), [])
+        placed = quantity(flock.get('BIRD_COUNT'))
+        if not observations:
+            fallback.append(permit)
+        else:
+            if len(observations) > 1:
+                multiple.append(permit)
+            dates = [day(row.get('TRANSACTION_DATE')) for row in observations]
+            if None in dates:
+                placed = None
+            else:
+                earliest = min(dates)
+                values = {quantity(row.get('QUANTITY')) for row,when in zip(observations,dates) if when == earliest}
+                placed = next(iter(values)) if len(values) == 1 else None
+            if placed is None:
+                ambiguous.append(permit)
         groups.setdefault(identity, []).append(dict(zip(DISPOSAL_COLUMNS, [
             registration, name, _display_date(flock.get('PLACEMENT_DATE')),
-            quantity(quotas.get(identity)), text(flock.get('PERMIT_NUMBER')) or '—',
-            provisional_disposal_age(flock.get('HATCH_DATE'), disposal),
+            quantity(quotas.get(identity)), permit,
+            legacy_disposal_age(flock.get('HATCH_DATE'), disposal),
             text(flock.get('DISPOSAL_PLANT')), disposal.isoformat(),
-            quantity(flock.get('BIRD_COUNT')), quantity(flock.get('BIRDS_DISPOSED'))])))
+            placed, quantity(flock.get('BIRDS_DISPOSED'))])))
     output = []
     for identity in sorted(groups, key=lambda key: (_order(groups[key][0]['Reg No']), key)):
         rows = sorted(groups[identity], key=lambda r: (r['Disposal Date'], _order(r['Permit No'])))
@@ -299,4 +326,12 @@ def build_flock_disposals_report(flocks, accounts, quotas, start_date, end_date,
                       'Placed': known_total([row['Placed'] for row in rows]),
                       'Disposed': known_total([row['Disposed'] for row in rows])})
         output.append(total)
-    return _frame(output, DISPOSAL_COLUMNS)
+    result = _frame(output, DISPOSAL_COLUMNS)
+    # Null disposal quantities are blank, never synthesized as zero.
+    result['Disposed'] = result['Disposed'].map(lambda value: '' if value == '—' else value)
+    result.attrs['notes'] = [label + ', '.join(sorted(set(permits),key=_order))
+        for label,permits in (
+            ('Earliest Delivery used; multiple Deliveries for permits: ',multiple),
+            ('No Delivery; BIRD_COUNT fallback for permits: ',fallback),
+            ('Placed unknown: undated/conflicting/invalid earliest Delivery for permits: ',ambiguous)) if permits]
+    return result

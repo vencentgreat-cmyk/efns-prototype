@@ -11,7 +11,7 @@ from app.services.flock_reports import (
     STATUS_COLUMNS, COUNTED_COLUMNS, NEEDING_COLUMNS, DISPOSAL_COLUMNS,
     build_flock_status_report, build_flocks_counted_report,
     build_flocks_needing_counts_report, build_flock_disposals_report,
-    provisional_disposal_age,
+    legacy_disposal_age,
 )
 from app.services.report_center import report_csv, report_xlsx, report_definition
 from tests.test_report_center import user
@@ -158,8 +158,8 @@ def test_disposals_legacy_rows_and_account_totals_without_capping_disposed():
     total = result.loc[result['Reg No'].eq('7159')].iloc[-1]
     assert total['Permit No'] == 'Total'
     assert (total.Placed,total.Disposed,total.Quota) == (49908,43304,42980)
-    assert provisional_disposal_age('2025-07-21','2026-09-24') == 61  # Legacy 80 is NOT claimed.
-    assert provisional_disposal_age('2025-07-21','2026-10-08') == 63  # Legacy 82 is NOT claimed.
+    assert legacy_disposal_age('2025-07-21','2026-09-24') == 80
+    assert legacy_disposal_age('2025-07-21','2026-10-08') == 82
 
 
 def test_disposals_require_actual_dates_and_include_range_endpoints():
@@ -169,7 +169,7 @@ def test_disposals_require_actual_dates_and_include_range_endpoints():
     result = build_flock_disposals_report(f, accounts(), {}, '2026-08-01', DAY)
     assert result['Permit No'].tolist() == ['start','end','Total']
     assert result.Quota.tolist() == ['—'] * 3
-    assert result.iloc[-1].Disposed == '—'
+    assert result.iloc[-1].Disposed == ''
     assert build_flock_disposals_report(f, accounts(), {}, '2027-01-01','2027-01-02').empty
 
 
@@ -213,7 +213,7 @@ def test_report_center_wiring_only_result_frames_and_no_audit_writes(handler,tmp
     repo.get_flocks = lambda:f
     repo.get_accounts = lambda:a
     repo.get_facilities = facilities
-    repo.get_flock_transactions = lambda:pd.DataFrame([transaction()]) if handler!='flocks_needing_counts' else pd.DataFrame()
+    repo.get_flock_transactions = lambda **kwargs:pd.DataFrame([transaction()]) if handler!='flocks_needing_counts' else pd.DataFrame()
     repo.get_quota_registrations = lambda:pd.DataFrame([dict(QUOTA_ID='q',ACCOUNT_ID='a',QUOTA_TYPE='Egg Production',STATUS='Active')])
     repo.get_quota_transactions = lambda:pd.DataFrame([
         dict(QUOTA_TRANSACTION_ID='base',QUOTA_ID='q',OWNER_ACCOUNT_ID='a',TRANSACTION_TYPE='Base',QUOTA_COUNT=100,EFFECTIVE_DATE='2026-08-01'),
@@ -237,7 +237,7 @@ def test_report_center_wiring_only_result_frames_and_no_audit_writes(handler,tmp
     if handler == 'flock_status':
         assert len(app.metric) == 5
     if handler == 'flock_disposals':
-        assert any('PROVISIONAL Disposal Age' in warning.value for warning in app.warning)
+        assert any('offset is derived from 30 legacy fixtures' in caption.value for caption in app.caption)
         f.loc[0,'DISPOSAL_DATE'] = None
         app.button(key='run_'+handler).click().run()
         assert not app.exception and not app.error

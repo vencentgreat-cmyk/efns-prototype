@@ -331,7 +331,7 @@ if section == "Report Library":
                 count_type = extra[2].selectbox('Count Type', ['All', 'Board', 'Producer', 'EFC/CEMA'], key=handler+'_count_type')
                 st.caption('Uses placed Flock Age inclusion; Delivery is not a Count. EFC/CEMA means labels other than Producer or Board, including blank labels.')
             elif handler == 'flock_disposals':
-                st.warning('PROVISIONAL Disposal Age: whole weeks from Hatch Date to actual Disposal Date. This has not been validated against legacy Disposal Age.')
+                st.caption('Disposal Age = whole weeks from Hatch Date to actual Disposal Date +19. The offset is derived from 30 legacy fixtures, not a business rule. Placed uses earliest Delivery quantity, otherwise BIRD_COUNT.')
             if handler in {'flock_status', 'flocks_counted', 'flock_disposals'}:
                 st.caption('Quota uses confirmed Account Egg Production positions at the report/end date. Unavailable state evidence leaves quota unknown. Totals sum known values.')
             elif handler == 'flock_status_producer':
@@ -354,7 +354,8 @@ if section == "Report Library":
                     elif handler == 'flocks_needing_counts':
                         result = build_flocks_needing_counts_report(source_flocks, repo.get_flock_transactions(), source_accounts, as_of, selected_type, from_age, to_age, count_type)
                     else:
-                        result = build_flock_disposals_report(source_flocks, source_accounts, quotas, start, as_of, selected_type)
+                        result = build_flock_disposals_report(source_flocks, source_accounts, quotas, start, as_of, selected_type, transactions=repo.get_flock_transactions(transaction_type='Delivery'))
+                        reasons = [*reasons, *result.attrs.get('notes', [])]
                     st.session_state[handler+'_result'] = result
                     st.session_state[handler+'_summary'] = summary
                     st.session_state[handler+'_reasons'] = reasons
