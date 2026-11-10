@@ -84,7 +84,7 @@ def run_report(definition,repo,case):
     handler=definition.handler
     today=halifax_today()
     as_of=date(1900,1,1) if case=='no_rows' else today
-    if case=='no_rows' and handler in {'flock_age','flock_status','flock_status_producer','flock_current',
+    if case=='no_rows' and handler in {'producers_over_quota','flock_age','flock_status','flock_status_producer','flock_current',
         'flock_current_producer','flock_salmonella_schedule','flocks_needing_counts'}:
         as_of=date(2200,1,1)  # Both fixture flocks are disposed/estimated ended by then.
     start=as_of.replace(day=1)
@@ -118,6 +118,9 @@ def run_report(definition,repo,case):
     if handler in {'quota_leases','quota_leases_by_end_date'}:
         return build_quota_leases_report(a,registrations,activity,set(),date(2200,1,1) if case=='no_rows' else as_of,by_end_date=handler.endswith('by_end_date'))
     if handler=='quota_history':return build_quota_history_report(a,registrations,activity,set(),as_of,rules=load_rules())
+    if handler=='producers_over_quota':
+        from app.services.producers_over_quota_report import build_producers_over_quota_report
+        return build_producers_over_quota_report(f,t,a,repo.get_facilities(),quotas,as_of)
     if handler in {'flock_status','flock_age','flock_status_producer'}:
         if handler=='flock_status_producer':return build_flock_status_by_producer_report(f,t,a,repo.get_facilities(),quotas,as_of,account)
         return (build_flock_status_report if handler=='flock_status' else build_flock_age_report)(f,t,a,repo.get_facilities(),quotas,as_of)
@@ -191,7 +194,7 @@ def test_every_available_report_page_smoke(definition,case,tmp_path,monkeypatch)
                 app.checkbox(key='print_'+prefix+'_use_dates').check().run()
                 app.date_input(key='print_'+prefix+'_start').set_value(date(1900,1,1))
                 app.date_input(key='print_'+prefix+'_end').set_value(date(1900,1,1))
-            empty_date=date(2200,1,1) if prefix in {'flock_age','flock_status','flock_status_producer',
+            empty_date=date(2200,1,1) if prefix in {'producers_over_quota','flock_age','flock_status','flock_status_producer',
                 'flock_current','flock_current_producer','flock_salmonella_schedule','flocks_needing_counts'} else date(1900,1,1)
             for widget in app.date_input:
                 if widget.key in {prefix+'_start',prefix+'_end',prefix+'_date',prefix+'_as_of'}:
