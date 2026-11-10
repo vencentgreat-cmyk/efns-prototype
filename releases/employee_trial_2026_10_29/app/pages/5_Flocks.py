@@ -23,6 +23,7 @@ from data.validation import validate_flock
 from data.repositories.continuity import changed_attributes
 from data.producer_identity import text
 from app.services.quota_usage import render_quota_usage
+from app.services.entry_fields import bird_strain_input
 from data.flock_stock import flock_stock
 from data.quota_position import load_rules
 from data.repositories.snowflake import normalize_numeric_bind
@@ -181,7 +182,7 @@ else:
                 estimated_disposal = right.date_input("Estimated Disposal Date", value=optional_form_date(current.get("EST_DISPOSAL")), key="flock_form_est_disposal")
                 disposal_date = right.date_input("Disposal Date", value=optional_form_date(current.get("DISPOSAL_DATE")), key="flock_form_disposal")
                 birds_disposed_input = right.text_input("Birds Disposed",value=text(current.get("BIRDS_DISPOSED")) or "",key="flock_form_disposed_text")
-                bird_strain = right.text_input("Bird Strain", value=str(current.get("BIRD_STRAIN") or ""), key="flock_form_strain")
+                bird_strain = bird_strain_input(flocks, current.get('BIRD_STRAIN'), target=right)
                 comments = st.text_area("Comments", value=str(current.get("COMMENTS") or ""), key="flock_form_comments")
             if view.record_id:
                 revision_reason = st.text_input("Reason for correction *",key="flock_form_revision_reason")
@@ -191,7 +192,7 @@ else:
                 initial_time = st.time_input('Confirmed initial placement time (Atlantic / Halifax)',value=dt.time(12),key='flock_form_initial_time')
                 initial_reason = st.text_input('Evidence for initial position',key='flock_form_initial_reason')
                 st.session_state.setdefault('flock_form_initial_request',uuid.uuid4().hex)
-        capture_form('flock_form_',current,{'FLOCK_NUMBER': ['flock_form_number'], 'ACCOUNT_ID': ['flock_form_account'], 'FACILITY_ID': ['flock_form_account', 'flock_form_facility'], 'FACILITY_DETAIL_ID': ['flock_form_account', 'flock_form_detail', 'flock_form_facility'], 'QUOTA_ID': ['flock_form_account', 'flock_form_quota'], 'FLOCK_QUOTA_TYPE': ['flock_form_quota_type'], 'STATUS': ['flock_form_status'], 'CREATE_DELIVERY_TRANSACTION': ['flock_form_delivery'], 'PERMIT_NUMBER': ['flock_form_permit'], 'PERMIT_DATE': ['flock_form_permit_date'], 'HATCH_DATE': ['flock_form_hatch'], 'DATE_ORDERED': ['flock_form_ordered'], 'BIRD_COUNT': ['flock_form_birds_text','flock_form_birds'], 'EGG_COLOUR': ['flock_form_colour'], 'BIRD_STRAIN': ['flock_form_strain'], 'PLACEMENT_DATE': ['flock_form_placement'], 'EST_DISPOSAL': ['flock_form_est_disposal'], 'DISPOSAL_DATE': ['flock_form_disposal'], 'BIRDS_DISPOSED': ['flock_form_disposed_text'], 'COMMENTS': ['flock_form_comments']})
+        capture_form('flock_form_',current,{'FLOCK_NUMBER': ['flock_form_number'], 'ACCOUNT_ID': ['flock_form_account'], 'FACILITY_ID': ['flock_form_account', 'flock_form_facility'], 'FACILITY_DETAIL_ID': ['flock_form_account', 'flock_form_detail', 'flock_form_facility'], 'QUOTA_ID': ['flock_form_account', 'flock_form_quota'], 'FLOCK_QUOTA_TYPE': ['flock_form_quota_type'], 'STATUS': ['flock_form_status'], 'CREATE_DELIVERY_TRANSACTION': ['flock_form_delivery'], 'PERMIT_NUMBER': ['flock_form_permit'], 'PERMIT_DATE': ['flock_form_permit_date'], 'HATCH_DATE': ['flock_form_hatch'], 'DATE_ORDERED': ['flock_form_ordered'], 'BIRD_COUNT': ['flock_form_birds_text','flock_form_birds'], 'EGG_COLOUR': ['flock_form_colour'], 'BIRD_STRAIN': ['flock_form_strain', 'flock_form_strain_other'], 'PLACEMENT_DATE': ['flock_form_placement'], 'EST_DISPOSAL': ['flock_form_est_disposal'], 'DISPOSAL_DATE': ['flock_form_disposal'], 'BIRDS_DISPOSED': ['flock_form_disposed_text'], 'COMMENTS': ['flock_form_comments']})
         if action == "save":
             try:
                 if view.record_id: bird_count = normalize_numeric_bind(bird_count_input,"BIRD_COUNT",1,integer=True) if field_changed("flock_form_","BIRD_COUNT") else current.get("BIRD_COUNT")

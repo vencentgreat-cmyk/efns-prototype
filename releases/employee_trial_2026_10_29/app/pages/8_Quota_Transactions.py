@@ -20,6 +20,7 @@ from data.repositories import get_repository
 from data.repositories.base import RepositoryError
 from data.validation import validate_quota_transaction, quota_related_account_required, parse_optional_quota_price
 from data.quota_position import component_table
+from app.services.entry_fields import quota_owner_errors
 
 
 require_operational_page()
@@ -219,7 +220,7 @@ else:
             quota_label = left.selectbox("Quota Registration *", list(quota_options), index=option_index(list(quota_options), label_for_id(quota_options, selected_quota_id)), key="quota_tx_form_quota")
             quota_id = quota_options[quota_label]
             owner_id = quota_accounts[quota_id]
-            left.text_input("Owner Account", value=account_names.get(owner_id, "Unknown"), disabled=True, key="quota_tx_form_owner")
+            left.markdown(f"**Owner Account (from Quota Registration)**  \n{account_names.get(owner_id) or 'Unknown'}")
             transaction_type = left.selectbox("Transaction Type *", stored_options(QUOTA_TRANSACTION_TYPES,current.get("TRANSACTION_TYPE"),bool(view.record_id)), index=(stored_index(QUOTA_TRANSACTION_TYPES,current.get("TRANSACTION_TYPE")) if view.record_id else option_index(list(QUOTA_TRANSACTION_TYPES), current.get("TRANSACTION_TYPE"))), key="quota_tx_form_type")
             left.caption('Type list confirmed from usage data 2026-10-30; provisional until staff confirm. Base is a snapshot, intended for new registrations. Historical types remain visible on existing records.')
             effective_date = left.date_input("Effective Date *", value=as_date(current.get("EFFECTIVE_DATE"), None if view.record_id else halifax_today()), key="quota_tx_form_effective")
@@ -242,6 +243,8 @@ else:
             if not view.record_id: record.pop("QUOTA_TRANSACTION_ID")
             else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
             errors = validate_quota_transaction(repo, record) if not view.record_id else []
+            errors.extend(quota_owner_errors(repo.get_quota_registration(quota_id),
+                preserve_form(record, current, 'quota_tx_form_')))
             if view.record_id and (field_changed('quota_tx_form_', 'RELATED_ACCOUNT_ID') or field_changed('quota_tx_form_', 'TRANSACTION_TYPE')):
                 if quota_related_account_required(transaction_type) and record['RELATED_ACCOUNT_ID'] is None:
                     errors.append('Related Account is required for this transaction type.')

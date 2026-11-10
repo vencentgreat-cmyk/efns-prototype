@@ -77,7 +77,7 @@
       "status": "MODIFIED",
       "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
-      "candidate_lf_sha256": "7b28c323bd3bdad074e415d698085186de80f53495e3bb02e1953fcefaaa8dc1"
+      "candidate_lf_sha256": "0735d4f47b2fdfb0c4bf28a79c5ff631fc55d8da2ce19ce2b0bd62cff0637cdd"
     },
     {
       "path": "app/pages/6_Flock_Transactions.py",
@@ -91,14 +91,14 @@
       "status": "MODIFIED",
       "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
-      "candidate_lf_sha256": "bd0c2c362f77461e044116893518e5c1642a3e367e017104e56bb49e33177e8f"
+      "candidate_lf_sha256": "9de5d165cfac5d880ce74a16ffc608aaa2d681ab44d7d854592fd4ddea161dad"
     },
     {
       "path": "app/pages/9_Salmonella_Tests.py",
       "status": "MODIFIED",
       "reason": "R3 F5/F6: disambiguate colliding Flock/Account labels and offer stored result filters; legacy edit preservation and new-entry choices unchanged.",
       "baseline_lf_sha256": "ffbd36c984fbdf71f6451b0e97ede64322f5293ae61674e799b9a925d2625e3e",
-      "candidate_lf_sha256": "03776afbb58fc3a35a7608dbb120adbb8a2adc141d5628ab28a1656e9ef380aa"
+      "candidate_lf_sha256": "d1ba4bddf360fc3a2e476c08317584cdb6fdf357c0efe3ff2d475a69ad231b9f"
     },
     {
       "path": "app/services/quota_usage.py",
@@ -492,6 +492,38 @@
       "status": "MODIFIED",
       "reason": "Extend the exact catalog-name contract for the newly implemented report.",
       "candidate_lf_sha256": "3857a3582d3d96d5f30472dc5ef29d8c969921e9e8572435f2438c3a79503dce"
+    }
+  ],
+  "sara_feedback_artifacts": [
+    {
+      "path": "app/pages/2_Production_Data.py",
+      "status": "MODIFIED",
+      "reason": "Staff entry/display feedback regression fix or its evidence and tests.",
+      "candidate_lf_sha256": "304282612f8e7e82b1930590e493aacca4ac264ea0ddb0c12b2ada28be5f10af"
+    },
+    {
+      "path": "app/services/entry_fields.py",
+      "status": "NEW",
+      "reason": "Staff entry/display feedback regression fix or its evidence and tests.",
+      "candidate_lf_sha256": "fdc12753f62036fa08cf916e686218af647a623bd90b96ae2bbba2cfbbd34cbf"
+    },
+    {
+      "path": "app/services/production_data_display.py",
+      "status": "NEW",
+      "reason": "Staff entry/display feedback regression fix or its evidence and tests.",
+      "candidate_lf_sha256": "f79ab668516fbccb85025292d2ca3f7e8c357a9101ade09c49bde4db69f310a8"
+    },
+    {
+      "path": "tests/test_sara_feedback.py",
+      "status": "NEW",
+      "reason": "Staff entry/display feedback regression fix or its evidence and tests.",
+      "candidate_lf_sha256": "7df9841bfe1409dc298ffa3f107339ee4fcc1d76bbda3d5643cbd4b3668192fb"
+    },
+    {
+      "path": "docs/codex_reports/SARA_FEEDBACK_FIXES_20261110.md",
+      "status": "NEW",
+      "reason": "Staff entry/display feedback regression fix or its evidence and tests.",
+      "candidate_lf_sha256": "abacc4fdbc35923fa0a6f117cbef223c363d90b819db0f28c94273cde2117076"
     }
   ]
 }
