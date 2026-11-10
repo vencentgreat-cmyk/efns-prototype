@@ -499,7 +499,7 @@
       "path": "app/pages/2_Production_Data.py",
       "status": "MODIFIED",
       "reason": "Staff entry/display feedback regression fix or its evidence and tests.",
-      "candidate_lf_sha256": "304282612f8e7e82b1930590e493aacca4ac264ea0ddb0c12b2ada28be5f10af"
+      "candidate_lf_sha256": "19e59c74fee2060510cd13cfbdcbaecf7922bf49e6d519d3c8c6956b8da77177"
     },
     {
       "path": "app/services/entry_fields.py",
@@ -523,7 +523,13 @@
       "path": "docs/codex_reports/SARA_FEEDBACK_FIXES_20261110.md",
       "status": "NEW",
       "reason": "Staff entry/display feedback regression fix or its evidence and tests.",
-      "candidate_lf_sha256": "abacc4fdbc35923fa0a6f117cbef223c363d90b819db0f28c94273cde2117076"
+      "candidate_lf_sha256": "187374eb6225af45cbb165bf7b2f31d95d031e24a00e4ce1acb2a0bdea8bec0b"
+    },
+    {
+      "path": "tests/test_production_data_followups.py",
+      "status": "NEW",
+      "reason": "Production Data bounded loading, safe fallback and actual CSV row-count/precision tests.",
+      "candidate_lf_sha256": "b1d21da21daeb29c668bee8dabcdee67e009e6ed6042fb751411afa8023cea8f"
     }
   ]
 }

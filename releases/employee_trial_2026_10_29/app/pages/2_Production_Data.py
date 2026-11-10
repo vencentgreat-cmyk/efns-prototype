@@ -9,6 +9,7 @@ from app.security import Permission
 from app.services.export import spreadsheet_safe
 from app.ui import apply_theme, page_header, section_intro
 from data.repositories import get_repository
+from data.producer_identity import production_identities
 from app.services.production_data_display import production_display_records, production_detail_range
 from app.services.production_reports import COMPONENTS, NEST_FIELDS
 from data.source_scope import SOURCE_SCOPES, scope_production
@@ -106,9 +107,17 @@ records = repo.get_production_records(
     barn_identity=barn,
     egg_colour=colour,
 )
-detail_range = production_detail_range(records)
-details = repo.get_production_report_records(*detail_range) if detail_range else pd.DataFrame()
-records = scope_production(production_display_records(records, details, repo.get_accounts()),source_scope)
+if reporting_year is None and not records.empty:
+    st.caption('Select a Reporting Year to load detail columns; use Week to narrow the results.')
+try:
+    # A Week alone can span every year: require Year before the extra CORE read.
+    detail_range = production_detail_range(records) if reporting_year is not None else None
+    details = repo.get_production_report_records(*detail_range) if detail_range else pd.DataFrame()
+    records = production_display_records(records, details, repo.get_accounts())
+except ValueError:
+    st.warning('Production details are unavailable; showing original records. Filter or reload to try again.')
+    records = production_identities(records)
+records = scope_production(records,source_scope)
 known_total = records['TOTAL'].notna().sum() if 'TOTAL' in records else 0
 coverage = st.columns(3)
 coverage[0].metric('Selected records',len(records))

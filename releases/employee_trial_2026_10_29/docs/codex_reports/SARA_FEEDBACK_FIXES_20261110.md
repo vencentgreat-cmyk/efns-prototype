@@ -49,7 +49,8 @@ by the caption **Selected flock permit (read-only)**. Storage behavior is unchan
 
 The selected rows and filters still come from `get_production_records` /
 REPORTING.VW_PRODUCTION_SUMMARY. One existing `get_production_report_records`
-read spans the minimum/maximum reporting week in the selected records and
+read is now made only after a Reporting Year is selected. It spans the
+minimum/maximum reporting week in the selected records and
 supplies CORE.PRODUCTION_RECORD fields, joined by PRODUCTION_ID without changing
 row count, original totals or source quantities. Empty selections skip this read.
 No SQL or repository method was added. `get_accounts` supplies names and
@@ -82,3 +83,60 @@ precision; Production Management report rounding is not applied. Existing totals
 are not recomputed. The requested Report Center navigation caption is included.
 Tests compare the actual page table with both export input frames, test exact
 fractional source values, and cover linked/unlinked/unknown Accounts and empty data.
+
+
+## Production Data follow-ups
+
+### Bounded detail loading
+
+A Reporting Year is required before the extra `get_production_report_records`
+read. Week alone may match the same week across every historical year and does
+not enable this read. The caption says: "Select a Reporting Year to load detail
+columns; use Week to narrow the results."
+
+The original summary rows, coverage metrics and CSV/XLSX row sets are not capped.
+Without Year, existing fields supplied by the summary repository remain visible,
+producer labels still resolve to Account names, and no extra detail query runs.
+With Year selected, the existing read is bounded by the selected rows' reporting
+weeks; existing filters and calculation rules are unchanged. No SQL was added.
+
+### Invalid detail identities
+
+The page catches ValueError from detail loading/enrichment (including NULL or
+duplicate detail PRODUCTION_ID), warns "Production details are unavailable;
+showing original records. Filter or reload to try again.", and displays the
+original unenriched rows using the existing identity helper. Source-scope filtering
+still applies. Raw exception text is not displayed; unrelated exception types are
+not swallowed. Tests exercise both invalid-identity cases through the real page.
+
+### Actual CSV contract
+
+Tests capture the actual Production Data CSV download, parse it, and compare its
+row count, Production IDs and columns with the displayed table, with and without
+a Year selection. They assert the exact stored fractional component `0.1250` and
+stored TOTAL `24945.0000`, including a deliberate mismatch between source TOTAL
+and the displayed components. No rounding, zero filling or total recomputation
+is applied. Blank source values remain blank in the CSV.
+
+### Local performance measurement
+
+Full local seeded MockRepository dataset: **200 rows**, default seed 42. Median
+of **11 warm paired runs**, alternating before/after order, using the same
+repository instance. Measures the page's three summary reads, optional detail
+range/read, Account read, identity/detail preparation and source-scope preparation.
+It excludes dataset generation, Streamlit rendering, CSV/XLSX serialization and
+network/database latency. Existing row IDs and totals were checked for equality.
+
+| Unfiltered data load | Before (f5f7607 pipeline) | After |
+|---|---:|---:|
+| Summary/display/export source rows | 200 | 200 |
+| Extra detail read calls | 1 | 0 |
+| Extra detail rows loaded | 200 | 0 |
+| Median time | 34.975 ms | 24.608 ms |
+
+Measured local reduction: **29.6%**. This small synthetic local dataset cannot
+establish DEV load time or network-query savings; no Snowflake access occurred.
+
+Only the Production Data page, its follow-up tests, these notes and the integrity
+manifest are changed in this follow-up. Other entry forms and report builders
+remain unchanged.
