@@ -22,10 +22,10 @@ def _date(value):
 
 def build_producers_over_quota_report(flocks, transactions, accounts, facilities, quotas,
                                      report_date, mortality='0.4', quota_type='Egg Production'):
-    """Filter known Account totals strictly above quota, retaining unknown details.
+    """List all positive-quota producers; flag over-quota totals for presentation.
 
-    Province-wide metrics are exactly Flock Status's metrics, not the sum of the
-    filtered output. Account quotas have the same confirmed Egg Production basis.
+    Provincial inventory/allocation use Flock Status's metrics. The producer
+    count is the number of listed Accounts. Quotas retain the Egg Production basis.
     The legacy-only zero/Last Count presentation rules do not alter shared builders.
     """
     _, summary = build_flock_status_report(flocks, transactions, accounts, facilities,
@@ -64,7 +64,10 @@ def build_producers_over_quota_report(flocks, transactions, accounts, facilities
             source['Flock Age'] if source['Flock Age'] != '—' else '', _date(placement),
             _date(source['Disp. Date']), source['Quota Type'], last_count, inventory, '']))
         groups.setdefault(owner_id, []).append((row, reason))
-    output = []
+    for owner_id in quotas:
+        if str(owner_id) in owners:
+            groups.setdefault(str(owner_id), [])
+    output, highlighted, listed = [], [], 0
     for owner_id in sorted(groups, key=lambda key: (_order(owners.get(key, {}).get('REGISTRATION_NUMBER')), key)):
         owner = owners.get(owner_id, {})
         registration, name = text(owner.get('REGISTRATION_NUMBER')), text(owner.get('ORGANIZATION_NAME'))
@@ -75,15 +78,17 @@ def build_producers_over_quota_report(flocks, transactions, accounts, facilities
             notes.append(f'{account_label}: excluded; confirmed quota is '
                          + ('zero' if quota == 0 else 'unavailable') + ', so % Quota is undefined.')
             continue
-        inventory = known_total([row['Inventory'] for row, _ in rows])
+        inventory = known_total([row['Inventory'] for row, _ in rows]) if rows else 0
         unknown = sum(row['Inventory'] is None for row, _ in rows)
         if unknown:
             notes.append(f'{account_label}: total excludes {unknown} flock(s) with genuinely unknown Inventory.')
         if inventory is None:
-            notes.append(f'{account_label}: excluded; no known Inventory is available to classify the Account.')
-            continue
-        if inventory <= quota:  # Exact integer/Decimal comparison, before percent rounding.
-            continue
+            notes.append(f'{account_label}: no known Inventory is available; total and % Quota are blank.')
+        listed += 1
+        if not rows:
+            heading = dict.fromkeys(COLUMNS, '')
+            heading.update({'Reg No': registration, 'Account Name': name})
+            output.append(heading)
         for index, (row, reason) in enumerate(rows):
             row.update({'Reg No': registration if index == 0 else '',
                         'Account Name': name if index == 0 else '',
@@ -94,12 +99,28 @@ def build_producers_over_quota_report(flocks, transactions, accounts, facilities
             if reason:
                 notes.append(f'{account_label}, permit {row["Permit No"] or "unavailable"}: {reason}')
         total = dict.fromkeys(COLUMNS, '')
-        total.update({'Account Name': 'Total', 'Inventory': inventory, '% Quota': utilization(inventory, quota)})
+        total.update({'Account Name': 'Total',
+                      'Inventory': inventory if inventory is not None else '',
+                      '% Quota': utilization(inventory, quota) if inventory is not None else ''})
+        if inventory is not None and inventory > quota:
+            highlighted.append(len(output))  # Unrounded comparison; never filters producers.
         output.append(total)
     result = pd.DataFrame(output, columns=COLUMNS, dtype=object)
     result.attrs['notes'] = list(dict.fromkeys(notes))
+    result.attrs['over_quota_total_rows'] = highlighted
+    summary = {**summary, 'Producers with Quota': listed}
     whole, _, fraction = format(Decimal(str(mortality)), 'f').partition('.')
     rate_text = whole + '.' + fraction.ljust(3, '0')
     result.attrs['header'] = (f'For {quota_type} as of {report_date:%d/%m/%Y} '
                               f'at {rate_text} Mortality')
     return result, summary
+
+
+def style_producers_over_quota(frame):
+    """Red text on only the over-quota Account Total percentage cells."""
+    styles = pd.DataFrame('', index=frame.index, columns=frame.columns)
+    column = frame.columns.get_loc('% Quota')
+    for position in frame.attrs.get('over_quota_total_rows', []):
+        if frame.iloc[position]['Account Name'] == 'Total':
+            styles.iloc[position, column] = 'color: #c00000; font-weight: bold'
+    return frame.style.apply(lambda _: styles, axis=None)

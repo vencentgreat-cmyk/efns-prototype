@@ -1,0 +1,58 @@
+﻿FlockStatusReportDate
+For Egg Production as of 10/11/2026 at 0.400 Mortality
+
+Inventory3,Textbox215,Textbox220
+"1,052,372","1,027,985",102.37%
+
+Quota_Bird_Count2,IssuanceCount123423
+"1,027,985",24
+
+Registration_Number1,Account_Name,PermitNo,FlockAgeCalc,Placement_Date,Disposal_Date,Quota_Type,LatestcountDate,Inventory,UtilizationPerFarm,Inventory1,Textbox24
+7022,CDS Poultry Ltd.,40370,60,26/01/2026,25/01/2027,Egg Production,02/10/2026,"38,609",111.83%,"38,609",111.83%
+7038,Bayview Poultry Farm Ltd.                                                  ,40368,63,06/01/2026,05/01/2027,Egg Production,08/07/2026,"9,823",60.82%,"16,550",102.46%
+7038,Bayview Poultry Farm Ltd.                                                  ,40382,39,23/06/2026,22/06/2027,Egg Production,08/07/2026,"6,727",41.65%,"16,550",102.46%
+7038,Bayview Poultry Farm Ltd.                                                  ,40407,9,19/01/2027,18/01/2028,Egg Production,,0,0.00%,"16,550",102.46%
+7050,Floyd Dickie & Sons Ltd.                                                   ,40364,66,11/12/2025,10/12/2026,Egg Production,09/06/2026,"14,322",42.34%,"29,135",86.14%
+7050,Floyd Dickie & Sons Ltd.                                                   ,40377,43,25/05/2026,24/05/2027,Egg Production,09/06/2026,"14,813",43.80%,"29,135",86.14%
+7050,Floyd Dickie & Sons Ltd.                                                   ,40397,15,03/12/2026,02/12/2027,Egg Production,,0,0.00%,"29,135",86.14%
+7065,Scotia Poultry Farm Ltd.                                                   ,40374,53,16/03/2026,15/03/2027,Egg Production,05/10/2026,"19,640",47.92%,"35,546",86.74%
+7065,Scotia Poultry Farm Ltd.                                                   ,40389,26,21/09/2026,20/09/2027,Egg Production,05/10/2026,"15,906",38.81%,"35,546",86.74%
+7078,Rooyakkers Farm Ltd.                                                       ,40367,66,15/12/2025,14/12/2026,Egg Production,02/10/2026,"26,863",46.64%,"55,376",96.14%
+7078,Rooyakkers Farm Ltd.                                                       ,40381,36,13/07/2026,12/07/2027,Egg Production,02/10/2026,"28,513",49.50%,"55,376",96.14%
+7078,Rooyakkers Farm Ltd.                                                       ,40404,6,08/02/2027,07/02/2028,Egg Production,,0,0.00%,"55,376",96.14%
+7101,Ross Cox Poultry Farm Ltd.                                                 ,40356,76,06/10/2025,03/12/2026,Egg Production,02/10/2026,"44,340",95.90%,"44,340",95.90%
+7101,Ross Cox Poultry Farm Ltd.                                                 ,40399,13,21/12/2026,20/12/2027,Egg Production,,0,0.00%,"44,340",95.90%
+7106,Southview Farms Ltd.                                                       ,40390,27,14/09/2026,13/09/2027,Egg Production,02/10/2026,"12,375",99.00%,"12,375",99.00%
+7107,Atlantic Poultry Incorporated,40375,52,23/03/2026,27/05/2027,Egg Production,02/10/2026,"21,085",27.08%,"60,119",77.21%
+7107,Atlantic Poultry Incorporated,40396,20,02/11/2026,01/11/2027,Egg Production,,"39,034",50.13%,"60,119",77.21%
+7113,Cornwallis Farms Ltd.                                                      ,40365,61,19/01/2026,18/01/2027,Egg Production,02/10/2026,"16,815",60.70%,"33,513",120.97%
+7113,Cornwallis Farms Ltd.                                                      ,40380,37,06/07/2026,05/07/2027,Egg Production,02/10/2026,"16,698",60.28%,"33,513",120.97%
+7113,Cornwallis Farms Ltd.                                                      ,40406,3,01/03/2027,28/02/2028,Egg Production,,0,0.00%,"33,513",120.97%
+7158,Merks Poultry Farm Ltd.                                                    ,40379,42,01/06/2026,31/05/2027,Egg Production,02/10/2026,"43,647",107.11%,"43,647",107.11%
+7159,2405272 Nova Scotia Ltd.                                                   ,40394,23,12/10/2026,11/10/2027,Egg Production,20/10/2026,"45,646",106.20%,"45,646",106.20%
+7161,L. B. Meek & Son Farm Ltd                                                  ,40388,29,27/08/2026,26/08/2027,Egg Production,02/10/2026,"16,477",99.79%,"16,477",99.79%
+7165,Centerbrook Poultry Ltd.,40373,55,26/02/2026,25/02/2027,Egg Production,10/07/2026,"13,903",90.80%,"13,903",90.80%
+7167,B W Poultry Farm Ltd.                                                      ,40376,53,12/03/2026,11/03/2027,Egg Production,02/10/2026,"42,638",101.71%,"42,638",101.71%
+7168,Mr. Christopher Eyking & Mr. Nicolaas Eyking,40371,57,16/02/2026,15/02/2027,Egg Production,03/11/2026,"40,558",73.51%,"60,217",109.15%
+7168,Mr. Christopher Eyking & Mr. Nicolaas Eyking,40395,22,15/10/2026,14/10/2027,Egg Production,03/11/2026,"19,659",35.63%,"60,217",109.15%
+7168,Mr. Christopher Eyking & Mr. Nicolaas Eyking,40405,5,15/02/2027,14/02/2028,Egg Production,,0,0.00%,"60,217",109.15%
+7169,Mr. Theodore Eyking & Mr. Aaron Eyking,40378,48,16/04/2026,15/04/2027,Egg Production,02/10/2026,"39,090",52.60%,"78,248",105.29%
+7169,Mr. Theodore Eyking & Mr. Aaron Eyking,40387,31,17/08/2026,16/08/2027,Egg Production,02/10/2026,"39,158",52.69%,"78,248",105.29%
+7172,Seaview Poultry Farms Ltd.,40359,73,27/10/2025,03/12/2026,Egg Production,02/10/2026,"38,992",63.92%,"71,426",117.09%
+7172,Seaview Poultry Farms Ltd.,40360,71,10/11/2025,17/12/2026,Egg Production,02/10/2026,"32,434",53.17%,"71,426",117.09%
+7172,Seaview Poultry Farms Ltd.,40400,14,14/12/2026,13/12/2027,Egg Production,,0,0.00%,"71,426",117.09%
+7172,Seaview Poultry Farms Ltd.,40401,12,28/12/2026,27/12/2027,Egg Production,,0,0.00%,"71,426",117.09%
+7173,Maritime Pride Poultry Inc.                                                ,40362,70,17/11/2025,07/01/2027,Egg Production,19/10/2026,"101,780",43.33%,"250,352",106.57%
+7173,Maritime Pride Poultry Inc.                                                ,40372,51,30/03/2026,29/03/2027,Egg Production,19/10/2026,"48,433",20.62%,"250,352",106.57%
+7173,Maritime Pride Poultry Inc.                                                ,40386,33,03/08/2026,02/08/2027,Egg Production,19/10/2026,"49,857",21.22%,"250,352",106.57%
+7173,Maritime Pride Poultry Inc.                                                ,40393,25,28/09/2026,27/09/2027,Egg Production,19/10/2026,"50,282",21.40%,"250,352",106.57%
+7173,Maritime Pride Poultry Inc.                                                ,40403,7,01/02/2027,31/01/2028,Egg Production,,0,0.00%,"250,352",106.57%
+7174,Biggs Farms Ltd.                                                           ,40385,34,27/07/2026,26/07/2027,Egg Production,02/10/2026,"17,392",103.93%,"17,392",103.93%
+7176,Oultons Poultry Farm Ltd.                                                  ,40392,27,14/09/2026,13/09/2027,Egg Production,06/10/2026,"1,486",112.66%,"1,486",112.66%
+7177,3C-Side Poultry Ltd.,40391,27,14/09/2026,13/09/2027,Egg Production,02/10/2026,"32,851",107.36%,"32,851",107.36%
+7178,DeLong Farms Licenses Ltd.,40363,67,08/12/2025,07/12/2026,Egg Production,02/10/2026,"23,028",50.62%,"47,571",104.56%
+7178,DeLong Farms Licenses Ltd.,40384,34,23/07/2026,22/07/2027,Egg Production,02/10/2026,"24,543",53.95%,"47,571",104.56%
+7178,DeLong Farms Licenses Ltd.,40398,15,07/12/2026,06/12/2027,Egg Production,,0,0.00%,"47,571",104.56%
+7402,Six Maples Farm,40402,20,29/10/2026,28/10/2027,Egg Production,,"1,941",108.44%,"1,941",108.44%
+7404,Windy Bay Farm Ltd.,40383,39,22/06/2026,21/06/2027,Egg Production,02/10/2026,"3,014",168.38%,"3,014",168.38%
+
