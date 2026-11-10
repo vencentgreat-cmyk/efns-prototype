@@ -1,0 +1,37 @@
+{
+  "legacy_rows": 2197,
+  "exported_rows": 2219,
+  "uniquely_matched": 2172,
+  "legacy_ambiguous_rows": 15,
+  "exported_ambiguous_rows": 19,
+  "legacy_missing_from_export": 10,
+  "exported_only_rows": 30,
+  "field_mismatch_counts": {
+    "EST_DISPOSAL": 14,
+    "DISPOSAL_DATE": 14,
+    "PLACEMENT_DATE": 12,
+    "HATCH_DATE": 0,
+    "BIRD_COUNT": 0,
+    "QUOTA_TYPE": 0,
+    "ACCOUNT": 0
+  },
+  "correction_rows": 14,
+  "old_birds_disposed_available": false,
+  "mapping_pattern_counts": {
+    "legacy_dates_distinct": 1781,
+    "already_correct_distinct_pair": 1767,
+    "indistinguishable_equal_legacy_dates": 391,
+    "informative_exact_swap": 8,
+    "legacy_nonblank_birds_disposed": 1825
+  },
+  "input_sha256": {
+    "Active Flocks 11-10-2026 11-48-38 AM.xlsx": "ae18cf0d2a9ca16cbbb04a8e8f99d4cf645459d31b11c36eb6359c15a7010c59",
+    "efns_custom_report (10).csv": "98eb49391a1cc08c2f406f2ba2eeeeabf9c558126509cc68f20fc05ee26af2a2"
+  },
+  "plan_id": "f22d5d2be005a745f06f7c35",
+  "dataverse_hidden_field_bindings": {
+    "new_disposaldate": "Disposal Date",
+    "new_disposaldate2": "Estimated Disposal Date",
+    "efc_birdsdisposed": "Birds Disposed"
+  }
+}

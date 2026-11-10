@@ -531,5 +531,109 @@
       "reason": "Production Data bounded loading, safe fallback and actual CSV row-count/precision tests.",
       "candidate_lf_sha256": "b1d21da21daeb29c668bee8dabcdee67e009e6ed6042fb751411afa8023cea8f"
     }
+  ],
+  "flock_disposal_correction_artifacts": [
+    {
+      "path": "scripts/generate_flock_disposal_correction.py",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "8b7b06626e426e6f1a2ebacb4a43de99c3b108453891de8b08c5b5891d8cde0c"
+    },
+    {
+      "path": "tests/test_flock_disposal_correction.py",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "ffc17367bdefc2a292d910c93f536cadef02a3c15fdbc7400e5e8e48dd796acd"
+    },
+    {
+      "path": "docs/codex_reports/FLOCK_DISPOSAL_CORRECTION_20261110.md",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "671f34dbe6ef0206602949dadea4b35733db6a64e32c47a658a7142d763c6595"
+    },
+    {
+      "path": "tests/fixtures/flock_disposal_correction/.gitattributes",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "705fd4d6451a31d36b3df7de96f83f30ac976c9b4a6d1e51671d8e2f33e2d0da"
+    },
+    {
+      "path": "tests/fixtures/flock_disposal_correction/Active Flocks 11-10-2026 11-48-38 AM.xlsx",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "2a8bc0db4358d4e4daac2f8d79192a5ba0ae4b748a7cf9a54b2d225b3555bdbb"
+    },
+    {
+      "path": "tests/fixtures/flock_disposal_correction/efns_custom_report (10).csv",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "98eb49391a1cc08c2f406f2ba2eeeeabf9c558126509cc68f20fc05ee26af2a2"
+    },
+    {
+      "path": "tests/fixtures/flock_disposal_correction/flock_current_report (2).csv",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "2454bb9df2aecc296031fb6c3fc61685f3c5ce3fa28fb7eb7e432b16a3380933"
+    },
+    {
+      "path": "tests/fixtures/flock_disposal_correction/flock_differences_legacy_vs_new.csv",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "4dca804d081985e1c63682e4eaa3891bfa906db5c1ef38c3c56d8a90b8c1f707"
+    },
+    {
+      "path": "sql/review/flock_disposal_correction_20261110/apply.sql",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "981c498494f459f32d8f1c33cb2e9596bd5ff5a6ae78ebcceaeab82743f9ac11"
+    },
+    {
+      "path": "sql/review/flock_disposal_correction_20261110/comparison.json",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "994a60609303f68926773ff68548519646d23297a15e0feba24b803909c0062d"
+    },
+    {
+      "path": "sql/review/flock_disposal_correction_20261110/comparison_differences.csv",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "a255ee2d6e162225ab5488f75632cf60451821975c209fceb4d57464fd42fcf3"
+    },
+    {
+      "path": "sql/review/flock_disposal_correction_20261110/corrections.csv",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "b966c96a44e297da64c434df5e4703e40b27f31d817089e85a6d6eb68da720f7"
+    },
+    {
+      "path": "sql/review/flock_disposal_correction_20261110/duplicate_permits.csv",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "66b32a714aa0b6e2ff790935c2fa9571fcaf0fb946750eba751cf7dc1255fd7c"
+    },
+    {
+      "path": "sql/review/flock_disposal_correction_20261110/precheck.sql",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "a2341746db8ccdaa6688aeaf61db8d46150725f1c193eee2efe4176f6661b014"
+    },
+    {
+      "path": "sql/review/flock_disposal_correction_20261110/rollback.sql",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "e9ba0697022ac3d81400de1c90f55bedd37d8056f06fd6887fa43a3a7acae947"
+    },
+    {
+      "path": "sql/review/flock_disposal_correction_20261110/unmatched_legacy_rows.csv",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "d2b41f2b4adbffeb2b0e81e75b0478fa2a5774fd60c71675e3b897d57b186e35"
+    },
+    {
+      "path": "sql/review/flock_disposal_correction_20261110/verification.sql",
+      "status": "NEW",
+      "reason": "Offline disposal reconciliation, immutable source fixture, reviewed SQL or regression evidence; not deployed runtime.",
+      "candidate_lf_sha256": "a2341746db8ccdaa6688aeaf61db8d46150725f1c193eee2efe4176f6661b014"
+    }
   ]
 }
