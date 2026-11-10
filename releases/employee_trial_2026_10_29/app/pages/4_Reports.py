@@ -27,6 +27,8 @@ from app.services.production_reports import (build_production_report, build_nest
 from app.services.flock_age_report import build_flock_age_report, build_flock_age_quotas
 from app.services.quota_state import get_inactive_quota_transaction_ids
 from app.services.report_pdf_ui import pdf_download_button, custom_parameter_lines
+from app.services.report_pdf import pdf_summary_lines
+from app.services.producers_over_quota_report import build_producers_over_quota_report
 from app.services.flock_reports import (
     build_flock_status_report, build_flocks_counted_report,
     build_flocks_needing_counts_report, build_flock_disposals_report,
@@ -304,6 +306,43 @@ if section == "Report Library":
                 else: st.dataframe(result, width="stretch", hide_index=True)
                 downloads(result, prefix+"_report", definition.report_id,
                     subtitle_lines=[f'Quota Type: {applied.get("quota_type", "")} · As of: {applied.get("as_of", "")} · Account: {applied.get("account", "")} · Status: {applied.get("status", "")}'],notes=metrics['notes'])
+        elif definition.handler == 'producers_over_quota':
+            handler = definition.handler
+            source_flocks, source_accounts = repo.get_flocks(), repo.get_accounts()
+            params = st.columns(3)
+            as_of = params[0].date_input('Report Date', value=halifax_today(), key=handler+'_date')
+            mortality = params[1].number_input('Mortality', min_value=0.0, value=0.4, step=0.1, format='%.3f', key=handler+'_mortality')
+            kinds = {str(value).strip() for value in source_flocks.get('FLOCK_QUOTA_TYPE', pd.Series(dtype=object)).dropna() if str(value).strip()}
+            selected_type = params[2].selectbox('Quota Type', ['Egg Production', 'All', *sorted(kinds-{'Egg Production','All','Special Permit'})], key=handler+'_type')
+            st.caption('Uses the Flock Status scope and confirmed Egg Production quota basis. Accounts qualify only when their unrounded known Inventory total is strictly greater than quota.')
+            if st.button('Run Report', type='primary', key='run_'+handler):
+                st.session_state.pop(handler+'_result', None)
+                try:
+                    quotas, reasons = load_flock_report_quotas(source_accounts, as_of)
+                    result, summary = build_producers_over_quota_report(source_flocks, repo.get_flock_transactions(),
+                        source_accounts, repo.get_facilities(), quotas, as_of, mortality, selected_type)
+                    st.session_state[handler+'_result'] = result
+                    st.session_state[handler+'_summary'] = summary
+                    st.session_state[handler+'_reasons'] = reasons
+                except ValueError as exc:
+                    show_data_error(exc)
+            result = st.session_state.get(handler+'_result')
+            if isinstance(result, pd.DataFrame):
+                summary = st.session_state[handler+'_summary']
+                summary_lines = pdf_summary_lines(summary, definition.report_id)
+                st.caption(result.attrs['header'])
+                for line in summary_lines:
+                    label, _, value = line.partition(': ')
+                    st.metric(label, value or '—')
+                notes = [summary['Notes'], *st.session_state.get(handler+'_reasons', []), *result.attrs.get('notes', [])]
+                for note in notes:
+                    if note: st.caption(note)
+                if result.empty:
+                    st.info('No producers exceed 100% of confirmed quota for the selected parameters.')
+                else:
+                    st.dataframe(result, hide_index=True, width='stretch')
+                downloads(result, handler+'_report', definition.report_id,
+                    subtitle_lines=[result.attrs['header'], *summary_lines], notes=notes)
         elif definition.handler in {'flock_status', 'flock_status_producer', 'flocks_counted', 'flocks_needing_counts', 'flock_disposals', 'flock_salmonella_schedule', 'scheduled_flock_placements'}:
             handler = definition.handler
             source_flocks, source_accounts = repo.get_flocks(), repo.get_accounts()

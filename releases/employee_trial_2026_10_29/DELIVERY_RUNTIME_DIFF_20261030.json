@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "4c9f35e77b24d9e7478c15e093c26ce93bbaaeff6797b60f6b0eacad78654c00"
+      "candidate_lf_sha256": "8e528308abad05b810f726ed0e89b660637a8c34784d36f5b975aa3fa931b171"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "1502571c7c9fc0a98f3ea17274cf873b4527d12ea8f46ef7155d2912fc97c54c"
+      "candidate_lf_sha256": "3f7cfba806af2ebbeb693cff041cbb49b15ca9674d19778a1a0c004f86a7c772"
     },
     {
       "path": "app/services/revision_history.py",
@@ -324,7 +324,7 @@
       "path": "app/services/report_pdf.py",
       "status": "NEW",
       "reason": "Shared presentation-only SSRS-style PDF renderer using exact CSV cell text, bounded row count, fitting, pagination and Halifax footer.",
-      "candidate_lf_sha256": "dd2fe0df2f94919cd68d1ab20f7f7c677dd55199e38c125031bd0fcabe162b19"
+      "candidate_lf_sha256": "97e7aeb1684328a40a882998010036689e6c1cfd1f1d3e0022be9765a6ddfe4e"
     },
     {
       "path": "app/services/report_pdf_ui.py",
@@ -342,7 +342,7 @@
       "path": "tests/test_report_smoke.py",
       "status": "NEW",
       "reason": "Catalog-wide offline builder/UI smoke scenarios and manifest artifact verification.",
-      "candidate_lf_sha256": "57947a3fb095228ce3b3642403204070f393e6fbffaff72645c144410632dc37"
+      "candidate_lf_sha256": "2b402bd9de770de91a4e34a2d7f869361150a346b1d3e3fa70e68a7fe70a9dae"
     },
     {
       "path": "docs/codex_reports/TRIAL_READINESS_STATIC_SCAN_20261109.md",
@@ -460,6 +460,38 @@
       "status": "MODIFIED",
       "reason": "Assert the new third PDF export button while retaining existing Production note/CSV/XLSX checks.",
       "candidate_lf_sha256": "e13d9c45eb5bec4da29bc593f10ce4337f6430838a2946c81daa1528a79c2bbc"
+    }
+  ],
+  "producers_over_quota_artifacts": [
+    {
+      "path": "app/services/producers_over_quota_report.py",
+      "status": "NEW",
+      "reason": "New legacy Producers Over Quota report, fixture, evidence/limits or regression coverage.",
+      "candidate_lf_sha256": "3dcf191566cdb6169f90dc4679807839f6af0e5298378265a79125789bd56629"
+    },
+    {
+      "path": "tests/test_producers_over_quota.py",
+      "status": "NEW",
+      "reason": "New legacy Producers Over Quota report, fixture, evidence/limits or regression coverage.",
+      "candidate_lf_sha256": "5c0e63f0906896db545f72d42d6ad3aecb2544a019764f7123382876ec036e37"
+    },
+    {
+      "path": "tests/fixtures/legacy_reports/EIMSProducersOverQuota.pdf",
+      "status": "NEW",
+      "reason": "New legacy Producers Over Quota report, fixture, evidence/limits or regression coverage.",
+      "candidate_lf_sha256": "bab387484bee85353ea9b4adc5f64a07224cccbda4f837377000ffd53e2ab75b"
+    },
+    {
+      "path": "docs/codex_reports/PRODUCERS_OVER_QUOTA_20261110.md",
+      "status": "NEW",
+      "reason": "New legacy Producers Over Quota report, fixture, evidence/limits or regression coverage.",
+      "candidate_lf_sha256": "b3bfdaeab83ccce23b173c4189402c0a2845656e5cf1dfa52ca00ac37092e272"
+    },
+    {
+      "path": "tests/test_report_center.py",
+      "status": "MODIFIED",
+      "reason": "Extend the exact catalog-name contract for the newly implemented report.",
+      "candidate_lf_sha256": "3857a3582d3d96d5f30472dc5ef29d8c969921e9e8572435f2438c3a79503dce"
     }
   ]
 }

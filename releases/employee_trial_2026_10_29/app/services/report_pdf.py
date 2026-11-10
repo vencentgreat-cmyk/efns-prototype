@@ -24,6 +24,7 @@ QUANTITY = re.compile(r'^[+-]?(?:\d+(?:\.\d*)?|\.\d+|\d{1,3}(?:,\d{3})+(?:\.\d*)
 PRODUCTION_QUANTITIES = ('J','J2','XL','L','M','S','PW','B','C','NR','CR','OL','ON','RJ','LK','FG','FC','NonLevy','Levy','Total')
 NEST_RUN_QUANTITIES = ('NR','NR25','NR24','NR23','NR22','NR21','NR20','NR19','NR18','NR17','FG','FC')
 QUANTITY_COLUMNS_BY_REPORT = {
+    'producers-over-quota': ('Inventory',),
     'production-management-summary': PRODUCTION_QUANTITIES,
     'production-management-producer': PRODUCTION_QUANTITIES,
     'production-management-details': PRODUCTION_QUANTITIES,
@@ -53,6 +54,19 @@ QUANTITY_COLUMNS_BY_REPORT = {
     'flock-permit': (),
     'salmonella-form': (),
 }
+
+SUMMARY_QUANTITY_COLUMNS_BY_REPORT = {
+    'producers-over-quota': ('Inventory Birds', 'NFPMC Allocation', 'Issuance for Province', 'Producers with Quota'),
+}
+
+
+def pdf_summary_lines(summary, report_id):
+    """Presentation-only summary quantities; percentages/identifiers stay exact."""
+    allowed = SUMMARY_QUANTITY_COLUMNS_BY_REPORT.get(report_id, ())
+    labels = ('Inventory Birds', 'NFPMC Allocation', 'Provincial Utilization',
+              'Issuance for Province', 'Producers with Quota')
+    return [label + ': ' + (group_quantity(display_text(summary.get(label)))
+            if label in allowed else display_text(summary.get(label))) for label in labels]
 
 
 class PDFExportError(ValueError):
