@@ -10,6 +10,8 @@ from app.services.export import spreadsheet_safe
 from app.ui import apply_theme, page_header, section_intro
 from data.repositories import get_repository
 from data.producer_identity import production_identities
+from app.services.production_data_display import production_display_records, production_detail_range
+from app.services.production_reports import COMPONENTS, NEST_FIELDS
 from data.source_scope import SOURCE_SCOPES, scope_production
 
 
@@ -105,7 +107,17 @@ records = repo.get_production_records(
     barn_identity=barn,
     egg_colour=colour,
 )
-records = scope_production(production_identities(records),source_scope)
+if reporting_year is None and not records.empty:
+    st.caption('Select a Reporting Year to load detail columns; use Week to narrow the results.')
+try:
+    # A Week alone can span every year: require Year before the extra CORE read.
+    detail_range = production_detail_range(records) if reporting_year is not None else None
+    details = repo.get_production_report_records(*detail_range) if detail_range else pd.DataFrame()
+    records = production_display_records(records, details, repo.get_accounts())
+except ValueError:
+    st.warning('Production details are unavailable; showing original records. Filter or reload to try again.')
+    records = production_identities(records)
+records = scope_production(records,source_scope)
 known_total = records['TOTAL'].notna().sum() if 'TOTAL' in records else 0
 coverage = st.columns(3)
 coverage[0].metric('Selected records',len(records))
@@ -135,6 +147,13 @@ with st.container(border=True):
             "PRODUCER_NUMBER",
             "PRODUCER_IDENTITY_LABEL",
             "PRODUCER_IDENTITY_STATUS",
+            "PRODUCER_ACCOUNT_ID",
+            "MARKETING_TYPE",
+            "HOUSING_SYSTEM",
+            "EGG_TYPE",
+            "GRADING_STATION",
+            *COMPONENTS,
+            *(label for label in NEST_FIELDS if label not in COMPONENTS),
             "GRADER_NUMBER",
             "BARN_IDENTITY",
             "EGG_COLOUR",
@@ -151,6 +170,7 @@ with st.container(border=True):
         )
         if column in records.columns
     ]
+    st.caption("Full production reports (Summary, by Producer, Details, Details by Grader, Nest Run) are in Report Center.")
     st.caption(f"Showing {len(records):,} of {len(all_records):,} production records.")
     st.dataframe(
         records[display_columns],
@@ -162,6 +182,12 @@ with st.container(border=True):
             "REPORTING_YEAR": "Year",
             "REPORTING_WEEK": "Week",
             "PRODUCER_NUMBER": "Producer",
+            "PRODUCER_IDENTITY_LABEL": "Producer Account / Registration",
+            "PRODUCER_ACCOUNT_ID": "Producer Account ID (source)",
+            "MARKETING_TYPE": "Marketing Type",
+            "HOUSING_SYSTEM": "Housing System",
+            "EGG_TYPE": "Egg Type / Specialty",
+            "GRADING_STATION": "Grading Station",
             "GRADER_NUMBER": "Grader",
             "BARN_IDENTITY": "Barn",
             "EGG_COLOUR": "Egg Colour",

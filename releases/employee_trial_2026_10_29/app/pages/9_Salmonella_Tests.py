@@ -139,7 +139,7 @@ else:
                 flock_label = left.selectbox("Flock / Permit Number *", list(flock_options), index=option_index(list(flock_options), label_for_id(flock_options, current.get("FLOCK_ID"))), key="salmonella_form_flock")
                 flock = repo.get_flock(flock_options[flock_label])
                 left.text_input("Account", value=account_names.get(flock["ACCOUNT_ID"], ""), disabled=True)
-                left.text_input("Permit Number", value=str(flock.get("PERMIT_NUMBER") or ""), disabled=True)
+                left.caption(f"Selected flock permit (read-only): {flock.get('PERMIT_NUMBER') or '—'}")
                 testing_date = right.date_input("Testing Date *", value=(optional_form_date(current.get("TESTING_DATE")) if view.record_id else halifax_today()), key="salmonella_form_testing")
                 samples = right.text_input("Number of Samples *",value=stored_text(current.get("NUMBER_OF_SAMPLES")),key='salmonella_form_samples') if view.record_id else right.number_input("Number of Samples *", min_value=0, value=int(current.get("NUMBER_OF_SAMPLES") or 0), key="salmonella_form_samples")
                 inspector = right.text_input("Inspector", value=str(current.get("INSPECTOR") or ""), key="salmonella_form_inspector")
