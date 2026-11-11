@@ -295,6 +295,8 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
         right=ParagraphStyle('number',parent=normal,alignment=TA_RIGHT)
         bold=ParagraphStyle('total',parent=normal,fontName='Helvetica-Bold')
         bold_right=ParagraphStyle('total-number',parent=bold,alignment=TA_RIGHT)
+        over_quota=ParagraphStyle('over-quota-total',parent=bold_right,textColor=colors.HexColor('#c00000'))
+        marked=set(frame.attrs.get('over_quota_total_rows', [])) if report_id=='producers-over-quota' else set()
         atomic=ParagraphStyle('identifier',parent=normal,splitLongWords=False)
         bold_atomic=ParagraphStyle('total-identifier',parent=bold,splitLongWords=False)
         cell_rows=[]
@@ -305,7 +307,7 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
         for index,row in enumerate(rows):
             total=index>0 and is_total_row(rows[0],row)
             if total:styles.append(('BACKGROUND',(0,index),(-1,index),colors.HexColor('#dddddd')))
-            cell_rows.append([paragraph(value,bold if index==0 else
+            cell_rows.append([paragraph(value,over_quota if total and index-1 in marked and rows[0][col]=='% Quota' else bold if index==0 else
                 bold_atomic if total and keep_identifiers and identifier_cell(rows[0][col],value) else
                 atomic if keep_identifiers and identifier_cell(rows[0][col],value) else
                 bold_right if total and NUMERIC.fullmatch(value) else bold if total else

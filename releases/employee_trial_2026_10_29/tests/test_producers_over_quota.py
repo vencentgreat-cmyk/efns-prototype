@@ -44,6 +44,14 @@ def legacy_rows():
     return rows, totals
 
 
+def account_totals(frame):
+    totals={};registration=None
+    for row in frame.to_dict('records'):
+        registration=row['Reg No'] or registration
+        if row['Account Name']=='Total':totals[registration]=(row['Inventory'],row['% Quota'])
+    return totals
+
+
 def sources():
     f, t, _, barns, _ = bayview()
     f = f.loc[f.ACCOUNT_ID.eq('a')].copy()
@@ -73,9 +81,9 @@ def test_source_observations_reproduce_7038_7159_7402_and_shared_summary():
     assert summary == expected_summary  # Province scope, including under-quota 7106.
     assert summary['NFPMC Allocation'] == summary['Issuance for Province'] == 1027985
     assert summary['Producers with Quota'] == 24
-    assert result.loc[result['Reg No'].ne(''),'Reg No'].tolist() == ['7038','7159','7402']
-    assert result.loc[result['Account Name'].eq('Total'),['Inventory','% Quota']].values.tolist() == [
-        [16550,'102.46%'],[45646,'106.20%'],[1941,'108.44%']]
+    assert set(result.loc[result['Reg No'].ne(''),'Reg No']) == set(QUOTAS)
+    totals = account_totals(result)
+    assert [totals[reg] for reg in ['7038','7159','7402']] == [(16550,'102.46%'),(45646,'106.20%'),(1941,'108.44%')]
     pdf, _ = legacy_rows()
     indexed = result.loc[result['Permit No'].ne('')].set_index('Permit No')
     for expected in pdf:
@@ -85,7 +93,7 @@ def test_source_observations_reproduce_7038_7159_7402_and_shared_summary():
             expected['age'],expected['inventory'],expected['percent'],expected['placed'],expected['disposed'],expected['counted'])
     assert indexed.loc['40407','Inventory'] == 0 and indexed.loc['40407','Flock Age'] == 9
     assert indexed.loc['40407','Last Count'] == indexed.loc['40402','Last Count'] == ''
-    assert summary['Inventory Birds'] > result.loc[result['Account Name'].eq('Total'),'Inventory'].sum()
+    assert summary['Inventory Birds'] == result.loc[result['Account Name'].eq('Total'),'Inventory'].sum()
     for frame, original in zip((f,t,a,b),before):pd.testing.assert_frame_equal(frame,original)
 
 
@@ -107,7 +115,7 @@ def test_all_legacy_account_totals_projection_from_pdf_not_reconstructed_counts(
             'Disp. Date':pd.to_datetime(row['disposed'],format='%d/%m/%Y').date(),'Quota Type':'Egg Production',
             'Count Date':pd.to_datetime(row['counted'],format='%d/%m/%Y').date() if row['counted'] else '—','Notes':''}])
     monkeypatch.setattr(report,'build_flock_current_report',observed)
-    frame, summary = report.build_producers_over_quota_report(flocks,tx,accounts,pd.DataFrame(),QUOTAS,DAY)
+    frame, summary = report.build_producers_over_quota_report(flocks,tx,accounts,pd.DataFrame(),{key:QUOTAS[key] for key in expected_totals},DAY)
     actual = {}; reg = None
     for row in frame.to_dict('records'):
         reg = row['Reg No'] or reg
@@ -115,13 +123,13 @@ def test_all_legacy_account_totals_projection_from_pdf_not_reconstructed_counts(
         elif row['Permit No']:
             expected = by_permit[row['Permit No']]
             assert row['Inventory'] == expected['inventory'] and row['% Quota'] == expected['percent']
-    assert actual == expected_totals and summary == province
+    assert actual == expected_totals and summary == {**province,'Producers with Quota':16}
     assert actual['7113'] == (33513,'120.97%')  # Projection proof only; raw Counts unavailable.
     assert frame.set_index('Permit No').loc['40406','Inventory'] == 0
 
 
-@pytest.mark.parametrize('quota,expected',[(16550,False),(16549,True),(0,False),(None,False)])
-def test_strict_unrounded_threshold_and_undefined_quota_notes(quota,expected):
+@pytest.mark.parametrize('quota,expected',[(16550,True),(16549,True),(20000,True),(0,False),(None,False)])
+def test_all_positive_quota_accounts_are_listed_and_undefined_quota_noted(quota,expected):
     f,t,a,b,q = sources(); q['7038']=quota
     result,_ = report.build_producers_over_quota_report(f,t,a,b,q,DAY)
     assert ('7038' in result['Reg No'].tolist()) == expected
@@ -150,12 +158,14 @@ def test_unknown_detail_known_subtotal_future_zero_and_mortality():
     indexed=result.loc[result['Permit No'].ne('')].set_index('Permit No')
     assert indexed.loc['unknown','Inventory']==''
     assert indexed.loc['not-counted','Inventory']==0 and indexed.loc['not-counted','Last Count']==''
-    assert result.loc[result['Account Name'].eq('Total'),'Inventory'].iloc[0]==16550
+    assert account_totals(result)['7038'][0]==16550
     assert any('7038: total excludes 1 flock' in n for n in result.attrs['notes'])
     q['7038']=16600
     ordinary,_=report.build_producers_over_quota_report(f,t,a,b,q,DAY)
     zero,_=report.build_producers_over_quota_report(f,t,a,b,q,DAY,mortality=0)
-    assert '7038' not in ordinary['Reg No'].tolist() and '7038' in zero['Reg No'].tolist()
+    assert '7038' in ordinary['Reg No'].tolist() and '7038' in zero['Reg No'].tolist()
+    assert account_totals(ordinary)['7038'][1]=='99.70%'
+    assert account_totals(zero)['7038'][1]=='101.37%'
 
 
 def test_future_count_is_blank_same_day_count_beats_delivery_and_empty_nulls():
@@ -169,7 +179,7 @@ def test_future_count_is_blank_same_day_count_beats_delivery_and_empty_nulls():
     assert empty.empty and list(empty)==report.COLUMNS
     a[['REGISTRATION_NUMBER','ORGANIZATION_NAME']]=None;f[['HATCH_DATE','PLACEMENT_DATE']]=None;t['QUANTITY']=None
     nulls,_=report.build_producers_over_quota_report(f,t,a,b,q,DAY)
-    assert nulls.empty and not re.search(r'\b(None|nan|NaT)\b',' '.join(nulls.attrs['notes']))
+    assert not nulls.empty and not re.search(r'\b(None|nan|NaT)\b',' '.join(nulls.attrs['notes']))
 
 
 @pytest.mark.parametrize('kind,expected',[('not-counted',0),('conflict',''),('invalid','')])
@@ -182,17 +192,18 @@ def test_not_yet_counted_zero_is_distinct_from_genuinely_unknown(kind,expected):
         t=pd.concat([t,pd.DataFrame(extra)],ignore_index=True)
     result,_=report.build_producers_over_quota_report(f,t,a,b,q,DAY)
     assert result.set_index('Permit No').loc['40382','Inventory']==expected
-    assert result.loc[result['Account Name'].eq('Total'),'Inventory'].iloc[0]==9823
+    assert account_totals(result)['7038'][0]==9823
 
 
 def test_scope_matches_status_and_non_egg_note():
     f,t,a,b,q=sources()
     f.loc[f.ACCOUNT_ID.eq('7038'),'STATUS']='Inactive'
     result,_=report.build_producers_over_quota_report(f,t,a,b,q,DAY)
-    assert '7038' not in result['Reg No'].tolist()
+    assert account_totals(result)['7038']==(0,'0.00%')
+    assert '40368' not in result['Permit No'].tolist()
     f.loc[f.ACCOUNT_ID.eq('7159'),'FLOCK_QUOTA_TYPE']='Special Permit'
     result,_=report.build_producers_over_quota_report(f,t,a,b,q,DAY,quota_type='All')
-    assert '7159' not in result['Reg No'].tolist()
+    assert account_totals(result)['7159']==(0,'0.00%')
     assert any('Only Egg Production' in n for n in result.attrs['notes'])
 
 
@@ -208,7 +219,8 @@ def test_exports_pdf_summary_quantities_dates_and_catalog():
     assert QUANTITY_COLUMNS_BY_REPORT[definition.report_id]==('Inventory',)
     assert SUMMARY_QUANTITY_COLUMNS_BY_REPORT[definition.report_id]==('Inventory Birds','NFPMC Allocation','Issuance for Province','Producers with Quota')
     rows=pdf_display_rows(frame,definition.report_id)
-    assert rows[1][0]=='7038' and rows[1][2]=='40368' and rows[1][8]=='9,823' and rows[1][9]=='60.82%'
+    sample=next(row for row in rows[1:] if row[2]=='40368')
+    assert sample[0]=='7038' and sample[8]=='9,823' and sample[9]=='60.82%'
     lines=pdf_summary_lines(summary,definition.report_id)
     assert 'NFPMC Allocation: 1,027,985' in lines
     pdf=render_report_pdf(definition.name,[frame.attrs['header'],*lines],frame,report_id=definition.report_id)
