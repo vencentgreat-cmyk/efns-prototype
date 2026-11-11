@@ -589,5 +589,19 @@
       "reason": "Document date default source, behavior, scope and offline validation.",
       "candidate_lf_sha256": "c4ebbad047b580d94f80919805457ea2c389744501f770a93ae0f86026cf2e64"
     }
+  ],
+  "production_navigation_investigation_artifacts": [
+    {
+      "path": "tests/test_production_navigation.py",
+      "status": "NEW",
+      "reason": "Synthetic AppTest coverage of actual sidebar protocol, unique routes and Dashboard target identity for every role and both entrypoints.",
+      "candidate_lf_sha256": "561ab3b225cdf40339a8369681f4375dc2ce3394637befbe4ead31e9527311be"
+    },
+    {
+      "path": "docs/codex_reports/NAV_PRODUCTION_20261111.md",
+      "status": "NEW",
+      "reason": "Production sidebar investigation and version-matched reproduction evidence; no runtime change without confirmed cause.",
+      "candidate_lf_sha256": "1bf64189820269287880850bdf93223b8c5f272e330bd48afb996b9cd2a9f0ac"
+    }
   ]
 }
