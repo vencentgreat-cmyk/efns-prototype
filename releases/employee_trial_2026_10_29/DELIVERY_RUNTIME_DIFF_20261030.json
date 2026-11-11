@@ -77,7 +77,7 @@
       "status": "MODIFIED",
       "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
-      "candidate_lf_sha256": "0735d4f47b2fdfb0c4bf28a79c5ff631fc55d8da2ce19ce2b0bd62cff0637cdd"
+      "candidate_lf_sha256": "ebe74d47520e45f822e71080407a1a384ffa6b3a455bf01479813a2420c8ed2a"
     },
     {
       "path": "app/pages/6_Flock_Transactions.py",
@@ -562,6 +562,32 @@
       "status": "NEW",
       "reason": "Complete legacy/DEV parity evidence and regression coverage.",
       "candidate_lf_sha256": "0720de3dcef61f40da053068a7e0ac361b74e5588688d5cd5a7b085bac020ead"
+    }
+  ],
+  "flock_date_default_artifacts": [
+    {
+      "path": "app/services/flock_date_defaults.py",
+      "status": "NEW",
+      "reason": "Pure editable create-form date defaults; preserve manual overrides and existing records.",
+      "candidate_lf_sha256": "536e55475c0a485ac77425c81b08da6f4027b7a39cc9080ac9301448cfd45a0a"
+    },
+    {
+      "path": "tests/test_facility_flock_relationships.py",
+      "status": "MODIFIED",
+      "reason": "Align occupied-facility create-form expectation with the requested date defaults, retaining preservation checks.",
+      "candidate_lf_sha256": "a1f5c729d1e7104c41ba3cc64ca56b0b93ef4ef8aa1a4a84f0b89706ba44fb79"
+    },
+    {
+      "path": "tests/test_flock_date_defaults.py",
+      "status": "NEW",
+      "reason": "Synthetic calendar, override, clear, edit preservation and real form save/rerun regressions.",
+      "candidate_lf_sha256": "fc42d58b327fd665d17c68bd00ea44bd8ea63873299deab3d062bef1f74ff0f1"
+    },
+    {
+      "path": "docs/codex_reports/FLOCK_DATE_DEFAULTS_20261111.md",
+      "status": "NEW",
+      "reason": "Document date default source, behavior, scope and offline validation.",
+      "candidate_lf_sha256": "c4ebbad047b580d94f80919805457ea2c389744501f770a93ae0f86026cf2e64"
     }
   ]
 }
