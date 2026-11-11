@@ -24,6 +24,7 @@ from data.repositories.continuity import changed_attributes
 from data.producer_identity import text
 from app.services.quota_usage import render_quota_usage
 from app.services.entry_fields import bird_strain_input
+from app.services.flock_date_defaults import apply_flock_date_defaults, placement_from_hatch, estimated_disposal_from_placement
 from data.flock_stock import flock_stock
 from data.quota_position import load_rules
 from data.repositories.snowflake import normalize_numeric_bind
@@ -49,6 +50,11 @@ def option_index(options, value):
 
 def label_for_id(mapping, value, default=None):
     return next((label for label, record_id in mapping.items() if record_id == value), default)
+
+
+def mark_date_manual(key):
+    # Only user edits trigger this callback; automatic defaults do not.
+    st.session_state[key + "_manual"] = st.session_state.get(key) is not None
 
 
 if view.name == "list":
@@ -144,6 +150,18 @@ else:
     else:
         current = current or {}
         begin_form('flock_form_',view.record_id)
+        if not view.record_id:
+            for key in ("flock_form_placement", "flock_form_est_disposal"):
+                st.session_state.setdefault(key + "_manual", st.session_state.get(key) is not None)
+            placement_default, disposal_default = apply_flock_date_defaults(
+                st.session_state.get("flock_form_hatch", halifax_today()),
+                st.session_state.get("flock_form_placement"),
+                st.session_state.get("flock_form_est_disposal"),
+                placement_manual=st.session_state.flock_form_placement_manual,
+                estimated_manual=st.session_state.flock_form_est_disposal_manual,
+            )
+            st.session_state.flock_form_placement = placement_default
+            st.session_state.flock_form_est_disposal = disposal_default
         expected_key = f"flock_form_expected_{view.record_id}"
         if view.name == "edit" and view.record_id:
             st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
@@ -178,8 +196,16 @@ else:
                 egg_colour = left.selectbox("Egg Colour", stored_options(EGG_COLOURS,current.get("EGG_COLOUR"),bool(view.record_id)), index=(stored_index(EGG_COLOURS,current.get("EGG_COLOUR")) if view.record_id else option_index(list(EGG_COLOURS), current.get("EGG_COLOUR"))), key="flock_form_colour")
                 permit_date = left.date_input("Permit Date", value=optional_form_date(current.get("PERMIT_DATE")), key="flock_form_permit_date")
                 ordered_date = left.date_input("Date Ordered", value=optional_form_date(current.get("DATE_ORDERED")), key="flock_form_ordered")
-                placement_date = left.date_input("Placement Date", value=optional_form_date(current.get("PLACEMENT_DATE")), key="flock_form_placement")
-                estimated_disposal = right.date_input("Estimated Disposal Date", value=optional_form_date(current.get("EST_DISPOSAL")), key="flock_form_est_disposal")
+                st.caption("Placement = Hatch + 19 weeks; Estimated Disposal = Placement + 52 weeks (defaults, can be changed)")
+                placement_date = left.date_input("Placement Date", value=optional_form_date(current.get("PLACEMENT_DATE")), key="flock_form_placement", on_change=mark_date_manual if not view.record_id else None, args=("flock_form_placement",))
+                estimated_disposal = right.date_input("Estimated Disposal Date", value=optional_form_date(current.get("EST_DISPOSAL")), key="flock_form_est_disposal", on_change=mark_date_manual if not view.record_id else None, args=("flock_form_est_disposal",))
+                if view.record_id:
+                    calculated_placement = placement_from_hatch(hatch_date)
+                    calculated_disposal = estimated_disposal_from_placement(placement_date)
+                    if calculated_placement and calculated_placement != optional_form_date(current.get("PLACEMENT_DATE")):
+                        left.caption(f"Calculated from Hatch Date: {calculated_placement.isoformat()}")
+                    if calculated_disposal and calculated_disposal != optional_form_date(current.get("EST_DISPOSAL")):
+                        right.caption(f"Calculated from Placement Date: {calculated_disposal.isoformat()}")
                 disposal_date = right.date_input("Disposal Date", value=optional_form_date(current.get("DISPOSAL_DATE")), key="flock_form_disposal")
                 birds_disposed_input = right.text_input("Birds Disposed",value=text(current.get("BIRDS_DISPOSED")) or "",key="flock_form_disposed_text")
                 bird_strain = bird_strain_input(flocks, current.get('BIRD_STRAIN'), target=right)

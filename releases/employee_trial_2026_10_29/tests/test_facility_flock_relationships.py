@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 from app.services.report_builder import build_report
+from app.services.flock_date_defaults import placement_from_hatch, estimated_disposal_from_placement
 from app.services.report_center import build_custom_report
 from data.migration import MigrationSourceFile, analyze_migration_files
 from data.repositories.mock import MockRepository
@@ -97,7 +98,7 @@ def test_reports_include_all_flocks_without_multiplying_production():
         build_report(repo, ["FLOCK_NUMBER", "TOTAL_RECEIVED"])
 
 
-def test_flock_form_allows_occupied_facility_and_leaves_dates_unknown(tmp_path, monkeypatch):
+def test_flock_form_allows_occupied_facility_with_editable_date_defaults(tmp_path, monkeypatch):
     app = authenticated_app(Path(__file__).parents[1] / "app" / "Home.py", tmp_path, monkeypatch)
     app.switch_page("pages/5_Flocks.py").run()
     next(button for button in app.button if button.label == "New").click().run()
@@ -112,7 +113,9 @@ def test_flock_form_allows_occupied_facility_and_leaves_dates_unknown(tmp_path, 
     assert not app.error
     saved = app.session_state.repo.get_flocks().query("FLOCK_NUMBER == 'SYN-FORM-SHARED'").iloc[0]
     assert saved.FACILITY_ID == facility_id
-    assert pd.isna(saved.PLACEMENT_DATE) and pd.isna(saved.DISPOSAL_DATE)
+    assert saved.PLACEMENT_DATE == placement_from_hatch(saved.HATCH_DATE)
+    assert saved.EST_DISPOSAL == estimated_disposal_from_placement(saved.PLACEMENT_DATE)
+    assert pd.isna(saved.DISPOSAL_DATE)
     existing = app.session_state.repo.get_flocks()
     pd.testing.assert_frame_equal(before.reset_index(drop=True), existing[existing.FLOCK_ID.isin(before.FLOCK_ID)].reset_index(drop=True), check_dtype=False)
 
