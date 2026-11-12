@@ -13,7 +13,9 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
-from app.auth import require_operational_page
+from app.auth import require_operational_page, can_current
+from app.security import Permission
+from app.services.flock_related import flock_quota_link
 from app.navigation import format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, related_records_table, saved_view_selector, selected_row_index, timestamp_column
 from app.ui import apply_theme, clear_widget_prefix, optional_form_date, page_header, section_intro, show_data_error
 from data.constants import EGG_COLOURS, FLOCK_QUOTA_TYPES, FLOCK_STATUSES, UNASSIGNED_LABEL
@@ -55,6 +57,15 @@ def label_for_id(mapping, value, default=None):
 def mark_date_manual(key):
     # Only user edits trigger this callback; automatic defaults do not.
     st.session_state[key + "_manual"] = st.session_state.get(key) is not None
+
+
+def render_linked_quota(target, quota, *, key):
+    target.markdown(f"**Quota**  \n{quota.label}")
+    target.markdown(f"**Flock Quota Type**  \n{quota.flock_quota_type}")
+    if quota.note:
+        target.caption(quota.note)
+    if quota.can_open and target.button("View Quota Registration", key=key, icon=":material/assignment:"):
+        open_module("Quota_Registrations", "detail", quota.quota_id)
 
 
 if view.name == "list":
@@ -100,6 +111,7 @@ else:
     if action == "delete" and view.record_id: st.session_state['flock_form___delete_pending']=view.record_id
     if not is_form:
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
+        linked_quota = flock_quota_link(repo, current, can_view=can_current(Permission.VIEW_DATA))
         summary, details, related = st.tabs(["Summary", "Details", "Related Records"])
         with summary:
             with st.container(border=True):
@@ -111,6 +123,7 @@ else:
                     open_module("Accounts_&_Facilities", "detail", current["ACCOUNT_ID"])
                 if current.get("FACILITY_ID") and left.button("View Facility", key="flock_parent_facility", icon=":material/domain:"):
                     open_module("Facilities", "detail", current["FACILITY_ID"])
+                render_linked_quota(left, linked_quota, key="flock_parent_quota")
                 middle.markdown(f"**Permit Number**  \n{current.get('PERMIT_NUMBER')}")
                 middle.markdown(f"**Hatch Date**  \n{current.get('HATCH_DATE')}")
                 middle.markdown(f"**Placement Date**  \n{current.get('PLACEMENT_DATE') or '—'}")
@@ -137,6 +150,8 @@ else:
             detail_fields = [key for key in current if key not in {"CREATED_AT", "UPDATED_AT"}]
             st.dataframe(pd.DataFrame({"Field": [key.replace("_", " ").title() for key in detail_fields], "Value": [str(current[key]) if current[key] is not None else "—" for key in detail_fields]}), width="stretch", hide_index=True)
         with related:
+            with st.container(border=True):
+                render_linked_quota(st, linked_quota, key="flock_related_quota")
             for heading, frame, key, label, slug in (
                 ("Flock Transactions", repo.get_flock_transactions(view.record_id), "FLOCK_TRANSACTION_ID", "TRANSACTION_TYPE", "Flock_Transactions"),
                 ("Salmonella Tests", repo.get_salmonella_tests(flock_id=view.record_id), "SALMONELLA_TEST_ID", "PERMIT_NUMBER", "Salmonella_Tests"),

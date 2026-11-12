@@ -77,7 +77,7 @@
       "status": "MODIFIED",
       "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
-      "candidate_lf_sha256": "ebe74d47520e45f822e71080407a1a384ffa6b3a455bf01479813a2420c8ed2a"
+      "candidate_lf_sha256": "657a5efbea6eb890e319cd09bc10e25efc0d6b5460be54c9d9af5e756f58abcd"
     },
     {
       "path": "app/pages/6_Flock_Transactions.py",
@@ -588,6 +588,26 @@
       "status": "NEW",
       "reason": "Document date default source, behavior, scope and offline validation.",
       "candidate_lf_sha256": "c4ebbad047b580d94f80919805457ea2c389744501f770a93ae0f86026cf2e64"
+    }
+  ],
+  "flock_quota_related_artifacts": [
+    {
+      "path": "app/services/flock_related.py",
+      "status": "NEW",
+      "reason": "Read-only Flock linked Quota label, missing-record and permission context using the existing single-record repository read.",
+      "candidate_lf_sha256": "a054e55b55f2216c3d6c0b2f60264138f0350d56f7a4bc354d38a24934b571e6"
+    },
+    {
+      "path": "tests/test_flock_quota_related.py",
+      "status": "NEW",
+      "reason": "Synthetic mock/offline-Snowflake lookup, tab rendering, permission, unchanged-data and registered-navigation regressions.",
+      "candidate_lf_sha256": "2e8fcb2e62baf71da35e64b9cd841264358e01b37c6b27ff611dc1ebd8d55d47"
+    },
+    {
+      "path": "docs/codex_reports/FLOCK_QUOTA_RELATED_20261112.md",
+      "status": "NEW",
+      "reason": "Document display-only relationship rows, repository/permission reuse, full-suite counts and shipped-file hash proof.",
+      "candidate_lf_sha256": "895c43a2105f61b15a59e8308d85b0063d14a05e641a495270657d71f3daaf9f"
     }
   ]
 }
