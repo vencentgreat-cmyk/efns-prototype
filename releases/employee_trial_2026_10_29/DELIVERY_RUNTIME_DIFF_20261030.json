@@ -35,7 +35,7 @@
       "status": "MODIFIED",
       "reason": "R3 F5: disambiguate colliding Facility selector labels; preserve distinct target IDs and existing save behavior.",
       "baseline_lf_sha256": "a21a8266cd0d09c0b130916acf219b375f2596e1dd31723903e517d08066a9e3",
-      "candidate_lf_sha256": "f13213ad39240f236e0073527750f15854989cfce1b22ef319a7fd30de9160d9"
+      "candidate_lf_sha256": "01027b55961a97951d5dcb6221fe8f88ee3acd92070e3c4622a865d013ecdfe2"
     },
     {
       "path": "app/pages/15_User_Management.py",
@@ -608,6 +608,26 @@
       "status": "NEW",
       "reason": "Document display-only relationship rows, repository/permission reuse, full-suite counts and shipped-file hash proof.",
       "candidate_lf_sha256": "895c43a2105f61b15a59e8308d85b0063d14a05e641a495270657d71f3daaf9f"
+    }
+  ],
+  "facility_detail_display_artifacts": [
+    {
+      "path": "app/services/facility_detail_display.py",
+      "status": "NEW",
+      "reason": "Read-only friendly labels and null-safe stored-value Facility Detail presentation; no derived dimensions or capacities.",
+      "candidate_lf_sha256": "6e95de96d1b2589a3bad88b913be0917dc9434628da2d4fe8ea19d7e29ba96ed"
+    },
+    {
+      "path": "tests/test_facility_detail_display.py",
+      "status": "NEW",
+      "reason": "Synthetic label, stored-field, null, precision, no-calculation, read-only and both-entrypoint display regressions.",
+      "candidate_lf_sha256": "b8c4a9f3007255c7715629f5b2aa25e6802f4944b18117675e5b984624d04328"
+    },
+    {
+      "path": "docs/codex_reports/FACILITY_DETAILS_DISPLAY_20261112.md",
+      "status": "NEW",
+      "reason": "Legacy-field/schema/migration/repository audit, deferred parent view gap, test counts and shipped-file raw hash proof.",
+      "candidate_lf_sha256": "03b0b9c62e11b9cf8d149ab77f01738303f5f36899c7c5be44e0a73ea6844fd3"
     }
   ]
 }
