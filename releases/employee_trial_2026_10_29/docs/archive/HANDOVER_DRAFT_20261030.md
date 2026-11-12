@@ -97,7 +97,7 @@ business meaning is confirmed. Allocation rows are retained RAW-only and are
 not Account entitlement or QUOTA_TRANSACTION import candidates.
 
 Use the manually executed, read-only
-[reconciliation SQL](../sql/review/quota_flock_reconciliation_20261029.sql): identity
+[reconciliation SQL](../../sql/review/quota_flock_reconciliation_20261029.sql): identity
 first, then T1e missing-target details/summary and uniqueness checks. Remaining
 sections compare observations, deliveries, components and Inactive source rows.
 SQL engine syntax/results are **to verify**; this task did not run it. Its
@@ -120,7 +120,7 @@ task changes only its superseded header comment, not the SQL logic.
   `data/quota_position.py`, `data/flock_stock.py` and `config/quota_rules.json`
   contain the **PENDING** draft; do not switch it to CONFIRMED without evidence.
   Missing/inactive source coverage and unverified current stock independently
-  block percentages. Use the [confirmation sheet](quota_rules_confirmation_20261029.md).
+  block percentages. Use the [confirmation sheet](../quota_rules_confirmation_20261029.md).
 - New-entry choices are Adjustment, Purchase, Sale, Lease (In), Lease (Out),
   Base: confirmed from usage data 2026-10-30; provisional until staff confirm.
   Base is intended for new registrations; defining/enforcing that workflow
