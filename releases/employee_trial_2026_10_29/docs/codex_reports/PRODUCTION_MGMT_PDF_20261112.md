@@ -1,6 +1,6 @@
 # Production Management PDF — 2026-11-12
 
-Base: origin/main `d5ffbe19dbd1ee83308c58c409928cfdcef9185b`; isolated branch `codex-production-mgmt-pdf-20261112`, worktree `.local/production-mgmt-pdf-worktree`. Offline only; no deployment, PR, Snowflake calls or real-data additions.
+Original base: origin/main `d5ffbe19dbd1ee83308c58c409928cfdcef9185b`; isolated branch `codex-production-mgmt-pdf-20261112`, worktree `.local/production-mgmt-pdf-worktree`. Offline only; no deployment, PR, Snowflake calls or real-data additions.
 
 ## Audit and scope
 
@@ -41,7 +41,7 @@ Measured PDF rendering only, local Python 3.12.14 / ReportLab 5.0.0 (the existin
 
 Peak traced allocations in a separate instrumented full-year render: Summary 115.30 MiB; Details 107.89 MiB. Tracing increases execution time (37.109s / 31.741s), so the table reports uninstrumented timings. Times are local measurements, not a Snowflake latency guarantee. Layout retains the existing 5,000 exported-result-row safety limit. Small and full-year first/last pages were rendered with Poppler and visually reviewed for borders, header/logo, totals, spacing, page footer and clipping. A separate PDF text extraction comparison verified all 54 Summary total rows and the Details grand total, every quantity exactly equal to the source result. Synthetic generated PDFs/PNGs stay ignored under this worktree’s `.local/`.
 
-## Shipped byte proof
+## Original shipped byte proof (d5ffbe1)
 
 All `snowflake.yml` artifact globs plus streamlit_app.py, environment.yml and .streamlit/config.toml were hashed before edits. Before: 114 files; after: 115 (one new service). **112 existing shipped files are byte-identical**, including builders, repositories, SQL, configuration, pages, data, existing CSV/XLSX code and logo. Only these shipped paths change:
 
@@ -53,4 +53,23 @@ All `snowflake.yml` artifact globs plus streamlit_app.py, environment.yml and .s
 
 Other changes are two test files, this report and the live runtime-diff manifest. No schema, data, report calculations, filters, screen values or CSV/XLSX output changed. No real producer/flock files added. Other worktrees/branches untouched.
 
-The live DELIVERY_RUNTIME_DIFF_20261030.json is regenerated from final LF-normalized bytes, preserving main’s entries and adding three new paths, for **94 candidate hashes**. Historical captured-source manifests remain baseline evidence and are unchanged.
+The original DELIVERY_RUNTIME_DIFF_20261030.json was regenerated from final LF-normalized bytes, preserving main’s entries and adding three new paths, for **94 candidate hashes**. Historical captured-source manifests remain baseline evidence and are unchanged.
+
+
+## Main integration — 2026-11-12
+
+Merged `origin/main` **b2aefd984cdb56668118138f5f890a39e2644715** (Facility Details PR #26) into the existing Production PDF branch; history is preserved for a normal push. Only DELIVERY_RUNTIME_DIFF_20261030.json conflicted. The conflict was resolved by taking main’s whole version, adding the three Production PDF artifact paths programmatically, and recomputing every candidate hash from final LF-normalized bytes. No JSON/hash conflict was hand-merged. All of main’s Facility Details entries remain, including its service, tests and documentation. The resulting live manifest has **97 candidate hashes**; captured historical manifests are unchanged.
+
+Integration validation: release **2,055 passed, 1 skipped, 0 failed/errors** (587.55s); root **706 passed, 0 failed/errors** (158.35s). Both suites ran in full with dedicated temporary directories: `python -m pytest -q --basetemp ../../.local/integration-release-temp` from the release and `python -m pytest -q --basetemp .local/integration-root-temp` from root. The 24 Facility Details cases and 19 Production PDF cases pass together. All three Production PDF shipped source files are unchanged from a7e667d. No report calculation, production display, Facility Details implementation, repository, SQL or dependency was changed to integrate main.
+
+### Shipped proof against new main
+
+The raw-byte baseline is the original pre-edit artifact snapshot, updated with the non-overlapping Facility Details files imported from main. These main changes do not intersect any Production PDF shipped path. Every other shipped file was also independently compared with main’s stored content (accounting for the established local LF/CRLF checkout representation). Main has **115** shipped artifacts; the integrated candidate has **116**. **113 existing shipped files remain byte-identical**. Exactly these three paths differ from new main:
+
+| Shipped path | Main baseline raw SHA-256 | Integrated raw SHA-256 |
+|---|---|---|
+| `app/services/production_pdf.py` | `NEW` | `e1723c2a3cf9d23ba34b5717aad524ce933de4d1af32a95871017a87d830c841` |
+| `app/services/report_pdf.py` | `73284c37073feac1572f31d1ad1c193476a63911967ab9965e4bf73aba4ed1a7` | `09e38bb5dc62a626f30983294eb652189fc3b15c3f99206b962ce724e761d0f4` |
+| `app/services/report_pdf_ui.py` | `ec40552b9f7c69fc883764c08e80f4a336830b23c50b3b4f55944ca108c99830` | `f085964556fc2eb4fcdfc44ca894d7b24c69c56927c31a5a5b27009d15825068` |
+
+The new-main comparison confirms the Facility Details page and helper remain exactly as merged on main. No other branch/worktree was edited, no real data files were added, and no deployment/Snowflake calls were made.

@@ -13,6 +13,7 @@ from app.navigation import ensure_record_form_state, format_timestamp, list_comm
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.repositories import get_repository
 from app.services.selector_options import unique_identity_options
+from app.services.facility_detail_display import facility_detail_frame, facility_detail_values
 from data.repositories.base import RepositoryError
 from data.constants import FACILITY_DETAIL_STATUSES
 
@@ -72,7 +73,8 @@ if view.name == "list":
     else:
         display = display.reset_index(drop=True)
         st.session_state.facility_detail_list_row_ids = display["FACILITY_DETAIL_ID"].tolist()
-        st.dataframe(display[["DETAIL_NAME", "FACILITY_NAME", "ACCOUNT_NAME", "DETAIL_TYPE", "STATUS", "COMMENTS", "CREATED_AT"]], width="stretch", height=520, hide_index=True, on_select="rerun", selection_mode="single-row", key="facility_detail_list_grid", column_config={"DETAIL_NAME": "Facility Detail", "FACILITY_NAME": "Facility", "ACCOUNT_NAME": "Account", "CREATED_AT": timestamp_column("Created On")})
+        display_frame = facility_detail_frame(display, timestamp_formatter=format_timestamp)
+        st.dataframe(display_frame, width="stretch", height=520, hide_index=True, on_select="rerun", selection_mode="single-row", key="facility_detail_list_grid")
 else:
     current = repo.get_facility_detail(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -80,26 +82,29 @@ else:
         if st.button("Back to Facility Details", icon=":material/arrow_back:"): open_view("list")
         st.stop()
     is_form = view.name in {"new", "edit"}
-    page_header("New Facility Detail" if view.name == "new" else current.get("DETAIL_NAME") or "Facility Detail", "Facility relationship and existing provisional detail fields.", "FACILITY DETAIL")
+    page_header("New Facility Detail" if view.name == "new" else stored_text(current.get("DETAIL_NAME")) or "Facility Detail", "Facility relationship and existing provisional detail fields.", "FACILITY DETAIL")
     action = record_command_bar("facility_detail_record", view.name)
     if action in {"back", "cancel"}: start_new_form("facility_detail_form_"); open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "refresh": st.rerun()
     if action == "edit": start_new_form("facility_detail_form_"); open_view("edit", view.record_id)
     if action == "delete" and view.record_id: st.session_state['facility_detail_form___delete_pending']=view.record_id
     if not is_form:
-        facility_id = current.get("FACILITY_ID")
-        account_id = facility_accounts.get(facility_id)
+        facility_id = stored_text(current.get("FACILITY_ID"))
+        account_id = stored_text(facility_accounts.get(facility_id))
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
         summary, related = st.tabs(["Summary", "Related Records"])
         with summary:
             with st.container(border=True):
                 left, right = st.columns(2)
-                left.markdown(f"**Detail Name**  \n{current.get('DETAIL_NAME') or '—'}")
-                left.markdown(f"**Detail Type**  \n{current.get('DETAIL_TYPE') or '—'}")
-                left.markdown(f"**Status**  \n{current.get('STATUS') or '—'}")
-                right.markdown(f"**Facility**  \n{facility_names.get(facility_id, 'Unknown')}")
-                if account_id: right.markdown(f"**Account**  \n{account_names.get(account_id, 'Unknown')}")
-                right.markdown(f"**Comments**  \n{current.get('COMMENTS') or 'No comments.'}")
+                values = facility_detail_values(
+                    {**current, "FACILITY_NAME": facility_names.get(facility_id), "ACCOUNT_NAME": account_names.get(account_id)},
+                    timestamp_formatter=format_timestamp,
+                )
+                fields = [(label, value) for label, value in values.items() if label != "Created On"]
+                for index, (label, value) in enumerate(fields):
+                    target = left if index < 9 else right
+                    display_label = label.replace("*", r"\*")
+                    target.markdown(f"**{display_label}**  \n{value}")
         with related:
             flocks = repo.get_flocks(facility_detail_id=view.record_id)
             related_records_table("Flocks", flocks, id_column="FLOCK_ID", label_column="FLOCK_NUMBER", page_slug="Flocks", key="facility_detail_related_flocks")
