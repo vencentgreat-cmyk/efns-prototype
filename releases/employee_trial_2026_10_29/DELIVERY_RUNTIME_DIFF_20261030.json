@@ -26,9 +26,9 @@
     {
       "path": "app/pages/11_Facilities.py",
       "status": "MODIFIED",
-      "reason": "R3 F6: current-first historical Facility-type filter union only; unchanged new-entry type choices and all save paths.",
+      "reason": "R3 F6: current-first historical Facility-type filter union only; unchanged new-entry type choices and all save paths. Parent list/Summary additionally expose stored Housing System read-only with the Facility Type label; edit, filter and Report Center export behavior unchanged.",
       "baseline_lf_sha256": "029972a156e38efe9a6f92fef4cae4909af42df7506e36aba1fe6271ebe86f84",
-      "candidate_lf_sha256": "746dffbbe840daced5d99446467aee4979f3458a2d5722c71d37c6d271c7ad3c"
+      "candidate_lf_sha256": "b6edf2f9f472f7d3f645c6a33cab49baa4fe59ef40604c2d7f398b0eb48c3229"
     },
     {
       "path": "app/pages/13_Facility_Details.py",
@@ -648,6 +648,20 @@
       "status": "NEW",
       "reason": "Record PDF audit, presentation scope, full suites, performance and shipped-byte proof.",
       "candidate_lf_sha256": "ce705da70f68b980157a1880c2f2af7d6b36855e2923a3ee6b26a52976dd7aed"
+    }
+  ],
+  "facility_housing_view_artifacts": [
+    {
+      "path": "tests/test_facility_housing_view.py",
+      "status": "NEW",
+      "reason": "Synthetic parent Facility list/Summary labels, nullable values, role/entrypoint, unchanged edit/filter/export and offline repository coverage.",
+      "candidate_lf_sha256": "5e1dd3d9998c2b7f04bf68192fb3301c02d62481288916c3fa6c30275199b44b"
+    },
+    {
+      "path": "docs/codex_reports/FACILITY_HOUSING_VIEW_20261112.md",
+      "status": "NEW",
+      "reason": "Document display-only scope, existing reads, staff-facing rows, full suites and shipped-byte identity proof.",
+      "candidate_lf_sha256": "f538decb52898cfe560f47966ea7b13f24ce8ad0322d4617bfe54d691ad7a87b"
     }
   ]
 }

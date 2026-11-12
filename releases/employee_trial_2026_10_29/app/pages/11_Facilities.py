@@ -21,6 +21,7 @@ from data.constants import FACILITY_STATUSES
 from data.repositories import get_repository
 from app.services.selector_options import historical_filter_options
 from app.services.facility_source_description import render_source_description
+from app.services.facility_detail_display import facility_detail_value
 
 
 require_operational_page()
@@ -74,7 +75,9 @@ if view.name == "list":
     else:
         display = display.reset_index(drop=True)
         st.session_state.facility_list_row_ids = display["FACILITY_ID"].tolist()
-        st.dataframe(display[["FACILITY_NAME", "ACCOUNT_NAME", "FACILITY_TYPE", "STATUS", "ACTIVATION_DATE", "CLOSURE_DATE", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="facility_list_grid", column_config={"FACILITY_NAME": "Facility Name", "ACCOUNT_NAME": "Account", "CREATED_AT": timestamp_column("Created On")})
+        for field in ("FACILITY_TYPE", "HOUSING_SYSTEM"):
+            display[field] = display.get(field, pd.Series(index=display.index, dtype=object)).map(lambda value: facility_detail_value(field, value))
+        st.dataframe(display[["FACILITY_NAME", "ACCOUNT_NAME", "FACILITY_TYPE", "HOUSING_SYSTEM", "STATUS", "ACTIVATION_DATE", "CLOSURE_DATE", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="facility_list_grid", column_config={"FACILITY_NAME": "Facility Name", "ACCOUNT_NAME": "Account", "FACILITY_TYPE": "Facility Type", "HOUSING_SYSTEM": "Housing System", "CREATED_AT": timestamp_column("Created On")})
 else:
     current = get_facility(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -97,7 +100,8 @@ else:
                 left.markdown(f"**Account**  \n{account_names.get(current.get('ACCOUNT_ID'), 'Unknown')}")
                 if current.get("ACCOUNT_ID") and left.button("View Account", key="facility_parent_account", icon=":material/account_circle:"):
                     open_module("Accounts_&_Facilities", "detail", current["ACCOUNT_ID"])
-                left.markdown(f"**Type**  \n{current.get('FACILITY_TYPE') or '—'}")
+                left.markdown(f"**Facility Type**  \n{facility_detail_value('FACILITY_TYPE', current.get('FACILITY_TYPE'))}")
+                left.markdown(f"**Housing System**  \n{facility_detail_value('HOUSING_SYSTEM', current.get('HOUSING_SYSTEM'))}")
                 right.markdown(f"**Status**  \n{current.get('STATUS')}")
                 right.markdown(f"**Activation Date**  \n{current.get('ACTIVATION_DATE') or '—'}")
                 right.markdown(f"**Closure Date**  \n{current.get('CLOSURE_DATE') or '—'}")
