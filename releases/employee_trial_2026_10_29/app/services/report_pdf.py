@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from app.services.printable_form_text import FORM_BLUE
+from app.services.production_pdf import (uses_production_layout, production_pdf_rows,
+    production_table_layout, PRODUCTION_CAPTION)
 
 MAX_PDF_ROWS = 5000
 MIN_FONT_SIZE = 7
@@ -211,7 +213,7 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
     ensure_pdf_row_limit(len(frame))
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_RIGHT
-    from reportlab.lib.pagesizes import letter, landscape
+    from reportlab.lib.pagesizes import letter, legal, landscape
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.pdfgen.canvas import Canvas
     from reportlab.platypus import Paragraph, Spacer, LongTable, TableStyle
@@ -224,10 +226,23 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
     title=display_text(title)
     subtitles=[display_text(value) for value in ([subtitle_lines] if isinstance(subtitle_lines,str) else subtitle_lines or []) if display_text(value)]
     rows=pdf_display_rows(frame,report_id)
+    production=uses_production_layout(report_id, frame.columns)
+    week_rows,total_rows=[],[]
+    if production:
+        rows,week_rows,total_rows=production_pdf_rows(rows)
+        if PRODUCTION_CAPTION not in subtitles:
+            subtitles.append(PRODUCTION_CAPTION)
     keep_identifiers=report_id=='custom-builder'
     pagesize=landscape(letter) if len(frame.columns)>7 else letter
     layout=None
-    if rows:
+    if production:
+        layout=production_table_layout(rows,pagesize[0]-48)
+        if layout is None:
+            pagesize=landscape(legal)
+            layout=production_table_layout(rows,pagesize[0]-48)
+        if layout is None:
+            raise PDFExportError('The numeric columns cannot fit legibly on Letter or Legal paper. Use CSV or XLSX.')
+    elif rows:
         try:
             layout=table_layout(rows,pagesize[0]-48,keep_identifiers=keep_identifiers)
         except PDFExportError:
@@ -304,11 +319,17 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
             ('GRID',(0,0),(-1,-1),.35,colors.HexColor('#999999')),('VALIGN',(0,0),(-1,-1),'TOP'),
             ('LEFTPADDING',(0,0),(-1,-1),2),('RIGHTPADDING',(0,0),(-1,-1),2),
             ('TOPPADDING',(0,0),(-1,-1),3),('BOTTOMPADDING',(0,0),(-1,-1),3)]
+        for index in week_rows:
+            styles.extend([('SPAN',(0,index),(-1,index)),
+                ('BACKGROUND',(0,index),(-1,index),colors.Color(*FORM_BLUE)),
+                ('NOSPLIT',(0,index),(-1,min(index+1,len(rows)-1)))])
+        for index in total_rows:
+            styles.append(('SPAN',(0,index),(4,index)))
         for index,row in enumerate(rows):
             total=index>0 and is_total_row(rows[0],row)
             if total:styles.append(('BACKGROUND',(0,index),(-1,index),colors.HexColor('#dddddd')))
             cell_rows.append([paragraph(value,over_quota if total and index-1 in marked and rows[0][col]=='% Quota' else bold if index==0 else
-                bold_atomic if total and keep_identifiers and identifier_cell(rows[0][col],value) else
+                bold if index in week_rows else bold_atomic if total and keep_identifiers and identifier_cell(rows[0][col],value) else
                 atomic if keep_identifiers and identifier_cell(rows[0][col],value) else
                 bold_right if total and NUMERIC.fullmatch(value) else bold if total else
                 right if NUMERIC.fullmatch(value) else normal) for col,value in enumerate(row)])

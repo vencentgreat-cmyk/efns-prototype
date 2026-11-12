@@ -54,7 +54,10 @@ def test_every_available_report_pdf(definition,case):
     assert SUBTITLE in ' '.join(text.split())
     assert not re.search(r'(?<!\w)(None|nan|NaT|<NA>)(?!\w)',text)
     flat=re.sub(r'\s+','',text)
-    for column in frame.columns:assert re.sub(r'\s+','',str(column)) in flat
+    from app.services.production_pdf import uses_production_layout, PDF_COLUMNS, PDF_LABELS
+    columns=([PDF_LABELS.get(column,column) for column in PDF_COLUMNS]
+        if uses_production_layout(definition.report_id,frame.columns) else frame.columns)
+    for column in columns:assert re.sub(r'\s+','',str(column)) in flat
     if frame.empty:assert 'No records found' in text
     assert tuple(map(int,(reader.pages[0].mediabox.width,reader.pages[0].mediabox.height)))==((792,612) if len(frame.columns)>7 else (612,792))
     pd.testing.assert_frame_equal(frame,original)

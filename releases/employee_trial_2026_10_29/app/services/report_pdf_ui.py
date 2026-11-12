@@ -14,6 +14,10 @@ def pdf_download_button(user,frame,title,subtitle_lines,filename,report_id,*,not
         return
     import streamlit as st
     target=target if target is not None else st
+    from app.services.production_pdf import PRODUCTION_PDF_REPORTS
+    if report_id in PRODUCTION_PDF_REPORTS and frame.empty:
+        target.info('No production records match the selected parameters; PDF export is unavailable.')
+        return
     try:
         ensure_pdf_row_limit(len(frame))
         pdf=render_report_pdf(title,subtitle_lines,frame,notes,report_id=report_id)

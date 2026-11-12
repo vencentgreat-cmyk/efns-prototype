@@ -324,13 +324,13 @@
       "path": "app/services/report_pdf.py",
       "status": "NEW",
       "reason": "Shared presentation-only SSRS-style PDF renderer using exact CSV cell text, bounded row count, fitting, pagination and Halifax footer.",
-      "candidate_lf_sha256": "c18402986b70f9ac7861adcf4ce585fef2ebd138a880e3a058d3ba5792b4afc9"
+      "candidate_lf_sha256": "169fba5bddb7d5c9146c8d6c9dbf3a4abe73924e6f7f81041b0b29f126dee8e9"
     },
     {
       "path": "app/services/report_pdf_ui.py",
       "status": "NEW",
       "reason": "Permission-checked PDF buttons and existing REPORT export audit pattern; no database or report calculation changes.",
-      "candidate_lf_sha256": "1e52e26c0743c8d4f8a825402b7cca7b1538b0a14614d7172819319b8e2295ac"
+      "candidate_lf_sha256": "3991b2b4c80c38c839a7eee01290ca029410f896e9d6731f57643c858b218c55"
     }
   ],
   "deployment_metadata_changes": {
@@ -405,7 +405,7 @@
       "path": "tests/test_report_pdf.py",
       "status": "NEW",
       "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
-      "candidate_lf_sha256": "8ff6e48dcfa4d03ad14ca95be78d7a66043dc40b78edb31b7c3340f06ae3fe25"
+      "candidate_lf_sha256": "ab494188056039297a13afc427678b930f6808bb309fd72c4fb53d5c2a337f06"
     },
     {
       "path": "docs/codex_reports/REPORT_PDF_EXPORT_20261109.md",
@@ -608,6 +608,26 @@
       "status": "NEW",
       "reason": "Document display-only relationship rows, repository/permission reuse, full-suite counts and shipped-file hash proof.",
       "candidate_lf_sha256": "895c43a2105f61b15a59e8308d85b0063d14a05e641a495270657d71f3daaf9f"
+    }
+  ],
+  "production_mgmt_pdf_artifacts": [
+    {
+      "path": "app/services/production_pdf.py",
+      "status": "NEW",
+      "reason": "PDF-only legacy Production column projection, week headings and atomic numeric sizing with Letter-first Legal fallback.",
+      "candidate_lf_sha256": "e1723c2a3cf9d23ba34b5717aad524ce933de4d1af32a95871017a87d830c841"
+    },
+    {
+      "path": "tests/test_production_mgmt_pdf.py",
+      "status": "NEW",
+      "reason": "Synthetic layout, exact totals/exports, repository paths, pagination, paper fallback, empty-data, permission and audit coverage.",
+      "candidate_lf_sha256": "d11adcb06a53ee0ed2ecffee199576fccfbe2f61b96dce2439250f409639a787"
+    },
+    {
+      "path": "docs/codex_reports/PRODUCTION_MGMT_PDF_20261112.md",
+      "status": "NEW",
+      "reason": "Record PDF audit, presentation scope, full suites, performance and shipped-byte proof.",
+      "candidate_lf_sha256": "f52f4e05886c8fe862793d7b7d2af7c42b0e2d0df7b1fe1b91a2d28817d0c352"
     }
   ]
 }
