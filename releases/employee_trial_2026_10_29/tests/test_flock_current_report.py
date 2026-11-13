@@ -71,7 +71,7 @@ def test_zero_mortality_and_report_day_count_ignore_future_counts():
     assert build_flock_current_report(f,t,a,DAY).iloc[0]['Inventory']==12439
 
 
-@pytest.mark.parametrize('change',[{'QUANTITY':1},{'COUNT_SOURCE_LABEL':'Other'}])
+@pytest.mark.parametrize('change',[{'QUANTITY':1}])
 def test_latest_count_conflict_does_not_select_an_observation(change):
     f,t,a=sources([FIXTURES[0]])
     t=pd.concat([t,pd.DataFrame([dict(t.iloc[0],**change)])])

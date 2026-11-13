@@ -21,6 +21,20 @@ PLACEMENT_COLUMNS = ['Reg No', 'Account Name', 'Start Date Age', 'End Date Age',
                      'Pullet Grower', 'Inventory', 'Quota', 'Total Producers',
                      'Total Flocks', 'Total Birds']
 
+# Explicit staff-confirmed test registration; do not infer from broad name patterns.
+REPORT_TEST_REGISTRATIONS = frozenset({'pr.12345regis'})
+
+
+def without_confirmed_test_account(flocks, accounts, quotas):
+    """Shared Status/Producers Over Quota scope; leave other producers intact."""
+    excluded = {text(row.get('ACCOUNT_ID')) for row in accounts.to_dict('records')
+                if text(row.get('REGISTRATION_NUMBER')).casefold() in REPORT_TEST_REGISTRATIONS}
+    if not excluded:
+        return flocks, accounts, quotas
+    return (flocks.loc[~flocks.get('ACCOUNT_ID', pd.Series(index=flocks.index, dtype=object)).map(text).isin(excluded)].copy(),
+            accounts.loc[~accounts.ACCOUNT_ID.map(text).isin(excluded)].copy(),
+            {key: value for key, value in quotas.items() if text(key) not in excluded})
+
 
 def _order(value):
     value = text(value)
@@ -69,7 +83,8 @@ def _owner(flock, owners):
 
 def build_flock_status_report(flocks, transactions, accounts, facilities, quotas,
                               report_date, mortality='0.4', quota_type='Egg Production'):
-    """Re-layout the shared Flock Age result; identical calculations/summary."""
+    """Shared Flock Age calculations, excluding the confirmed test Account."""
+    flocks, accounts, quotas = without_confirmed_test_account(flocks, accounts, quotas)
     age, summary = build_flock_age_report(flocks, transactions, accounts, facilities,
                                          quotas, report_date, mortality, quota_type)
     groups, details = [], []
@@ -113,6 +128,7 @@ def build_flock_status_by_producer_report(flocks, transactions, accounts, facili
     Select by stable Account ID, never by organization name or registration.
     Missing selection returns an empty result and no summary.
     """
+    flocks, accounts, quotas = without_confirmed_test_account(flocks, accounts, quotas)
     identity = text(account_id)
     selected_accounts = accounts.loc[accounts.get('ACCOUNT_ID', pd.Series(index=accounts.index, dtype=object)).map(text).eq(identity)]
     if not identity or selected_accounts.empty:
