@@ -49,7 +49,8 @@ def test_different_usable_quantities_still_conflict_and_count_wins_delivery_tie(
     f,t,a=example()
     t=pd.concat([t,pd.DataFrame([dict(t.iloc[0],TRANSACTION_TYPE='Delivery',QUANTITY=1)])])
     assert status(f,t,a)[0].iloc[1].Inventory==39515
-    t=pd.concat([t,pd.DataFrame([dict(t.iloc[0],QUANTITY=39553,COUNT_SOURCE_LABEL=None)])])
+    # Both quantities are sourced and lack ordering evidence: still a conflict.
+    t=pd.concat([t,pd.DataFrame([dict(t.iloc[0],QUANTITY=39553,COUNT_SOURCE_LABEL='Board')])])
     row=build_flock_current_report(f,t,a,AS_OF).iloc[0]
     assert row.Counted==row.Inventory=='—' and row.Notes=='Count conflict'
 

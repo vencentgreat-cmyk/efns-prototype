@@ -78,13 +78,14 @@ def build_flock_age_report(flocks, transactions, accounts, facilities, quotas,
     names = {str(r['FACILITY_ID']): text(r.get('FACILITY_NAME')) for r in facilities.to_dict('records')}
     grouped_transactions = {str(key): group for key, group in transactions.groupby('FLOCK_ID')} if not transactions.empty else {}
     owners = {str(r['ACCOUNT_ID']): r for r in accounts.to_dict('records')}
-    groups = {}
+    groups, report_notes = {}, []
     for flock in eligible.to_dict('records'):
         current = build_flock_current_report(pd.DataFrame([flock]),
             grouped_transactions.get(str(flock['FLOCK_ID']), transactions.iloc[:0]),
             accounts, report_date, mortality, quota_type)
         if current.empty:
             continue
+        report_notes.extend(current.attrs.get('notes', []))
         row = current.iloc[0].to_dict()
         owner_id = str(flock.get('ACCOUNT_ID'))
         quota = quantity(quotas.get(owner_id))
@@ -124,4 +125,7 @@ def build_flock_age_report(flocks, transactions, accounts, facilities, quotas,
         'Producers with Quota': producers_with_positive_quota(accounts, quotas),
         'Notes': f'{quota_values.count(None)} Account quota(s) unavailable; {inventories.count(None)} flock Inventory value(s) excluded'}
     result = pd.DataFrame(output, columns=COLUMNS, dtype=object)
-    return result.where(result.notna(), '—'), summary
+    result = result.where(result.notna(), '—')
+    if report_notes:
+        result.attrs['notes'] = list(dict.fromkeys(report_notes))
+    return result, summary
