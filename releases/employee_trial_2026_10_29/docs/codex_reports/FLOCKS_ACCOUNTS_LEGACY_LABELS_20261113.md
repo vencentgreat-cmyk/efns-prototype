@@ -62,7 +62,9 @@ The shared `related_records_table` takes an optional column_config argument, def
 
 ## Validation and shipped bytes
 
-Full release suite (Python 3.12): **2,159 passed, 1 skipped, 0 failed**, 707.81 seconds. Full root suite (Python 3.11): **706 passed, 0 skipped, 0 failed**, 145.15 seconds. Focused new-label/related-navigation/staff-workflow tests: **25 passed**. Commands: `python -m pytest -q` from each directory with separate worktree-local `--basetemp` paths. Tests use synthetic fixtures and both entrypoints (`streamlit_app.py`, `app/Home.py`): exact legacy order/labels, unchanged values/source frames, Location link and missing links, account versus primary-contact email distinction, filters, selected record, edit/save, related-record navigation and original Report Center CSV/XLSX columns/values.
+Initial build validation: full release suite (Python 3.12): **2,159 passed, 1 skipped, 0 failed**, 707.81 seconds. Full root suite (Python 3.11): **706 passed, 0 skipped, 0 failed**, 145.15 seconds. Focused new-label/related-navigation/staff-workflow tests: **25 passed**. Commands: `python -m pytest -q` from each directory with separate worktree-local `--basetemp` paths. Tests use synthetic fixtures and both entrypoints (`streamlit_app.py`, `app/Home.py`): exact legacy order/labels, unchanged values/source frames, Location link and missing links, account versus primary-contact email distinction, filters, selected record, edit/save, related-record navigation and original Report Center CSV/XLSX columns/values.
+
+Whole-word ID follow-up: **36 affected tests passed**, 84.83 seconds, including nine capitalization cases, both-entrypoint labels/selection/save, related navigation, staff workflows and manifest checks. Only the affected tests were rerun for this narrow follow-up, as requested; the full-suite counts above refer to the initial build.
 
 Artifacts snapshot: 116 existing shipped files before; 117 after, because the new label-only service is included by the existing app/services/*.py wildcard. **113 existing shipped files are byte-identical**. Three existing shipped files change and one is added:
 
@@ -71,13 +73,13 @@ Artifacts snapshot: 116 existing shipped files before; 117 after, because the ne
 | app/pages/5_Flocks.py | 92be24fbdf467004a1db6777af14a44149ac086cbb1cf62a5f9426a387677fa8 | 3e3a960db93ecfa6ddca61f349e1871fa3cd79affe434c2ba4b0e34df33bb1f6 |
 | app/pages/3_Accounts_Facilities_Flocks.py | 3405c92c03b89f19595ce9563aa7fdd93fe9af0284bbb16f6225817a14842523 | e17ff0477d9338a27f8873e7bfaa05e559818e6ad674f07ff1284dc840b65e7e |
 | app/navigation.py | 711e9624c9e5f47aae0c5a7ff980ca2216e5785c2442420f5adf7bda7769c321 | 9acc4d991bdc51ef3ad2c18dda970ade12027cbbc101907561f7e9b5d80e5b36 |
-| app/services/legacy_view_labels.py | NEW | da13ec2e8bd1790dc3d25c7c73323eb1383f687cb0fda1ec02638ade18bbd5a1 |
+| app/services/legacy_view_labels.py | NEW | 4447cd1aa724fdeae049dbe7f735de6ec5cefad412ff1f38289e3a6ef1f22dc7 |
 
 All expanded snowflake.yml artifacts plus streamlit_app.py, environment.yml and .streamlit/config.toml are covered. No dependency, asset, config, schema, SQL, repository or data changes. No real-data files, Snowflake calls, deployment or PR. The live runtime-diff manifest retains main's entries and **110 candidate hashes** are regenerated from final LF-normalized bytes.
 
 ## Schema-key label matrix
 
-The matrix lists readable header labels for existing repository schema keys that can appear in these pages' Related Records/matched-production grids. These grids preserve their previous column subsets. For the Flock Details Field column, the old label was the key converted to title case; only the semantic overrides and ID capitalization above differ. Flock colour applies only to Flock lists/Details; matched Production retains Egg Colour. Unknown future keys follow the same readable rule: underscores to spaces, title case, trailing Id to ID.
+The matrix lists readable header labels for existing repository schema keys that can appear in these pages' Related Records/matched-production grids. These grids preserve their previous column subsets. For the Flock Details Field column, the old label was the key converted to title case; only the semantic overrides and ID capitalization above differ. Flock colour applies only to Flock lists/Details; matched Production retains Egg Colour. Unknown future keys follow the same readable rule: underscores to spaces, title case, whole-word Id to ID. Follow-up review found only BARN_IDENTITY affected by the old prefix replacement in this matrix; it now displays Barn Identity. Identity, Identifier and Idle remain intact; standalone ID words remain uppercase.
 
 | Before (raw header) | After (readable header) |
 |---|---|
@@ -85,7 +87,7 @@ The matrix lists readable header labels for existing repository schema keys that
 | ACTIVATION_DATE | Activation Date |
 | ADDRESS_1 | Address 1 |
 | ADDRESS_2 | Address 2 |
-| BARN_IDENTITY | Barn IDentity |
+| BARN_IDENTITY | Barn Identity |
 | BIRDS_DISPOSED | Birds Disposed |
 | BIRDS_HOUSED | Birds Housed |
 | BIRD_COLOUR | Bird Colour |

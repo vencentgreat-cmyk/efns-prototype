@@ -1,4 +1,5 @@
 """Presentation-only labels/order; never rename stored or exported fields."""
+import re
 
 FLOCK_COLUMNS = (
     'FLOCK_QUOTA_TYPE', 'PERMIT_NUMBER', 'REGISTRATION_NUMBER', 'ACCOUNT_NAME',
@@ -32,7 +33,7 @@ LABELS = {
 def field_label(field, *, flock=False):
     if flock and field == 'EGG_COLOUR':
         return 'Flock Colour'
-    return LABELS.get(field, field.replace('_', ' ').title().replace(' Id', ' ID'))
+    return LABELS.get(field, re.sub(r'\bId\b', 'ID', field.replace('_', ' ').title()))
 
 
 def column_labels(columns, *, flock=False):

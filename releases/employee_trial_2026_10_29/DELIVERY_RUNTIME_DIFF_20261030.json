@@ -719,7 +719,7 @@
       "path": "app/services/legacy_view_labels.py",
       "status": "NEW",
       "reason": "Presentation-only shared legacy column order and readable labels; source/export column keys unchanged.",
-      "candidate_lf_sha256": "da13ec2e8bd1790dc3d25c7c73323eb1383f687cb0fda1ec02638ade18bbd5a1"
+      "candidate_lf_sha256": "4447cd1aa724fdeae049dbe7f735de6ec5cefad412ff1f38289e3a6ef1f22dc7"
     },
     {
       "path": "app/navigation.py",
@@ -731,13 +731,13 @@
       "path": "tests/test_flocks_accounts_legacy_labels.py",
       "status": "NEW",
       "reason": "Synthetic both-entrypoint labels/order, confirmed linked Location, filters, selection/edit/save, related headers and original exports.",
-      "candidate_lf_sha256": "0eba9a6e63212f986748604c970d685e2f546ffb46a64e4cdea6e5bb41ff4484"
+      "candidate_lf_sha256": "ed9b0cf39976552a738f7c6ded9c83a0b8e62903fa934d6eddd4577797cb00f5"
     },
     {
       "path": "docs/codex_reports/FLOCKS_ACCOUNTS_LEGACY_LABELS_20261113.md",
       "status": "NEW",
       "reason": "Field mapping limitations, exhaustive label matrix, exact scope, validation and shipped-file byte proof.",
-      "candidate_lf_sha256": "e1336d57f9ae77c3e2aab04ef4dd9f1728481935738ac0d3a07ac99afa314deb"
+      "candidate_lf_sha256": "10c0088a635c28e48bb00bac2d51a218157fdfc799f491575cdcd426de9ca459"
     }
   ]
 }

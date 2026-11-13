@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from app.navigation import timestamp_column
-from app.services.legacy_view_labels import ACCOUNT_COLUMNS, FLOCK_COLUMNS, column_labels
+from app.services.legacy_view_labels import ACCOUNT_COLUMNS, FLOCK_COLUMNS, column_labels, field_label
 from app.services.report_center import build_custom_report, report_csv, report_xlsx
 from tests.auth_support import authenticated_app
 from tests.test_report_center import user
@@ -18,6 +18,17 @@ from tests.test_staff_workflows import chain
 
 ROOT=Path(__file__).resolve().parents[1]
 ENTRIES=[('streamlit_app.py','app/pages'),('app/Home.py','pages')]
+
+
+@pytest.mark.parametrize('field,expected',[
+    ('BARN_IDENTITY','Barn Identity'), ('PRODUCER_IDENTITY_LABEL','Producer Identity Label'),
+    ('IDENTITY','Identity'), ('IDENTIFIER','Identifier'), ('IDLE_TIME','Idle Time'),
+    ('ACCOUNT_ID','Account ID'), ('ID','ID'), ('ID_NUMBER','ID Number'),
+    ('IDENTITY_ID','Identity ID'),
+])
+def test_id_capitalization_only_matches_a_whole_word(field,expected):
+    assert field_label(field)==expected
+    assert column_labels([field])[field]==expected
 
 
 @pytest.fixture
