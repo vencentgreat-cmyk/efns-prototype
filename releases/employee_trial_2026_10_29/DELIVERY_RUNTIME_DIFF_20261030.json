@@ -26,9 +26,9 @@
     {
       "path": "app/pages/11_Facilities.py",
       "status": "MODIFIED",
-      "reason": "R3 F6: current-first historical Facility-type filter union only; unchanged new-entry type choices and all save paths. Parent list/Summary additionally expose stored Housing System read-only with the Facility Type label; edit, filter and Report Center export behavior unchanged.",
+      "reason": "R3 F6: current-first historical Facility-type filter union only; unchanged new-entry type choices and all save paths. Parent list/Summary additionally expose stored Housing System read-only with the Facility Type label; edit, filter and Report Center export behavior unchanged. Legacy display-only list order, Facility Layout wording, friendly labels and stored field Summary rows; form options/save behavior unchanged.",
       "baseline_lf_sha256": "029972a156e38efe9a6f92fef4cae4909af42df7506e36aba1fe6271ebe86f84",
-      "candidate_lf_sha256": "b6edf2f9f472f7d3f645c6a33cab49baa4fe59ef40604c2d7f398b0eb48c3229"
+      "candidate_lf_sha256": "828452c8563e0eb02817635bf737900fa78e62bbcc6886a9f9a93a1aa7111b92"
     },
     {
       "path": "app/pages/13_Facility_Details.py",
@@ -655,7 +655,7 @@
       "path": "tests/test_facility_housing_view.py",
       "status": "NEW",
       "reason": "Synthetic parent Facility list/Summary labels, nullable values, role/entrypoint, unchanged edit/filter/export and offline repository coverage.",
-      "candidate_lf_sha256": "5e1dd3d9998c2b7f04bf68192fb3301c02d62481288916c3fa6c30275199b44b"
+      "candidate_lf_sha256": "9a761d6438d24180bcb5499cadf489bb9706c887105bac6524c695d5e42745aa"
     },
     {
       "path": "docs/codex_reports/FACILITY_HOUSING_VIEW_20261112.md",
@@ -698,6 +698,20 @@
       "status": "NEW",
       "reason": "PDF-only rounding appendix reduction, Letter width guarantees, synthetic benchmark and shipped-byte proof.",
       "candidate_lf_sha256": "531ffc86f629956a75a8cd30e465cceca0c83fe694c68373c403b25a2118ba4e"
+    }
+  ],
+  "facilities_legacy_labels_artifacts": [
+    {
+      "path": "tests/test_facilities_legacy_labels.py",
+      "status": "NEW",
+      "reason": "Synthetic both-entrypoint legacy labels, Summary fields, null handling and selection/edit/save regression tests.",
+      "candidate_lf_sha256": "b27dcce557b2a7947130023612548550d3479b02a698ef148a2c046f2feceed0"
+    },
+    {
+      "path": "docs/codex_reports/FACILITIES_LEGACY_LABELS_20261113.md",
+      "status": "NEW",
+      "reason": "Legacy field availability, form option differences, exact display scope, full-suite results and shipped-byte proof.",
+      "candidate_lf_sha256": "34d49c2006685476f62996e9b1de0d55719b5eed0d471e572e0308b2a0eab2d4"
     }
   ]
 }

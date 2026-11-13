@@ -40,11 +40,11 @@ def test_list_has_adjacent_friendly_columns_without_mutating_source(facility,tmp
     app=facility_app(repo,facility_id,tmp_path,monkeypatch,entrypoint,prefix)
     assert not app.error and not app.exception
     grid=app.dataframe[0];shown=grid.value
-    assert shown.columns.tolist()==['FACILITY_NAME','ACCOUNT_NAME','FACILITY_TYPE','HOUSING_SYSTEM',
-        'STATUS','ACTIVATION_DATE','CLOSURE_DATE','CREATED_AT']
+    assert shown.columns.tolist()==['REGISTRATION_NUMBER','ACCOUNT_NAME','FACILITY_NAME','FARM_LOCATION_NAME',
+        'FACILITY_TYPE','HOUSING_SYSTEM','STATUS','CREATED_AT']
     labels=json.loads(grid.proto.columns)
     assert labels['FACILITY_TYPE']['label']=='Facility Type'
-    assert labels['HOUSING_SYSTEM']['label']=='Housing System'
+    assert labels['HOUSING_SYSTEM']['label']=='Facility Layout'
     assert shown.iloc[0].FACILITY_TYPE=='Layer' and shown.iloc[0].HOUSING_SYSTEM=='Enriched'
     assert app.session_state['facility_list_row_ids']==[facility_id]
     pd.testing.assert_frame_equal(repo._facilities,before)
@@ -58,7 +58,7 @@ def test_summary_housing_is_read_only_for_existing_roles(facility,tmp_path,monke
     assert not app.error and not app.exception
     text=[block.value for block in app.tabs[0].get('markdown')]
     assert '**Facility Type**  \nLayer' in text
-    assert '**Housing System**  \nEnriched' in text
+    assert '**Facility Layout**  \nEnriched' in text
     assert not any(block.startswith('**Type**') for block in text)
     assert not any(widget.label=='Housing System' for widget in app.text_input)
     pd.testing.assert_frame_equal(repo._facilities,before)
@@ -81,7 +81,7 @@ def test_all_missing_representations_are_dash_in_list_and_summary(facility,tmp_p
     app.run()
     assert not app.error and not app.exception
     text=[block.value for block in app.tabs[0].get('markdown')]
-    assert '**Facility Type**  \n—' in text and '**Housing System**  \n—' in text
+    assert '**Facility Type**  \n—' in text and '**Facility Layout**  \n—' in text
     pd.testing.assert_frame_equal(repo._facilities,before)
 
 
