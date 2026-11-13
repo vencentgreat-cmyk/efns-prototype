@@ -46,7 +46,7 @@ def flock_is_in_current_report(flock, report_date, quota_type):
 
 
 def latest_observation(observations):
-    """Resolve date-scoped rows by quantity; source is display metadata only."""
+    """Resolve date-scoped rows by quantity, sourced evidence, then update time."""
     if not observations:
         return None, None, None, 'No Count or Delivery on or before report date'
     latest_day = max(day(row['TRANSACTION_DATE']) for row in observations)
@@ -60,7 +60,26 @@ def latest_observation(observations):
     if any(value is None for value in quantities):
         return latest_day, selected, None, f'Invalid {kind} quantity'
     if len(set(quantities)) > 1:
-        return latest_day, selected, None, f'{kind} conflict'
+        sourced = [row for row in latest if text(row.get('COUNT_SOURCE_LABEL'))]
+        sourced_quantities = {quantity(row.get('QUANTITY')) for row in sourced}
+        if len(sourced_quantities) == 1:
+            selected = sourced[0]
+            method = 'sourced'
+        else:
+            stamps = [pd.to_datetime(row.get('UPDATED_AT'), utc=True, errors='coerce') for row in latest]
+            if any(pd.isna(stamp) for stamp in stamps):
+                return latest_day, selected, None, f'{kind} conflict'
+            newest_stamp = max(stamps)
+            newest = [row for row, stamp in zip(latest, stamps) if stamp == newest_stamp]
+            if len({quantity(row.get('QUANTITY')) for row in newest}) != 1:
+                return latest_day, selected, None, f'{kind} conflict'
+            selected = next((row for row in newest if text(row.get('COUNT_SOURCE_LABEL'))), newest[0])
+            method = 'most recently updated'
+        selected = dict(selected, _REPORT_OBSERVATION_TIE_BREAK=True)
+        plural = 'Counts' if kind == 'Count' else 'Deliveries'
+        note = (f'{len(latest)} {plural} on {latest_day.isoformat()} with different quantities; '
+                f'the {method} record was used')
+        return latest_day, selected, quantity(selected.get('QUANTITY')), note
     note = 'Initial Delivery quantity used (no later Count)' if kind == 'Delivery' else ''
     return latest_day, selected, quantities[0], note
 
@@ -86,7 +105,7 @@ def build_flock_current_report(flocks, transactions, accounts, report_date,
         when = day(row.get('TRANSACTION_DATE'))
         if text(row.get('TRANSACTION_TYPE')) in {'Count', 'Delivery'} and when and when <= report_date:
             counts.setdefault(str(row.get('FLOCK_ID')), []).append(row)
-    groups = {}
+    groups, report_notes = {}, []
     for flock in flocks.to_dict('records'):
         if not flock_is_in_current_report(flock, report_date, quota_type):
             continue
@@ -96,6 +115,12 @@ def build_flock_current_report(flocks, transactions, accounts, report_date,
         observations = counts.get(str(flock['FLOCK_ID']), [])
         latest_day, observation, counted, observation_note = latest_observation(observations)
         notes = [observation_note] if observation_note else []
+        if observation is not None and (observation.get('_REPORT_OBSERVATION_TIE_BREAK')
+                or observation_note in {'Count conflict', 'Delivery conflict'}):
+            account_label = (text(owner.get('REGISTRATION_NUMBER'))
+                             or text(owner.get('ORGANIZATION_NAME')) or 'Account without registration')
+            report_notes.append(f"{account_label}, "
+                f"permit {text(flock.get('PERMIT_NUMBER')) or '—'}: {observation_note}")
         placement, hatch = day(flock.get('PLACEMENT_DATE')), day(flock.get('HATCH_DATE'))
         inventory = upcoming = None
         if placement is None:
@@ -157,4 +182,7 @@ def build_flock_current_report(flocks, transactions, accounts, report_date,
     result = pd.DataFrame(output, columns=COLUMNS, dtype=object)
     for column in ('Count Date', 'Placement Date', 'Hatch Date', 'Disp. Date'):
         result[column] = result[column].map(lambda value: value.isoformat() if isinstance(value, date) else '—')
-    return result.where(result.notna(), '—')
+    result = result.where(result.notna(), '—')
+    if report_notes:
+        result.attrs['notes'] = list(dict.fromkeys(report_notes))
+    return result

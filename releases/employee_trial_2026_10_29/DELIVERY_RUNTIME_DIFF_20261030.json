@@ -258,7 +258,7 @@
       "path": "app/services/flock_reports.py",
       "status": "NEW",
       "reason": "Pure flock reports; Disposals uses fixture-derived elapsed weeks +19, earliest Delivery Placed with fallback/conflict notes and stored Disposed/Plant values; other calculations unchanged.",
-      "candidate_lf_sha256": "cfa025790a19284ea8dc320d872c8c7e35bf6bf30b2470716822dcca5787659f"
+      "candidate_lf_sha256": "9250f0455641d75f71cf53c0f7d51cf22c27630ab6e95c60fad83ab13088956a"
     },
     {
       "path": "data/confirmed_quota_position.py",
@@ -276,13 +276,13 @@
       "path": "app/services/flock_age_report.py",
       "status": "NEW",
       "reason": "Pure Flock Age projection using shared current calculations and supplied existing Quota Summary values; unavailable quota stays unknown.",
-      "candidate_lf_sha256": "7d81f18f2204eeeca4af0fd6e5833e703bbdb0e9ebd23dd85939ffca9ce7b626"
+      "candidate_lf_sha256": "567e16d0c0953c6da34298f5dd49693fb739eab7cdc7c9ec918e1221a5b773ef"
     },
     {
       "path": "app/services/flock_current_report.py",
       "status": "NEW",
       "reason": "Read-only pure Flock Current report; exact mortality arithmetic and provisional inclusion; no PENDING rule changes.",
-      "candidate_lf_sha256": "45f6bceaecba36e93f84a27e3d053423a2e73c5c71f6af1c0acf2a4c2cfce3f1"
+      "candidate_lf_sha256": "dd8ccfc1eb07841115a15b9c948a82db1e0b00c83520b2006263f72418e4f482"
     },
     {
       "path": "app/services/printable_forms.py",
@@ -669,13 +669,27 @@
       "path": "tests/test_flock_status_asof.py",
       "status": "NEW",
       "reason": "Confirmed same-quantity Count de-duplication, upcoming Bird Count fallback, test-account scope and frozen current-date regressions.",
-      "candidate_lf_sha256": "b594e19e55f2962d62049c3ffe52497169b7f4ce5f31af6e0081673b377394ef"
+      "candidate_lf_sha256": "a82f2c717775b8e21a29c5fa411342324d6eb20cb3ebcd2125bf717982817bdf"
     },
     {
       "path": "docs/codex_reports/FLOCK_STATUS_ASOF_FIX_20261113.md",
       "status": "NEW",
       "reason": "Document confirmed fixes, expected June legacy targets, source-data limitations, 7128 effort, full tests and shipped-file proof.",
       "candidate_lf_sha256": "567efd2c060dfc317ca5672831749232970b62f9f6a3d150e026e853904e6f8a"
+    }
+  ],
+  "flock_status_conflict_rule_artifacts": [
+    {
+      "path": "tests/test_flock_status_conflict_rule.py",
+      "status": "NEW",
+      "reason": "Confirmed 40357 sourced/update-time tie-break, conservative unresolved cases, visible Status notes and unchanged priority/invalid behavior.",
+      "candidate_lf_sha256": "380426bd107c4fec152f441855242f58d2b1ef549b250e7932defa26bea05a5a"
+    },
+    {
+      "path": "docs/codex_reports/FLOCK_STATUS_CONFLICT_RULE_20261113.md",
+      "status": "NEW",
+      "reason": "Record confirmed legacy fixture, precise ordering policy, visible-note propagation, complete regressions and shipped-byte proof.",
+      "candidate_lf_sha256": "817471eff8c101afb781ce1a42204496da0629dd9676c70b3f8252175bb7756b"
     }
   ]
 }

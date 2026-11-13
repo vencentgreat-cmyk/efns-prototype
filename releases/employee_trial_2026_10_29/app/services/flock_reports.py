@@ -98,7 +98,11 @@ def build_flock_status_report(flocks, transactions, accounts, facilities, quotas
     output = []
     for _, rows in sorted(groups, key=lambda group: _order(group[0])):
         output.extend(dict(row, Sold='', **{'Facility Name': row.get('Facility name', '—')}) for row in rows)
-    return _frame(output, STATUS_COLUMNS), summary
+    result = _frame(output, STATUS_COLUMNS)
+    if age.attrs.get('notes'):
+        result.attrs['notes'] = list(age.attrs['notes'])
+        summary['Notes'] = '; '.join(filter(None, [summary['Notes'], *result.attrs['notes']]))
+    return result, summary
 
 
 def build_flock_salmonella_schedule(flocks, transactions, accounts, facilities,
