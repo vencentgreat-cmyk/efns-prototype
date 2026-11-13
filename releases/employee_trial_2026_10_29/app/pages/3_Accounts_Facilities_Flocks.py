@@ -27,6 +27,7 @@ from data.repositories import get_repository
 from data.repositories.base import RepositoryError
 from data.validation import parse_optional_coordinate
 from data.account_relationships import account_link_options
+from app.services.legacy_view_labels import ACCOUNT_COLUMNS, column_labels
 
 
 require_operational_page()
@@ -123,7 +124,7 @@ if view.name == "list":
         st.session_state.account_list_row_ids = display["ACCOUNT_ID"].tolist()
         st.caption(f"{len(display):,} Account(s) in this view")
         st.dataframe(
-            display[["ORGANIZATION_NAME", "REGISTRATION_NUMBER", "CITY", "PROVINCE", "POSTAL_CODE", "CONTACT_PHONE", "CONTACT_EMAIL", "STATUS", "CREATED_AT"]],
+            display.reindex(columns=ACCOUNT_COLUMNS),
             width="stretch",
             height=540,
             hide_index=True,
@@ -131,11 +132,13 @@ if view.name == "list":
             selection_mode="single-row",
             key="account_list_grid",
             column_config={
+                **column_labels(ACCOUNT_COLUMNS),
                 "ORGANIZATION_NAME": st.column_config.TextColumn("Account Name", width="large"),
                 "REGISTRATION_NUMBER": "Registration Number",
                 "CONTACT_PHONE": "Main Phone",
-                "CONTACT_EMAIL": "Email",
+                "CONTACT_EMAIL": "Account Email",
                 "CREATED_AT": timestamp_column("Created On"),
+                "UPDATED_AT": timestamp_column("Modified On"),
             },
         )
 
@@ -148,7 +151,7 @@ else:
 
     is_form = view.name in {"new", "edit"}
     title = "New Account" if view.name == "new" else current["ORGANIZATION_NAME"]
-    subtitle = "Create a complete Account record." if view.name == "new" else f"Registration {current.get('REGISTRATION_NUMBER') or 'not assigned'}"
+    subtitle = "Create a complete Account record." if view.name == "new" else f"Registration Number {current.get('REGISTRATION_NUMBER') or 'not assigned'}"
     page_header(title, subtitle, "ACCOUNT RECORD")
     action = record_command_bar("account_record", view.name)
     if action in {"back", "cancel"}:
@@ -168,7 +171,7 @@ else:
     if not is_form:
         audit_left, audit_right = st.columns(2)
         audit_left.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))}")
-        audit_right.caption(f"Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
+        audit_right.caption(f"Modified On: {format_timestamp(current.get('UPDATED_AT'))}")
         summary_tab, related_tab = st.tabs(["Summary", "Related Records"])
         with summary_tab:
             from app.services.quota_usage import render_account_usage
@@ -179,8 +182,9 @@ else:
                 left.markdown(f"**Account Name**  \n{current.get('ORGANIZATION_NAME') or '—'}")
                 left.markdown(f"**Registration Number**  \n{current.get('REGISTRATION_NUMBER') or '—'}")
                 left.markdown(f"**Status**  \n{current.get('STATUS') or '—'}")
-                middle.markdown(f"**Email**  \n{current.get('CONTACT_EMAIL') or '—'}")
-                middle.markdown(f"**Phone**  \n{current.get('CONTACT_PHONE') or '—'}")
+                middle.markdown(f"**Primary Contact**  \n{stored_text(current.get('CONTACT_NAME')) or '—'}")
+                middle.markdown(f"**Account Email**  \n{current.get('CONTACT_EMAIL') or '—'}")
+                middle.markdown(f"**Main Phone**  \n{current.get('CONTACT_PHONE') or '—'}")
                 middle.markdown(f"**Website**  \n{current.get('WEBSITE') or '—'}")
                 right.markdown(f"**Province of Registration**  \n{current.get('PROVINCE_OF_REGISTRATION') or '—'}")
                 right.markdown(f"**Default on Reports**  \n{'Yes' if current.get('DEFAULT_ON_REPORTS') else 'No'}")
@@ -252,7 +256,7 @@ else:
                     related_display["RECORD"] = related_display.apply(lambda row: row.get(label_column) or row[id_column], axis=1)
                     columns = ["RECORD", *[column for column in frame.columns if column not in {id_column, "CREATED_AT", "UPDATED_AT"}][:5]]
                     grid_key = f"account_related_{slug}"
-                    st.dataframe(related_display[columns], width="stretch", hide_index=True, on_select="rerun", selection_mode="single-row", key=grid_key)
+                    st.dataframe(related_display[columns], width="stretch", hide_index=True, on_select="rerun", selection_mode="single-row", key=grid_key, column_config={"RECORD": "Record", **column_labels(columns)})
                     related_index = selected_row_index(grid_key)
                     if related_index is not None and related_index < len(related_display):
                         if st.button(f"View selected {heading[:-1] if heading.endswith('s') else heading}", key=f"account_related_open_{slug}"):
@@ -262,7 +266,7 @@ else:
             if production.empty:
                 st.info("No matched Production Records.")
             else:
-                st.dataframe(production, width="stretch", hide_index=True)
+                st.dataframe(production, width="stretch", hide_index=True, column_config=column_labels(production.columns))
 
     else:
         current = current or {}
@@ -278,8 +282,8 @@ else:
             with st.container(border=True):
                 left, right = st.columns(2)
                 account_name = left.text_input("Account Name *", value=str(current.get("ORGANIZATION_NAME") or ""), key="account_form_name")
-                email = left.text_input("Email", value=str(current.get("CONTACT_EMAIL") or ""), key="account_form_email")
-                phone = left.text_input("Phone", value=str(current.get("CONTACT_PHONE") or ""), key="account_form_phone")
+                email = left.text_input("Account Email", value=str(current.get("CONTACT_EMAIL") or ""), key="account_form_email")
+                phone = left.text_input("Main Phone", value=str(current.get("CONTACT_PHONE") or ""), key="account_form_phone")
                 fax = left.text_input("Fax", value=str(current.get("FAX") or ""), key="account_form_fax")
                 website = left.text_input("Website", value=str(current.get("WEBSITE") or ""), placeholder="https://", key="account_form_website")
                 registration = left.text_input("Registration Number", value=str(current.get("REGISTRATION_NUMBER") or ""), key="account_form_registration")
@@ -298,7 +302,7 @@ else:
         with address_tab:
             with st.container(border=True):
                 left, right = st.columns(2)
-                street1 = left.text_input("Address 1: Street 1", value=str(current.get("ADDRESS_LINE1") or ""), key="account_form_street1")
+                street1 = left.text_input("Address 1: Street", value=str(current.get("ADDRESS_LINE1") or ""), key="account_form_street1")
                 street2 = left.text_input("Address 1: Street 2", value=str(current.get("ADDRESS_LINE2") or ""), key="account_form_street2")
                 street3 = left.text_input("Address 1: Street 3", value=str(current.get("ADDRESS_LINE3") or ""), key="account_form_street3")
                 city = left.text_input("Address 1: City", value=str(current.get("CITY") or ""), key="account_form_city")

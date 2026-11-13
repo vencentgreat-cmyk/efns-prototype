@@ -26,6 +26,7 @@ from data.repositories.continuity import changed_attributes
 from data.producer_identity import text
 from app.services.quota_usage import render_quota_usage
 from app.services.entry_fields import bird_strain_input
+from app.services.legacy_view_labels import FLOCK_COLUMNS, field_label, column_labels
 from app.services.flock_date_defaults import apply_flock_date_defaults, placement_from_hatch, estimated_disposal_from_placement
 from data.flock_stock import flock_stock
 from data.quota_position import load_rules
@@ -82,7 +83,7 @@ if view.name == "list":
     filters = st.columns([2, 1, 1])
     keyword = filters[0].text_input("Filter by keyword", placeholder="Flock number or permit", key="flock_filter_keyword")
     account_filter = filters[1].selectbox("Account", ["All", *account_options], key="flock_filter_account")
-    colour_filter = filters[2].selectbox("Egg colour", ["All", *EGG_COLOURS], key="flock_filter_colour")
+    colour_filter = filters[2].selectbox("Flock Colour", ["All", *EGG_COLOURS], key="flock_filter_colour")
     display = repo.get_flocks(statuses=statuses).copy()
     if keyword:
         display = display[display[["FLOCK_NUMBER", "PERMIT_NUMBER"]].fillna("").astype(str).apply(lambda col: col.str.contains(keyword, case=False, regex=False)).any(axis=1)]
@@ -95,8 +96,15 @@ if view.name == "list":
         display = display.reset_index(drop=True)
         display["ACCOUNT_NAME"] = display["ACCOUNT_ID"].map(account_names).fillna("Unknown")
         display["FACILITY_NAME"] = display["FACILITY_ID"].map(facility_names).fillna(UNASSIGNED_LABEL)
+        registrations = {row.ACCOUNT_ID: row.REGISTRATION_NUMBER for row in accounts.itertuples()}
+        display["REGISTRATION_NUMBER"] = display["ACCOUNT_ID"].map(registrations)
+        locations = {row.FARM_LOCATION_ID: row.LOCATION_NAME for row in repo.get_farm_locations().itertuples()}
+        facility_locations = {row.FACILITY_ID: getattr(row, 'FARM_LOCATION_ID', None) for row in facilities.itertuples()}
+        display["LOCATION"] = display["FACILITY_ID"].map(facility_locations).map(locations).fillna("—")
         st.session_state.flock_list_row_ids = display["FLOCK_ID"].tolist()
-        st.dataframe(display[["FLOCK_NUMBER", "ACCOUNT_NAME", "FACILITY_NAME", "PERMIT_NUMBER", "BIRD_COUNT", "HATCH_DATE", "EGG_COLOUR", "STATUS", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_list_grid", column_config={"FLOCK_NUMBER": "Flock Number", "ACCOUNT_NAME": "Account", "FACILITY_NAME": "Facility", "CREATED_AT": timestamp_column("Created On")})
+        list_columns = column_labels(FLOCK_COLUMNS, flock=True)
+        list_columns["CREATED_AT"] = timestamp_column("Created On")
+        st.dataframe(display.reindex(columns=FLOCK_COLUMNS), width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_list_grid", column_config=list_columns)
 else:
     current = repo.get_flock(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -110,7 +118,7 @@ else:
     if action == "edit": start_new_form("flock_form_"); open_view("edit", view.record_id)
     if action == "delete" and view.record_id: st.session_state['flock_form___delete_pending']=view.record_id
     if not is_form:
-        st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
+        st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Modified On: {format_timestamp(current.get('UPDATED_AT'))}")
         linked_quota = flock_quota_link(repo, current, can_view=can_current(Permission.VIEW_DATA))
         summary, details, related = st.tabs(["Summary", "Details", "Related Records"])
         with summary:
@@ -118,7 +126,7 @@ else:
                 left, middle, right = st.columns(3)
                 left.markdown(f"**Flock Number**  \n{current.get('FLOCK_NUMBER')}")
                 left.markdown(f"**Account**  \n{account_names.get(current.get('ACCOUNT_ID'), 'Unknown')}")
-                left.markdown(f"**Facility**  \n{facility_names.get(current.get('FACILITY_ID'), UNASSIGNED_LABEL)}")
+                left.markdown(f"**Facility Name**  \n{facility_names.get(current.get('FACILITY_ID'), UNASSIGNED_LABEL)}")
                 if current.get("ACCOUNT_ID") and left.button("View Account", key="flock_parent_account", icon=":material/account_circle:"):
                     open_module("Accounts_&_Facilities", "detail", current["ACCOUNT_ID"])
                 if current.get("FACILITY_ID") and left.button("View Facility", key="flock_parent_facility", icon=":material/domain:"):
@@ -140,15 +148,15 @@ else:
                     right.caption('Count is an observation, not a current stock total.')
                     if observed['latest_counts']:
                         count_rows = pd.DataFrame(observed['latest_counts'])
-                        st.dataframe(count_rows[[c for c in ('FLOCK_TRANSACTION_ID', 'TRANSACTION_DATE', 'QUANTITY', 'COUNT_SOURCE_LABEL') if c in count_rows.columns]], hide_index=True, width='stretch')
+                        st.dataframe(count_rows[[c for c in ('FLOCK_TRANSACTION_ID', 'TRANSACTION_DATE', 'QUANTITY', 'COUNT_SOURCE_LABEL') if c in count_rows.columns]], hide_index=True, width='stretch', column_config=column_labels(count_rows.columns))
                 except Exception:
                     right.caption('Calculation draft unavailable for this record')
-                right.markdown(f"**Egg Colour**  \n{current.get('EGG_COLOUR') or '—'}")
+                right.markdown(f"**Flock Colour**  \n{current.get('EGG_COLOUR') or '—'}")
                 right.markdown(f"**Status**  \n{current.get('STATUS')}")
             render_quota_usage(repo, current)
         with details:
             detail_fields = [key for key in current if key not in {"CREATED_AT", "UPDATED_AT"}]
-            st.dataframe(pd.DataFrame({"Field": [key.replace("_", " ").title() for key in detail_fields], "Value": [str(current[key]) if current[key] is not None else "—" for key in detail_fields]}), width="stretch", hide_index=True)
+            st.dataframe(pd.DataFrame({"Field": [field_label(key, flock=True) for key in detail_fields], "Value": [str(current[key]) if current[key] is not None else "—" for key in detail_fields]}), width="stretch", hide_index=True)
         with related:
             with st.container(border=True):
                 render_linked_quota(st, linked_quota, key="flock_related_quota")
@@ -156,12 +164,12 @@ else:
                 ("Flock Transactions", repo.get_flock_transactions(view.record_id), "FLOCK_TRANSACTION_ID", "TRANSACTION_TYPE", "Flock_Transactions"),
                 ("Salmonella Tests", repo.get_salmonella_tests(flock_id=view.record_id), "SALMONELLA_TEST_ID", "PERMIT_NUMBER", "Salmonella_Tests"),
             ):
-                related_records_table(heading, frame, id_column=key, label_column=label, page_slug=slug, key=f"flock_related_{slug}")
+                related_records_table(heading, frame, id_column=key, label_column=label, page_slug=slug, key=f"flock_related_{slug}", column_config={"RECORD": "Record", **column_labels(frame.columns)})
             production = repo.get_production_records()
             production = production[production["FLOCK_ID"] == view.record_id] if "FLOCK_ID" in production else production.iloc[0:0]
             section_intro(f"Matched Production Records ({len(production)})")
             if production.empty: st.info("No matched Production Records.")
-            else: st.dataframe(production, width="stretch", hide_index=True)
+            else: st.dataframe(production, width="stretch", hide_index=True, column_config=column_labels(production.columns))
     else:
         current = current or {}
         begin_form('flock_form_',view.record_id)
@@ -191,7 +199,7 @@ else:
                 related_facilities = repo.get_facilities(account_id=account_id)
                 facility_options = {**{row.FACILITY_NAME: row.FACILITY_ID for row in related_facilities.itertuples()}, UNASSIGNED_LABEL: None}
                 facility_labels = list(facility_options)
-                facility_label = left.selectbox("Facility *", facility_labels, index=0 if not view.record_id else option_index(facility_labels, label_for_id(facility_options, current.get("FACILITY_ID"),UNASSIGNED_LABEL)), key="flock_form_facility")
+                facility_label = left.selectbox("Facility Name *", facility_labels, index=0 if not view.record_id else option_index(facility_labels, label_for_id(facility_options, current.get("FACILITY_ID"),UNASSIGNED_LABEL)), key="flock_form_facility")
                 facility_id = facility_options.get(facility_label)
                 detail_options = {UNASSIGNED_LABEL: None, **{row.DETAIL_NAME: row.FACILITY_DETAIL_ID for row in repo.get_facility_details(facility_id).itertuples()}}
                 detail_label = left.selectbox("Facility Detail", list(detail_options), index=option_index(list(detail_options), label_for_id(detail_options, current.get("FACILITY_DETAIL_ID"), UNASSIGNED_LABEL)), key="flock_form_detail")
@@ -208,7 +216,7 @@ else:
                 left, right = st.columns(2)
                 bird_count_input = left.text_input("Bird Count *",value=text(current.get("BIRD_COUNT")) or "",key="flock_form_birds_text") if view.record_id else None
                 bird_count = left.number_input("Bird Count *", min_value=0, value=0,key="flock_form_birds") if not view.record_id else None
-                egg_colour = left.selectbox("Egg Colour", stored_options(EGG_COLOURS,current.get("EGG_COLOUR"),bool(view.record_id)), index=(stored_index(EGG_COLOURS,current.get("EGG_COLOUR")) if view.record_id else option_index(list(EGG_COLOURS), current.get("EGG_COLOUR"))), key="flock_form_colour")
+                egg_colour = left.selectbox("Flock Colour", stored_options(EGG_COLOURS,current.get("EGG_COLOUR"),bool(view.record_id)), index=(stored_index(EGG_COLOURS,current.get("EGG_COLOUR")) if view.record_id else option_index(list(EGG_COLOURS), current.get("EGG_COLOUR"))), key="flock_form_colour")
                 permit_date = left.date_input("Permit Date", value=optional_form_date(current.get("PERMIT_DATE")), key="flock_form_permit_date")
                 ordered_date = left.date_input("Date Ordered", value=optional_form_date(current.get("DATE_ORDERED")), key="flock_form_ordered")
                 st.caption("Placement = Hatch + 19 weeks; Estimated Disposal = Placement + 52 weeks (defaults, can be changed)")
