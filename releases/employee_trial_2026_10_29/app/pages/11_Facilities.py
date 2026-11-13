@@ -19,9 +19,10 @@ from app.ui import apply_theme, clear_widget_prefix, optional_form_date, page_he
 from data.repositories.base import RepositoryError
 from data.constants import FACILITY_STATUSES
 from data.repositories import get_repository
-from app.services.selector_options import historical_filter_options
+from app.services.selector_options import historical_filter_options, unique_identity_options
 from app.services.facility_source_description import render_source_description
 from app.services.facility_detail_display import facility_detail_value
+from data.repositories.snowflake import normalize_numeric_bind
 
 
 require_operational_page()
@@ -39,6 +40,9 @@ farm_location_names = {}
 if view.name in {"list", "detail"}:
     farm_location_names = {row.FARM_LOCATION_ID: row.LOCATION_NAME for row in repo.get_farm_locations().itertuples()}
 FACILITY_TYPES = ("Pullet", "Layer", "Other")
+FACILITY_ENTRY_TYPES = (None, "Breeder", "Hatchery", "Layers", "Pullets")
+FACILITY_LAYOUTS = (None, "Organic", "Conventional", "Free Range", "Enriched", "Free Run")
+MANURE_DISPOSAL_TYPES = (None, "Belt", "Shallow Pit", "Deep Pit", "Belts and Gutter")
 
 
 def option_index(options, value):
@@ -132,20 +136,34 @@ else:
         expected_key = f"facility_form_expected_{view.record_id}"
         if view.name == "edit" and view.record_id:
             st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
+        locations = repo.get_farm_locations()
+        location_options = {"Not selected": None, **unique_identity_options(
+            ((f"{row.LOCATION_NAME} · {account_names.get(row.ACCOUNT_ID, 'Unknown')}", row.FARM_LOCATION_ID)
+             for row in locations.itertuples()), reserved_labels=("Not selected",))}
+        current_location = stored_text(current.get("FARM_LOCATION_ID"))
+        if current_location and current_location not in location_options.values():
+            location_options[f"{current_location} (not found)"] = current_location
+            st.caption("Stored Farm Location was not found; it is preserved unless changed.")
         with st.container(border=True):
             left, right = st.columns(2)
             facility_name = left.text_input("Facility Name *", value=str(current.get("FACILITY_NAME") or ""), key="facility_form_name")
             account_label = left.selectbox("Account *", list(account_options), index=option_index(list(account_options), label_for_id(account_options, current.get("ACCOUNT_ID"))), key="facility_form_account")
-            facility_type = left.selectbox("Facility Type", stored_options(FACILITY_TYPES,current.get("FACILITY_TYPE"),bool(view.record_id)), index=(stored_index(FACILITY_TYPES,current.get("FACILITY_TYPE")) if view.record_id else option_index(list(FACILITY_TYPES), current.get("FACILITY_TYPE"))), key="facility_form_type")
+            location_label = left.selectbox("Farm Location", list(location_options), index=option_index(list(location_options), label_for_id(location_options, current_location)), key="facility_form_location")
+            facility_type = left.selectbox("Facility Type", stored_options(FACILITY_ENTRY_TYPES,current.get("FACILITY_TYPE"),bool(view.record_id)), index=(stored_index(FACILITY_ENTRY_TYPES,current.get("FACILITY_TYPE")) if view.record_id else 0), format_func=lambda value: "—" if value is None else value, key="facility_form_type")
+            layout = left.selectbox("Facility Layout", stored_options(FACILITY_LAYOUTS,current.get("HOUSING_SYSTEM"),bool(view.record_id)), index=(stored_index(FACILITY_LAYOUTS,current.get("HOUSING_SYSTEM")) if view.record_id else 0), format_func=lambda value: "—" if value is None else value, key="facility_form_layout")
+            manure = left.selectbox("Manure Disposal", stored_options(MANURE_DISPOSAL_TYPES,current.get("MANURE_DISPOSAL"),bool(view.record_id)), index=(stored_index(MANURE_DISPOSAL_TYPES,current.get("MANURE_DISPOSAL")) if view.record_id else 0), format_func=lambda value: "—" if value is None else value, key="facility_form_manure")
+            quota_text = left.text_input("Facility Quota", value=stored_text(current.get("FACILITY_QUOTA")) or "", key="facility_form_quota")
             status = left.selectbox("Status", stored_options(FACILITY_STATUSES,current.get("STATUS"),bool(view.record_id)), index=(stored_index(FACILITY_STATUSES,current.get("STATUS")) if view.record_id else option_index(list(FACILITY_STATUSES), current.get("STATUS"))), key="facility_form_status")
             activation = right.date_input("Activation Date", value=optional_form_date(current.get("ACTIVATION_DATE")), key="facility_form_activation")
             construction = right.date_input("Construction Date", value=optional_form_date(current.get("CONSTRUCTION_DATE")), key="facility_form_construction")
+            renovation = right.date_input("Renovation Date", value=optional_form_date(current.get("RENOVATION_DATE")), key="facility_form_renovation")
             closure = right.date_input("Closure Date", value=optional_form_date(current.get("CLOSURE_DATE")), key="facility_form_closure")
             inactive = right.date_input("Inactive Date", value=optional_form_date(current.get("INACTIVE_DATE")), key="facility_form_inactive")
+            comments = st.text_area("Comments", value="" if pd.isna(current.get("COMMENTS")) else str(current.get("COMMENTS")), key="facility_form_comments")
             if view.record_id:
                 revision_reason = st.text_input("Reason for correction *",key="facility_form_revision_reason")
                 st.session_state.setdefault("facility_form_revision_request",uuid.uuid4().hex)
-        capture_form('facility_form_',current,{'FACILITY_NAME': ['facility_form_name'], 'ACCOUNT_ID': ['facility_form_account'], 'FACILITY_TYPE': ['facility_form_type'], 'STATUS': ['facility_form_status'], 'ACTIVATION_DATE': ['facility_form_activation'], 'CONSTRUCTION_DATE': ['facility_form_construction'], 'CLOSURE_DATE': ['facility_form_closure'], 'INACTIVE_DATE': ['facility_form_inactive']})
+        capture_form('facility_form_',current,{'FACILITY_NAME': ['facility_form_name'], 'ACCOUNT_ID': ['facility_form_account'], 'FACILITY_TYPE': ['facility_form_type'], 'STATUS': ['facility_form_status'], 'ACTIVATION_DATE': ['facility_form_activation'], 'CONSTRUCTION_DATE': ['facility_form_construction'], 'CLOSURE_DATE': ['facility_form_closure'], 'INACTIVE_DATE': ['facility_form_inactive'], 'FARM_LOCATION_ID': ['facility_form_location'], 'HOUSING_SYSTEM': ['facility_form_layout'], 'MANURE_DISPOSAL': ['facility_form_manure'], 'FACILITY_QUOTA': ['facility_form_quota'], 'RENOVATION_DATE': ['facility_form_renovation'], 'COMMENTS': ['facility_form_comments']})
         if action == "save":
             if not facility_name.strip(): st.error("Facility Name is required.")
             else:
@@ -153,6 +171,10 @@ else:
                 if not view.record_id: record.pop("FACILITY_ID")
                 else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
                 try:
+                    record.update(FARM_LOCATION_ID=location_options[location_label], HOUSING_SYSTEM=layout,
+                        MANURE_DISPOSAL=manure, RENOVATION_DATE=renovation, COMMENTS=comments,
+                        FACILITY_QUOTA=(current.get("FACILITY_QUOTA") if view.record_id and not field_changed('facility_form_', 'FACILITY_QUOTA')
+                                        else normalize_numeric_bind(quota_text, "Facility Quota", 1, integer=False)))
                     if view.record_id:
                         saved_id = save_form(repo,'FACILITY',record,current,'facility_form_',revision_reason)
                     else: saved_id = save_form(repo,'FACILITY',record,current,'facility_form_')

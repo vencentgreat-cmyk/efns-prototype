@@ -26,9 +26,9 @@
     {
       "path": "app/pages/11_Facilities.py",
       "status": "MODIFIED",
-      "reason": "R3 F6: current-first historical Facility-type filter union only; unchanged new-entry type choices and all save paths. Parent list/Summary additionally expose stored Housing System read-only with the Facility Type label; edit, filter and Report Center export behavior unchanged. Legacy display-only list order, Facility Layout wording, friendly labels and stored field Summary rows; form options/save behavior unchanged.",
+      "reason": "R3 F6: current-first historical Facility-type filter union only; unchanged new-entry type choices and all save paths. Parent list/Summary additionally expose stored Housing System read-only with the Facility Type label; edit, filter and Report Center export behavior unchanged. Legacy display-only list order, Facility Layout wording, friendly labels and stored field Summary rows; form options/save behavior unchanged. Legacy Facility entry choices and existing maintained field controls, optional Farm Location, unchanged save/revision/audit/permission helpers and historical/unshown-field preservation.",
       "baseline_lf_sha256": "029972a156e38efe9a6f92fef4cae4909af42df7506e36aba1fe6271ebe86f84",
-      "candidate_lf_sha256": "828452c8563e0eb02817635bf737900fa78e62bbcc6886a9f9a93a1aa7111b92"
+      "candidate_lf_sha256": "11ec5430d1b442872855c9ef5949de40e97b9c532f0f292e2f143dfe6c717f37"
     },
     {
       "path": "app/pages/13_Facility_Details.py",
@@ -705,7 +705,7 @@
       "path": "tests/test_facilities_legacy_labels.py",
       "status": "NEW",
       "reason": "Synthetic both-entrypoint legacy labels, Summary fields, null handling and selection/edit/save regression tests.",
-      "candidate_lf_sha256": "b27dcce557b2a7947130023612548550d3479b02a698ef148a2c046f2feceed0"
+      "candidate_lf_sha256": "fdfb88b4b1025b52b4ee277d2c9bad0884ef3b694debcbe5b53bbbf08e2da9a6"
     },
     {
       "path": "docs/codex_reports/FACILITIES_LEGACY_LABELS_20261113.md",
@@ -738,6 +738,20 @@
       "status": "NEW",
       "reason": "Field mapping limitations, exhaustive label matrix, exact scope, validation and shipped-file byte proof.",
       "candidate_lf_sha256": "10c0088a635c28e48bb00bac2d51a218157fdfc799f491575cdcd426de9ca459"
+    }
+  ],
+  "facilities_form_legacy_artifacts": [
+    {
+      "path": "tests/test_facilities_form_legacy.py",
+      "status": "NEW",
+      "reason": "Synthetic create/edit/clear/no-op, historical preservation, permissions, exact quota values and revision/audit content tests on both entrypoints.",
+      "candidate_lf_sha256": "6052e780a72fd95b0867c0e3d635b9e1b1affb5041b907e8664a806143663656"
+    },
+    {
+      "path": "docs/codex_reports/FACILITIES_FORM_LEGACY_20261113.md",
+      "status": "NEW",
+      "reason": "Legacy form field inventory, preserved save/history contract, fixture counts, uncertainty, full suite results and shipped-byte proof.",
+      "candidate_lf_sha256": "343401cd2269b30737618fd12c2b22c581bf49b6e9681cd5123f0b4bfdf4399d"
     }
   ]
 }

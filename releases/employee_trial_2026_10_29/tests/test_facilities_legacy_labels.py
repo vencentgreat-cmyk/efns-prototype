@@ -82,7 +82,7 @@ def test_row_selection_edit_save_and_form_options_are_unchanged(legacy_facility,
     app.switch_page(f'{prefix}/11_Facilities.py').run()
     app.button(key='facility_record_edit').click().run()
     assert not app.exception and not app.error
-    assert app.selectbox(key='facility_form_type').options==['Pullet','Layer','Other']
+    assert app.selectbox(key='facility_form_type').options==['Layer','—','Breeder','Hatchery','Layers','Pullets']
     assert app.selectbox(key='facility_form_type').value=='Layer'
     assert app.selectbox(key='facility_form_status').options==['Active','Inactive','Closed']
     before=repo.get_facility(fid)
@@ -99,6 +99,6 @@ def test_row_selection_edit_save_and_form_options_are_unchanged(legacy_facility,
     app.session_state['_efns_record_11_Facilities_id']=None
     app.run()
     assert not app.exception and not app.error
-    assert app.selectbox(key='facility_form_type').options==['Pullet','Layer','Other']
-    assert not any(widget.label in {'Housing System','Facility Layout','Manure Disposal'}
-        for widget in app.selectbox)
+    assert app.selectbox(key='facility_form_type').options==['—','Breeder','Hatchery','Layers','Pullets']
+    assert app.selectbox(key='facility_form_layout').label=='Facility Layout'
+    assert app.selectbox(key='facility_form_manure').label=='Manure Disposal'
