@@ -128,16 +128,16 @@ def test_full_year_paginates_repeats_headers_and_keeps_numeric_cells_atomic(layo
 
 
 @pytest.mark.parametrize('layout',['summary','details'])
-def test_legal_only_when_letter_cannot_fit_numbers(layout):
+def test_refuse_instead_of_legal_when_letter_cannot_fit_numbers(layout):
+    from app.services.report_pdf import PDFExportError
     frame,meta=example(layout,1)
     for column in AMOUNTS:frame[column]=10**8
     rows,_,_=production_pdf_rows(pdf_display_rows(frame,'production-management-'+layout))
     assert production_table_layout(rows,744) is None
     assert production_table_layout(rows,960) is not None
-    reader=PdfReader(BytesIO(render_report_pdf('Large Quantities',meta['headers'],frame,
-        report_id='production-management-'+layout)))
-    assert tuple(map(int,(reader.pages[0].mediabox.width,reader.pages[0].mediabox.height)))==(1008,612)
-    assert '100,000,000' in reader.pages[0].extract_text()
+    with pytest.raises(PDFExportError,match='landscape Letter at 6.5pt'):
+        render_report_pdf('Large Quantities',meta['headers'],frame,
+            report_id='production-management-'+layout)
 
 
 @pytest.mark.parametrize('layout',['summary','details'])
@@ -174,3 +174,62 @@ def test_pdf_export_keeps_permission_and_audit(layout,monkeypatch):
     denied=FakeUI()
     pdf_download_button(user(active=False),frame,'Production',[],'report.pdf',report_id,target=denied)
     assert not denied.downloads and len(calls)==1
+
+
+@pytest.mark.parametrize('layout',['summary','details'])
+def test_rounding_appendix_is_one_pdf_summary_without_changing_other_outputs(layout):
+    from app.services.production_reports import production_notes_frame, production_rounding_summary
+    records,accounts=synthetic_source(40)
+    records['TOTAL'] += [i % 5 + 1 for i in range(len(records))]
+    frame,meta=build_production_report(records,accounts,202601,202653,['Regulated'],layout=layout)
+    notes=production_notes_frame(meta)
+    original=frame.copy(deep=True);original_notes=notes.copy(deep=True)
+    csv_before=report_csv(user(),frame)
+    sheets_before=pd.read_excel(BytesIO(report_xlsx(user(),frame,notes=notes)),sheet_name=None)
+    pdf=render_report_pdf('Production Management '+layout.title(),meta['headers'],frame,
+        notes=notes,report_id='production-management-'+layout)
+    text='\n'.join(page.extract_text() for page in PdfReader(BytesIO(pdf)).pages)
+    normalized=' '.join(text.split())
+    expected=('40 source rows have a stored TOTAL that differs from the displayed component '
+              'sum by rounding (largest difference 5 dozens).')
+    assert production_rounding_summary(meta)==expected
+    assert normalized.count(expected)==1
+    assert 'Rounding differences:' not in text and 'versus displayed' not in text
+    assert not re.search(r'\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b',text,re.I)
+    pd.testing.assert_frame_equal(original,frame)
+    pd.testing.assert_frame_equal(original_notes,notes)
+    assert len(notes.loc[notes.Section.eq('Rounding differences')])==40
+    assert report_csv(user(),frame)==csv_before
+    sheets_after=pd.read_excel(BytesIO(report_xlsx(user(),frame,notes=notes)),sheet_name=None)
+    assert sheets_before.keys()==sheets_after.keys()
+    for name in sheets_before:
+        pd.testing.assert_frame_equal(sheets_before[name],sheets_after[name])
+
+
+@pytest.mark.parametrize('layout',['summary','details'])
+def test_production_headers_housing_and_numbers_fit_without_word_splitting(layout):
+    records,accounts=synthetic_source(3)
+    records['HOUSING_SYSTEM']=['Conventional','Enrichable','Free Run']
+    frame,meta=build_production_report(records,accounts,202601,202653,['Regulated'],layout=layout)
+    report_id='production-management-'+layout
+    rows,_,_=production_pdf_rows(pdf_display_rows(frame,report_id))
+    size,widths=production_table_layout(rows,744)
+    assert size>=6.5
+    for col,header in enumerate(rows[0]):
+        for word in header.split():
+            assert stringWidth(word,'Helvetica-Bold',size)+4<=widths[col]
+    for value in records.HOUSING_SYSTEM:
+        assert stringWidth(value,'Helvetica-Bold',size)+4<=widths[3]
+    text='\n'.join(p.extract_text() for p in PdfReader(BytesIO(render_report_pdf(
+        'Housing',meta['headers'],frame,report_id=report_id))).pages)
+    for value in ('Type','Conventional','Enrichable','Free Run','NR','CR','OL','ON','FG','FC'):
+        assert value in text
+
+
+def test_pdf_notes_redact_source_ids_and_preserve_non_production_diagnostics():
+    from app.services.production_pdf import production_pdf_notes
+    from app.services.report_pdf import note_lines
+    diagnostic='Rounding differences: 00000000-0000-0000-0000-000000000064: stored TOTAL 1 versus displayed 2'
+    notes=[diagnostic,'Source notes: 00000000-0000-0000-0000-000000000064: missing quantity']
+    assert production_pdf_notes(notes)==['Source notes: source record: missing quantity']
+    assert note_lines(pd.DataFrame(),notes)==notes

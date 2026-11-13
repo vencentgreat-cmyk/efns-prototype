@@ -11,7 +11,7 @@ import pandas as pd
 
 from app.services.printable_form_text import FORM_BLUE
 from app.services.production_pdf import (uses_production_layout, production_pdf_rows,
-    production_table_layout, PRODUCTION_CAPTION)
+    production_table_layout, production_pdf_notes, PRODUCTION_CAPTION)
 
 MAX_PDF_ROWS = 5000
 MIN_FONT_SIZE = 7
@@ -213,7 +213,7 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
     ensure_pdf_row_limit(len(frame))
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_RIGHT
-    from reportlab.lib.pagesizes import letter, legal, landscape
+    from reportlab.lib.pagesizes import letter, landscape
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.pdfgen.canvas import Canvas
     from reportlab.platypus import Paragraph, Spacer, LongTable, TableStyle
@@ -238,10 +238,7 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
     if production:
         layout=production_table_layout(rows,pagesize[0]-48)
         if layout is None:
-            pagesize=landscape(legal)
-            layout=production_table_layout(rows,pagesize[0]-48)
-        if layout is None:
-            raise PDFExportError('The numeric columns cannot fit legibly on Letter or Legal paper. Use CSV or XLSX.')
+            raise PDFExportError('The columns cannot fit on landscape Letter at 6.5pt without splitting words or numbers. Use CSV or XLSX.')
     elif rows:
         try:
             layout=table_layout(rows,pagesize[0]-48,keep_identifiers=keep_identifiers)
@@ -306,7 +303,7 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
     story=[]
     if rows:
         size,widths=layout
-        normal=ParagraphStyle('cell',fontName='Helvetica',fontSize=size,leading=size+2,splitLongWords=True)
+        normal=ParagraphStyle('cell',fontName='Helvetica',fontSize=size,leading=size+2,splitLongWords=not production)
         right=ParagraphStyle('number',parent=normal,alignment=TA_RIGHT)
         bold=ParagraphStyle('total',parent=normal,fontName='Helvetica-Bold')
         bold_right=ParagraphStyle('total-number',parent=bold,alignment=TA_RIGHT)
@@ -339,6 +336,8 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
     if frame.empty:
         story.extend([Spacer(1,10),paragraph('No records found',parameter_style)])
     footnotes=note_lines(frame,notes)
+    if production:
+        footnotes=production_pdf_notes(footnotes)
     if footnotes:
         story.extend([Spacer(1,12),paragraph('Notes',title_style),Spacer(1,5)])
         for note in footnotes:story.extend([paragraph(note,parameter_style),Spacer(1,4)])

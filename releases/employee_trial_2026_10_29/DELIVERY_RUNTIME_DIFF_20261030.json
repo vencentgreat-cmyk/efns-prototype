@@ -324,7 +324,7 @@
       "path": "app/services/report_pdf.py",
       "status": "NEW",
       "reason": "Shared presentation-only SSRS-style PDF renderer using exact CSV cell text, bounded row count, fitting, pagination and Halifax footer.",
-      "candidate_lf_sha256": "169fba5bddb7d5c9146c8d6c9dbf3a4abe73924e6f7f81041b0b29f126dee8e9"
+      "candidate_lf_sha256": "d2b4746d545c0adba5fcc97be3cd3eb385d9056238c26c60f743da6e4c85077f"
     },
     {
       "path": "app/services/report_pdf_ui.py",
@@ -634,14 +634,14 @@
     {
       "path": "app/services/production_pdf.py",
       "status": "NEW",
-      "reason": "PDF-only legacy Production column projection, week headings and atomic numeric sizing with Letter-first Legal fallback.",
-      "candidate_lf_sha256": "e1723c2a3cf9d23ba34b5717aad524ce933de4d1af32a95871017a87d830c841"
+      "reason": "PDF-only legacy Production column projection, week headings, atomic word/number sizing on Letter, and compact rounding notes; refuse overflow instead of Legal fallback.",
+      "candidate_lf_sha256": "85d44bb231fb0916700051b1349f203c8fa8e6f805d65cf72071a6ead40fad34"
     },
     {
       "path": "tests/test_production_mgmt_pdf.py",
       "status": "NEW",
-      "reason": "Synthetic layout, exact totals/exports, repository paths, pagination, paper fallback, empty-data, permission and audit coverage.",
-      "candidate_lf_sha256": "d11adcb06a53ee0ed2ecffee199576fccfbe2f61b96dce2439250f409639a787"
+      "reason": "Synthetic layout, exact totals/exports, repository paths, pagination, Letter overflow refusal, compact PDF notes, empty-data, permission and audit coverage.",
+      "candidate_lf_sha256": "2e3c2fcc3778e78565929dc3273d1d2076aba3400fffc82d15eda5f8832f6bf2"
     },
     {
       "path": "docs/codex_reports/PRODUCTION_MGMT_PDF_20261112.md",
@@ -690,6 +690,14 @@
       "status": "NEW",
       "reason": "Record confirmed legacy fixture, precise ordering policy, visible-note propagation, complete regressions and shipped-byte proof.",
       "candidate_lf_sha256": "817471eff8c101afb781ce1a42204496da0629dd9676c70b3f8252175bb7756b"
+    }
+  ],
+  "production_pdf_polish_artifacts": [
+    {
+      "path": "docs/codex_reports/PRODUCTION_PDF_POLISH_20261113.md",
+      "status": "NEW",
+      "reason": "PDF-only rounding appendix reduction, Letter width guarantees, synthetic benchmark and shipped-byte proof.",
+      "candidate_lf_sha256": "531ffc86f629956a75a8cd30e465cceca0c83fe694c68373c403b25a2118ba4e"
     }
   ]
 }
