@@ -33,7 +33,11 @@ view = read_record_view()
 facilities = repo.get_facilities()
 accounts = repo.get_accounts()
 account_names = {row.ACCOUNT_ID: row.ORGANIZATION_NAME for row in accounts.itertuples()}
+account_registrations = {row.ACCOUNT_ID: row.REGISTRATION_NUMBER for row in accounts.itertuples()}
 account_options = {f"{row.ORGANIZATION_NAME} · {row.REGISTRATION_NUMBER or row.ACCOUNT_ID[:8]}": row.ACCOUNT_ID for row in accounts.itertuples()}
+farm_location_names = {}
+if view.name in {"list", "detail"}:
+    farm_location_names = {row.FARM_LOCATION_ID: row.LOCATION_NAME for row in repo.get_farm_locations().itertuples()}
 FACILITY_TYPES = ("Pullet", "Layer", "Other")
 
 
@@ -63,7 +67,7 @@ if view.name == "list":
     if action == "delete" and selected_id: st.session_state['facility_form___delete_pending']=selected_id
     filters = st.columns([2, 1])
     keyword = filters[0].text_input("Filter by keyword", placeholder="Facility or Account name", key="facility_filter_keyword")
-    facility_type = filters[1].selectbox("Facility type", ["All", *historical_filter_options(FACILITY_TYPES, facilities.get("FACILITY_TYPE", []))], key="facility_filter_type")
+    facility_type = filters[1].selectbox("Facility Type", ["All", *historical_filter_options(FACILITY_TYPES, facilities.get("FACILITY_TYPE", []))], key="facility_filter_type")
     display = repo.get_facilities(statuses=statuses).copy()
     display["ACCOUNT_NAME"] = display["ACCOUNT_ID"].map(account_names)
     if keyword:
@@ -75,9 +79,11 @@ if view.name == "list":
     else:
         display = display.reset_index(drop=True)
         st.session_state.facility_list_row_ids = display["FACILITY_ID"].tolist()
-        for field in ("FACILITY_TYPE", "HOUSING_SYSTEM"):
+        display["REGISTRATION_NUMBER"] = display["ACCOUNT_ID"].map(account_registrations)
+        display["FARM_LOCATION_NAME"] = display.get("FARM_LOCATION_ID", pd.Series(index=display.index, dtype=object)).map(farm_location_names)
+        for field in ("REGISTRATION_NUMBER", "ACCOUNT_NAME", "FACILITY_NAME", "FARM_LOCATION_NAME", "FACILITY_TYPE", "HOUSING_SYSTEM", "STATUS"):
             display[field] = display.get(field, pd.Series(index=display.index, dtype=object)).map(lambda value: facility_detail_value(field, value))
-        st.dataframe(display[["FACILITY_NAME", "ACCOUNT_NAME", "FACILITY_TYPE", "HOUSING_SYSTEM", "STATUS", "ACTIVATION_DATE", "CLOSURE_DATE", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="facility_list_grid", column_config={"FACILITY_NAME": "Facility Name", "ACCOUNT_NAME": "Account", "FACILITY_TYPE": "Facility Type", "HOUSING_SYSTEM": "Housing System", "CREATED_AT": timestamp_column("Created On")})
+        st.dataframe(display[["REGISTRATION_NUMBER", "ACCOUNT_NAME", "FACILITY_NAME", "FARM_LOCATION_NAME", "FACILITY_TYPE", "HOUSING_SYSTEM", "STATUS", "CREATED_AT"]], width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="facility_list_grid", column_config={"REGISTRATION_NUMBER": "Registration Number", "FACILITY_NAME": "Facility Name", "ACCOUNT_NAME": "Account", "FARM_LOCATION_NAME": "Farm Location", "FACILITY_TYPE": "Facility Type", "HOUSING_SYSTEM": "Facility Layout", "STATUS": "Status", "CREATED_AT": timestamp_column("Created On")})
 else:
     current = get_facility(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:
@@ -96,15 +102,20 @@ else:
         with summary:
             with st.container(border=True):
                 left, right = st.columns(2)
-                left.markdown(f"**Facility Name**  \n{current.get('FACILITY_NAME')}")
-                left.markdown(f"**Account**  \n{account_names.get(current.get('ACCOUNT_ID'), 'Unknown')}")
+                left.markdown(f"**Registration Number**  \n{facility_detail_value('REGISTRATION_NUMBER', account_registrations.get(current.get('ACCOUNT_ID')))}")
+                left.markdown(f"**Account**  \n{facility_detail_value('ACCOUNT_NAME', account_names.get(current.get('ACCOUNT_ID')))}")
+                left.markdown(f"**Facility Name**  \n{facility_detail_value('FACILITY_NAME', current.get('FACILITY_NAME'))}")
                 if current.get("ACCOUNT_ID") and left.button("View Account", key="facility_parent_account", icon=":material/account_circle:"):
                     open_module("Accounts_&_Facilities", "detail", current["ACCOUNT_ID"])
                 left.markdown(f"**Facility Type**  \n{facility_detail_value('FACILITY_TYPE', current.get('FACILITY_TYPE'))}")
-                left.markdown(f"**Housing System**  \n{facility_detail_value('HOUSING_SYSTEM', current.get('HOUSING_SYSTEM'))}")
-                right.markdown(f"**Status**  \n{current.get('STATUS')}")
-                right.markdown(f"**Activation Date**  \n{current.get('ACTIVATION_DATE') or '—'}")
-                right.markdown(f"**Closure Date**  \n{current.get('CLOSURE_DATE') or '—'}")
+                left.markdown(f"**Facility Layout**  \n{facility_detail_value('HOUSING_SYSTEM', current.get('HOUSING_SYSTEM'))}")
+                left.markdown(f"**Farm Location**  \n{facility_detail_value('FARM_LOCATION_NAME', farm_location_names.get(current.get('FARM_LOCATION_ID')))}")
+                for field, label in (("STATUS", "Status"), ("CONSTRUCTION_DATE", "Construction Date"),
+                    ("RENOVATION_DATE", "Renovation Date"), ("MANURE_DISPOSAL", "Manure Disposal"),
+                    ("FACILITY_QUOTA", "Facility Quota"), ("COMMENTS", "Comments"),
+                    ("ACTIVATION_DATE", "Activation Date"), ("CLOSURE_DATE", "Closure Date"),
+                    ("CREATED_AT", "Created On")):
+                    right.markdown(f"**{label}**  \n{facility_detail_value(field, current.get(field), timestamp_formatter=format_timestamp)}")
             render_source_description(st,repo,view.record_id)
         with related:
             if st.button("New Facility Detail", icon=":material/add:", type="primary"):
