@@ -224,6 +224,7 @@ def related_records_table(
     label_column: str,
     page_slug: str,
     key: str,
+    column_config: dict | None = None,
 ) -> None:
     """Show a deduplicated related table with registered-page navigation."""
     st.markdown(f"**{title} ({len(frame.drop_duplicates(id_column)) if id_column in frame else 0})**")
@@ -238,6 +239,7 @@ def related_records_table(
     st.dataframe(
         display[["RECORD", *visible]], width="stretch", hide_index=True,
         on_select="rerun", selection_mode="single-row", key=key,
+        column_config=column_config,
     )
     index = selected_row_index(key)
     if index is not None and index < len(display):

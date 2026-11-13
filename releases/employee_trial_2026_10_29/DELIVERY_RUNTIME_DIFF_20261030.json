@@ -75,9 +75,9 @@
     {
       "path": "app/pages/5_Flocks.py",
       "status": "MODIFIED",
-      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged.",
+      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
-      "candidate_lf_sha256": "657a5efbea6eb890e319cd09bc10e25efc0d6b5460be54c9d9af5e756f58abcd"
+      "candidate_lf_sha256": "cc05ac555007472f629d1f6489a7cab33d78ecc5e48adb498e9521016285f8f8"
     },
     {
       "path": "app/pages/6_Flock_Transactions.py",
@@ -712,6 +712,32 @@
       "status": "NEW",
       "reason": "Legacy field availability, form option differences, exact display scope, full-suite results and shipped-byte proof.",
       "candidate_lf_sha256": "34d49c2006685476f62996e9b1de0d55719b5eed0d471e572e0308b2a0eab2d4"
+    }
+  ],
+  "flocks_accounts_legacy_labels_artifacts": [
+    {
+      "path": "app/services/legacy_view_labels.py",
+      "status": "NEW",
+      "reason": "Presentation-only shared legacy column order and readable labels; source/export column keys unchanged.",
+      "candidate_lf_sha256": "4447cd1aa724fdeae049dbe7f735de6ec5cefad412ff1f38289e3a6ef1f22dc7"
+    },
+    {
+      "path": "app/navigation.py",
+      "status": "MODIFIED",
+      "reason": "Optional per-caller related-table header configuration; default rendering, selected row IDs and registered-page navigation unchanged.",
+      "candidate_lf_sha256": "7db5c27b760be1bce687ad7dd465c187fd30063d25e2a693c41c28624cf3218e"
+    },
+    {
+      "path": "tests/test_flocks_accounts_legacy_labels.py",
+      "status": "NEW",
+      "reason": "Synthetic both-entrypoint labels/order, confirmed linked Location, filters, selection/edit/save, related headers and original exports.",
+      "candidate_lf_sha256": "ed9b0cf39976552a738f7c6ded9c83a0b8e62903fa934d6eddd4577797cb00f5"
+    },
+    {
+      "path": "docs/codex_reports/FLOCKS_ACCOUNTS_LEGACY_LABELS_20261113.md",
+      "status": "NEW",
+      "reason": "Field mapping limitations, exhaustive label matrix, exact scope, validation and shipped-file byte proof.",
+      "candidate_lf_sha256": "10c0088a635c28e48bb00bac2d51a218157fdfc799f491575cdcd426de9ca459"
     }
   ]
 }
