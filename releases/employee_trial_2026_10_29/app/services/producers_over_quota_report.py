@@ -5,7 +5,7 @@ import pandas as pd
 
 from app.services.flock_age_report import known_total, utilization
 from app.services.flock_current_report import build_flock_current_report, day, quantity, text
-from app.services.flock_reports import build_flock_status_report
+from app.services.flock_reports import build_flock_status_report, without_confirmed_test_account
 
 COLUMNS = ['Reg No', 'Account Name', 'Permit No', 'Flock Age', 'Placement Date',
            'Disposal Date', 'Quota Type', 'Last Count', 'Inventory', '% Quota']
@@ -28,6 +28,7 @@ def build_producers_over_quota_report(flocks, transactions, accounts, facilities
     count is the number of listed Accounts. Quotas retain the Egg Production basis.
     The legacy-only zero/Last Count presentation rules do not alter shared builders.
     """
+    flocks, accounts, quotas = without_confirmed_test_account(flocks, accounts, quotas)
     _, summary = build_flock_status_report(flocks, transactions, accounts, facilities,
                                           quotas, report_date, mortality, quota_type)
     report_date = day(report_date)  # Validated by the shared builder, even if empty.

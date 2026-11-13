@@ -45,6 +45,26 @@ def flock_is_in_current_report(flock, report_date, quota_type):
             and (disposal is None or disposal > report_date))
 
 
+def latest_observation(observations):
+    """Resolve date-scoped rows by quantity; source is display metadata only."""
+    if not observations:
+        return None, None, None, 'No Count or Delivery on or before report date'
+    latest_day = max(day(row['TRANSACTION_DATE']) for row in observations)
+    latest = [row for row in observations if day(row['TRANSACTION_DATE']) == latest_day]
+    counts = [row for row in latest if text(row.get('TRANSACTION_TYPE')) == 'Count']
+    if counts:
+        latest = counts
+    selected = next((row for row in latest if text(row.get('COUNT_SOURCE_LABEL'))), latest[0])
+    kind = text(selected.get('TRANSACTION_TYPE'))
+    quantities = [quantity(row.get('QUANTITY')) for row in latest]
+    if any(value is None for value in quantities):
+        return latest_day, selected, None, f'Invalid {kind} quantity'
+    if len(set(quantities)) > 1:
+        return latest_day, selected, None, f'{kind} conflict'
+    note = 'Initial Delivery quantity used (no later Count)' if kind == 'Delivery' else ''
+    return latest_day, selected, quantities[0], note
+
+
 def build_flock_current_report(flocks, transactions, accounts, report_date,
                                mortality='0.4', quota_type='Egg Production'):
     """Return only report rows. Subtotals sum known measures and disclose gaps."""
@@ -74,25 +94,8 @@ def build_flock_current_report(flocks, transactions, accounts, report_date,
         owner = owners.get(owner_id, {})
         kind = text(flock.get('FLOCK_QUOTA_TYPE')) or 'Unknown'
         observations = counts.get(str(flock['FLOCK_ID']), [])
-        latest_day = max((day(r['TRANSACTION_DATE']) for r in observations), default=None)
-        latest = [r for r in observations if day(r['TRANSACTION_DATE']) == latest_day]
-        latest_counts = [r for r in latest if text(r.get('TRANSACTION_TYPE')) == 'Count']
-        if latest_counts:
-            latest = latest_counts  # Count wins only when both types share the latest date.
-        observation_type = text(latest[0].get('TRANSACTION_TYPE')) if latest else None
-        notes = []
-        counted = None
-        if not latest:
-            notes.append('No Count or Delivery on or before report date')
-        elif (len({quantity(r.get('QUANTITY')) for r in latest}) > 1
-              or len({text(r.get('COUNT_SOURCE_LABEL')) or 'Unknown' for r in latest}) > 1):
-            notes.append(f'{observation_type} conflict')
-        else:
-            counted = quantity(latest[0].get('QUANTITY'))
-            if counted is None:
-                notes.append(f'Invalid {observation_type} quantity')
-            elif observation_type == 'Delivery':
-                notes.append('Initial Delivery quantity used (no later Count)')
+        latest_day, observation, counted, observation_note = latest_observation(observations)
+        notes = [observation_note] if observation_note else []
         placement, hatch = day(flock.get('PLACEMENT_DATE')), day(flock.get('HATCH_DATE'))
         inventory = upcoming = None
         if placement is None:
@@ -104,6 +107,14 @@ def build_flock_current_report(flocks, transactions, accounts, report_date,
                 inventory = floor(Fraction(counted) * (1 - Fraction(rate) * 12
                                   * (report_date - latest_day).days / 36500))
                 upcoming = 0
+        elif placement > report_date and observation is None:
+            inventory = 0
+            upcoming = quantity(flock.get('BIRD_COUNT'))
+            if upcoming is None:
+                notes.append('Invalid stored Bird Count for upcoming flock')
+            else:
+                upcoming = int(upcoming)
+                notes.append('Stored Bird Count used for upcoming flock without an as-of observation')
         row = dict(zip(COLUMNS, [text(owner.get('REGISTRATION_NUMBER')) or '—',
             text(owner.get('ORGANIZATION_NAME')) or owner_id, kind,
             text(flock.get('PERMIT_NUMBER')) or '—', latest_day, placement,
@@ -120,6 +131,10 @@ def build_flock_current_report(flocks, transactions, accounts, report_date,
             result[column] = sum(values) if values else None
         missing_count = sum(row['Counted'] is None for row in rows)
         result['Notes'] = f'Excludes {missing_count} flock(s) without usable Count'
+        fallback_count = sum(row['Counted'] is None and row['Inventory'] == 0
+                             and row['Up. Flocks'] is not None for row in rows)
+        if fallback_count:
+            result['Notes'] += f'; Up. Flocks includes stored Bird Count for {fallback_count} upcoming flock(s)'
         missing_placement = sum(row['Counted'] is not None and row['Inventory'] is None for row in rows)
         if missing_placement:
             result['Notes'] += f'; Inventory/Up. Flocks exclude {missing_placement} flock(s) without placement date'

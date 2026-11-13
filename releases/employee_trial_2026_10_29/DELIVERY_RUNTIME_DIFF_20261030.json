@@ -258,7 +258,7 @@
       "path": "app/services/flock_reports.py",
       "status": "NEW",
       "reason": "Pure flock reports; Disposals uses fixture-derived elapsed weeks +19, earliest Delivery Placed with fallback/conflict notes and stored Disposed/Plant values; other calculations unchanged.",
-      "candidate_lf_sha256": "45c8bc93ff02d5526e8a9a553ff0ed1986264d039afee0ac5ca49e4b8e0cba66"
+      "candidate_lf_sha256": "cfa025790a19284ea8dc320d872c8c7e35bf6bf30b2470716822dcca5787659f"
     },
     {
       "path": "data/confirmed_quota_position.py",
@@ -282,7 +282,7 @@
       "path": "app/services/flock_current_report.py",
       "status": "NEW",
       "reason": "Read-only pure Flock Current report; exact mortality arithmetic and provisional inclusion; no PENDING rule changes.",
-      "candidate_lf_sha256": "3a2269cf1bb8da59dfb54c4629bfc8526ea2df4363263e1aabf96b5b35ec48db"
+      "candidate_lf_sha256": "45f6bceaecba36e93f84a27e3d053423a2e73c5c71f6af1c0acf2a4c2cfce3f1"
     },
     {
       "path": "app/services/printable_forms.py",
@@ -423,7 +423,7 @@
       "path": "tests/test_flock_current_report.py",
       "status": "MODIFIED",
       "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
-      "candidate_lf_sha256": "d26ac4a66cb2098f35e468ba8eedeb1f76eb55ad94aeb93a42d609358aebe30d"
+      "candidate_lf_sha256": "ff43e3c292b30c4d6ac7b8b6be647078a0793243ea53e220657f684ae7be10c6"
     },
     {
       "path": "tests/test_flock_reports.py",
@@ -467,7 +467,7 @@
       "path": "app/services/producers_over_quota_report.py",
       "status": "NEW",
       "reason": "New legacy Producers Over Quota report, fixture, evidence/limits or regression coverage.",
-      "candidate_lf_sha256": "9a97c31f97f2e404aaf20a483155fd644179864ce6c0265ccf14202868c8d072"
+      "candidate_lf_sha256": "4a16a57e68a02cfd5bbbb1a4e9a8d01fc3e44d141b59439cc98dfd48f8dde2b4"
     },
     {
       "path": "tests/test_producers_over_quota.py",
@@ -662,6 +662,20 @@
       "status": "NEW",
       "reason": "Document display-only scope, existing reads, staff-facing rows, full suites and shipped-byte identity proof.",
       "candidate_lf_sha256": "f538decb52898cfe560f47966ea7b13f24ce8ad0322d4617bfe54d691ad7a87b"
+    }
+  ],
+  "flock_status_asof_artifacts": [
+    {
+      "path": "tests/test_flock_status_asof.py",
+      "status": "NEW",
+      "reason": "Confirmed same-quantity Count de-duplication, upcoming Bird Count fallback, test-account scope and frozen current-date regressions.",
+      "candidate_lf_sha256": "b594e19e55f2962d62049c3ffe52497169b7f4ce5f31af6e0081673b377394ef"
+    },
+    {
+      "path": "docs/codex_reports/FLOCK_STATUS_ASOF_FIX_20261113.md",
+      "status": "NEW",
+      "reason": "Document confirmed fixes, expected June legacy targets, source-data limitations, 7128 effort, full tests and shipped-file proof.",
+      "candidate_lf_sha256": "567efd2c060dfc317ca5672831749232970b62f9f6a3d150e026e853904e6f8a"
     }
   ]
 }
