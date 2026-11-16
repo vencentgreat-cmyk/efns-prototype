@@ -104,7 +104,7 @@ if view.name == "list":
         st.session_state.flock_list_row_ids = display["FLOCK_ID"].tolist()
         list_columns = column_labels(FLOCK_COLUMNS, flock=True)
         list_columns["CREATED_AT"] = timestamp_column("Created On")
-        st.dataframe(display.reindex(columns=FLOCK_COLUMNS), width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_list_grid", column_config=list_columns)
+        st.dataframe(display.reindex(columns=FLOCK_COLUMNS), width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_list_grid", column_config=list_columns, placeholder="—")
 else:
     current = repo.get_flock(view.record_id) if view.record_id else None
     if view.name in {"detail", "edit"} and current is None:

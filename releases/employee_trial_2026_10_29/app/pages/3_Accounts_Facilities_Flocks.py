@@ -131,6 +131,7 @@ if view.name == "list":
             on_select="rerun",
             selection_mode="single-row",
             key="account_list_grid",
+            placeholder="—",
             column_config={
                 **column_labels(ACCOUNT_COLUMNS),
                 "ORGANIZATION_NAME": st.column_config.TextColumn("Account Name", width="large"),

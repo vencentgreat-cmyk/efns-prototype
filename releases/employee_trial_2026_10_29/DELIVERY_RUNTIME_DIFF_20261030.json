@@ -75,9 +75,9 @@
     {
       "path": "app/pages/5_Flocks.py",
       "status": "MODIFIED",
-      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained.",
+      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained. Main-list null rendering uses Streamlit native em-dash placeholder only; unchanged Arrow values and exports.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
-      "candidate_lf_sha256": "cc05ac555007472f629d1f6489a7cab33d78ecc5e48adb498e9521016285f8f8"
+      "candidate_lf_sha256": "7345d5c9396ad04bfb6543ea5b121b564c4033edd51e56ed55eb71d9b8e081e0"
     },
     {
       "path": "app/pages/6_Flock_Transactions.py",
@@ -752,6 +752,20 @@
       "status": "NEW",
       "reason": "Legacy form field inventory, preserved save/history contract, fixture counts, uncertainty, full suite results and shipped-byte proof.",
       "candidate_lf_sha256": "343401cd2269b30737618fd12c2b22c581bf49b6e9681cd5123f0b4bfdf4399d"
+    }
+  ],
+  "blank_null_display_artifacts": [
+    {
+      "path": "tests/test_blank_null_display.py",
+      "status": "NEW",
+      "reason": "Both-entrypoint null placeholder regressions with identical Arrow data, source frames, selection IDs and CSV/XLSX values.",
+      "candidate_lf_sha256": "10d3c66f425ec33d2f9ae9fd8ed6d1bd8cb5824bdff29cad3fa02fb26ba21073"
+    },
+    {
+      "path": "docs/codex_reports/BLANK_NULL_DISPLAY_20261116.md",
+      "status": "NEW",
+      "reason": "Presentation-only scope, validation results and shipped-byte proof.",
+      "candidate_lf_sha256": "1981c31a208252b0fa7114ef6b1d0362d3aae40c3ad08451ebcc3d942e1fa4ce"
     }
   ]
 }
