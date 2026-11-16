@@ -76,7 +76,9 @@ def test_exact_legacy_order_labels_and_values(legacy_chain,tmp_path,monkeypatch,
     expected=column_labels(columns,flock=page=='flock')
     expected['CREATED_AT']=timestamp_column('Created On')['label']
     if page=='account':expected['UPDATED_AT']=timestamp_column('Modified On')['label']
-    assert [config[col]['label'] for col in columns]==[expected[col] for col in columns]
+    visible=[col for col in columns if not config.get(col,{}).get('hidden',False)]
+    assert visible==[col for col in columns if page!='flock' or col!='FLOCK_NUMBER']
+    assert [config[col]['label'] for col in visible]==[expected[col] for col in visible]
     if page=='flock':
         assert grid.value.iloc[0].LOCATION=='Synthetic farm'
         assert grid.value.iloc[0].REGISTRATION_NUMBER=='001'

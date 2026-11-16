@@ -29,11 +29,12 @@ def test_employee_pages_save_cancel_and_refresh(chain,tmp_path,monkeypatch):
     app.session_state['_efns_record_5_Flocks_id']=flock
     app.switch_page('app/pages/5_Flocks.py').run()
     assert not app.exception
-    app.text_input(key='flock_form_number').input('DEV_TEST edited flock')
-    app.text_input(key='flock_form_revision_reason').input('Synthetic name correction')
+    app.text_area(key='flock_form_comments').input('DEV_TEST edited flock comment')
+    app.text_input(key='flock_form_revision_reason').input('Synthetic comment correction')
     app.button(key='flock_record_save').click().run()
     assert not app.exception and not app.error
-    assert r.get_flock(flock)['FLOCK_NUMBER']=='DEV_TEST edited flock'
+    assert r.get_flock(flock)['COMMENTS']=='DEV_TEST edited flock comment'
+    assert r.get_flock(flock)['FLOCK_NUMBER']==record['FLOCK_NUMBER']
     # A real supported Count entry does not masquerade as inventory mutation.
     app.session_state['_efns_record_6_Flock_Transactions_view']='new'
     app.switch_page('app/pages/6_Flock_Transactions.py').run()

@@ -26,6 +26,7 @@ from data.repositories.continuity import changed_attributes
 from data.producer_identity import text
 from app.services.quota_usage import render_quota_usage
 from app.services.entry_fields import bird_strain_input
+from app.services.flock_form_fields import role_account_names, duplicate_permit_errors, creation_retry_id, permit_text
 from app.services.legacy_view_labels import FLOCK_COLUMNS, field_label, column_labels
 from app.services.flock_date_defaults import apply_flock_date_defaults, placement_from_hatch, estimated_disposal_from_placement
 from data.flock_stock import flock_stock
@@ -81,7 +82,7 @@ if view.name == "list":
     if action == "refresh": clear_widget_prefix("flock_filter_"); st.rerun()
     if action == "delete" and selected_id: st.session_state['flock_form___delete_pending']=selected_id
     filters = st.columns([2, 1, 1])
-    keyword = filters[0].text_input("Filter by keyword", placeholder="Flock number or permit", key="flock_filter_keyword")
+    keyword = filters[0].text_input("Filter by keyword", placeholder="Permit Number", key="flock_filter_keyword")
     account_filter = filters[1].selectbox("Account", ["All", *account_options], key="flock_filter_account")
     colour_filter = filters[2].selectbox("Flock Colour", ["All", *EGG_COLOURS], key="flock_filter_colour")
     display = repo.get_flocks(statuses=statuses).copy()
@@ -104,6 +105,7 @@ if view.name == "list":
         st.session_state.flock_list_row_ids = display["FLOCK_ID"].tolist()
         list_columns = column_labels(FLOCK_COLUMNS, flock=True)
         list_columns["CREATED_AT"] = timestamp_column("Created On")
+        list_columns["FLOCK_NUMBER"] = None
         st.dataframe(display.reindex(columns=FLOCK_COLUMNS), width="stretch", height=540, hide_index=True, on_select="rerun", selection_mode="single-row", key="flock_list_grid", column_config=list_columns, placeholder="—")
 else:
     current = repo.get_flock(view.record_id) if view.record_id else None
@@ -112,7 +114,7 @@ else:
         if st.button("Back to Flocks"): open_view("list")
         st.stop()
     is_form = view.name in {"new", "edit"}
-    page_header("New Flock" if view.name == "new" else current["FLOCK_NUMBER"], "Validated relationships, permit, dates and bird counts.", "FLOCK RECORD")
+    page_header("New Flock" if view.name == "new" else permit_text(current.get("PERMIT_NUMBER")) or "Flock", "Validated relationships, permit, dates and bird counts.", "FLOCK RECORD")
     action = record_command_bar("flock_record", view.name)
     if action in {"back", "cancel"}: start_new_form("flock_form_"); open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "edit": start_new_form("flock_form_"); open_view("edit", view.record_id)
@@ -124,7 +126,6 @@ else:
         with summary:
             with st.container(border=True):
                 left, middle, right = st.columns(3)
-                left.markdown(f"**Flock Number**  \n{current.get('FLOCK_NUMBER')}")
                 left.markdown(f"**Account**  \n{account_names.get(current.get('ACCOUNT_ID'), 'Unknown')}")
                 left.markdown(f"**Facility Name**  \n{facility_names.get(current.get('FACILITY_ID'), UNASSIGNED_LABEL)}")
                 if current.get("ACCOUNT_ID") and left.button("View Account", key="flock_parent_account", icon=":material/account_circle:"):
@@ -155,7 +156,7 @@ else:
                 right.markdown(f"**Status**  \n{current.get('STATUS')}")
             render_quota_usage(repo, current)
         with details:
-            detail_fields = [key for key in current if key not in {"CREATED_AT", "UPDATED_AT"}]
+            detail_fields = [key for key in current if key not in {"FLOCK_NUMBER", "CREATED_AT", "UPDATED_AT"}]
             st.dataframe(pd.DataFrame({"Field": [field_label(key, flock=True) for key in detail_fields], "Value": [str(current[key]) if current[key] is not None else "—" for key in detail_fields]}), width="stretch", hide_index=True)
         with related:
             with st.container(border=True):
@@ -207,11 +208,16 @@ else:
                 quota_options = {UNASSIGNED_LABEL: None, **{f"{row.QUOTA_NAME} · {row.REGISTRATION_NUMBER}": row.QUOTA_ID for row in quotas.itertuples()}}
                 quota_label = left.selectbox("Quota Registration", list(quota_options), index=option_index(list(quota_options), label_for_id(quota_options, current.get("QUOTA_ID"), UNASSIGNED_LABEL)), key="flock_form_quota")
                 quota_type = left.selectbox("Flock Quota Type", stored_options(FLOCK_QUOTA_TYPES,current.get("FLOCK_QUOTA_TYPE"),bool(view.record_id)), index=(stored_index(FLOCK_QUOTA_TYPES,current.get("FLOCK_QUOTA_TYPE")) if view.record_id else option_index(list(FLOCK_QUOTA_TYPES), current.get("FLOCK_QUOTA_TYPE"))), key="flock_form_quota_type")
-                flock_number = right.text_input("Flock Number *", value=str(current.get("FLOCK_NUMBER") or ""), key="flock_form_number")
                 status = right.selectbox("Status", stored_options(FLOCK_STATUSES,current.get("STATUS"),bool(view.record_id)), index=(stored_index(FLOCK_STATUSES,current.get("STATUS")) if view.record_id else option_index(list(FLOCK_STATUSES), current.get("STATUS"))), key="flock_form_status")
                 create_delivery = right.checkbox("Create Delivery Transaction", value=bool(current.get("CREATE_DELIVERY_TRANSACTION")), key="flock_form_delivery")
-                permit_number = right.text_input("Permit Number *", value=str(current.get("PERMIT_NUMBER") or ""), key="flock_form_permit")
+                permit_number = right.text_input("Permit Number" if view.record_id else "Permit Number *", value=str(current.get("PERMIT_NUMBER") or ""), disabled=bool(view.record_id), key="flock_form_permit")
+                if view.record_id:
+                    right.caption("Permit Number cannot be changed here for an existing flock.")
                 hatch_date = right.date_input("Hatch Date *", value=(optional_form_date(current.get("HATCH_DATE")) if view.record_id else halifax_today()), key="flock_form_hatch")
+                hatchery_options = role_account_names(accounts, 'HATCHERY_ROLE')
+                breeder_options = role_account_names(accounts, 'BREEDER_ROLE')
+                hatchery = right.selectbox("Hatchery", stored_options(hatchery_options,current.get('HATCHERY'),bool(view.record_id)), index=stored_index(hatchery_options,current.get('HATCHERY')) if view.record_id else 0, format_func=lambda value: '—' if value is None else value, key='flock_form_hatchery')
+                breeder = right.selectbox("Breeder", stored_options(breeder_options,current.get('BREEDER'),bool(view.record_id)), index=stored_index(breeder_options,current.get('BREEDER')) if view.record_id else 0, format_func=lambda value: '—' if value is None else value, key='flock_form_breeder')
             with lifecycle:
                 left, right = st.columns(2)
                 bird_count_input = left.text_input("Bird Count *",value=text(current.get("BIRD_COUNT")) or "",key="flock_form_birds_text") if view.record_id else None
@@ -241,7 +247,7 @@ else:
                 initial_time = st.time_input('Confirmed initial placement time (Atlantic / Halifax)',value=dt.time(12),key='flock_form_initial_time')
                 initial_reason = st.text_input('Evidence for initial position',key='flock_form_initial_reason')
                 st.session_state.setdefault('flock_form_initial_request',uuid.uuid4().hex)
-        capture_form('flock_form_',current,{'FLOCK_NUMBER': ['flock_form_number'], 'ACCOUNT_ID': ['flock_form_account'], 'FACILITY_ID': ['flock_form_account', 'flock_form_facility'], 'FACILITY_DETAIL_ID': ['flock_form_account', 'flock_form_detail', 'flock_form_facility'], 'QUOTA_ID': ['flock_form_account', 'flock_form_quota'], 'FLOCK_QUOTA_TYPE': ['flock_form_quota_type'], 'STATUS': ['flock_form_status'], 'CREATE_DELIVERY_TRANSACTION': ['flock_form_delivery'], 'PERMIT_NUMBER': ['flock_form_permit'], 'PERMIT_DATE': ['flock_form_permit_date'], 'HATCH_DATE': ['flock_form_hatch'], 'DATE_ORDERED': ['flock_form_ordered'], 'BIRD_COUNT': ['flock_form_birds_text','flock_form_birds'], 'EGG_COLOUR': ['flock_form_colour'], 'BIRD_STRAIN': ['flock_form_strain', 'flock_form_strain_other'], 'PLACEMENT_DATE': ['flock_form_placement'], 'EST_DISPOSAL': ['flock_form_est_disposal'], 'DISPOSAL_DATE': ['flock_form_disposal'], 'BIRDS_DISPOSED': ['flock_form_disposed_text'], 'COMMENTS': ['flock_form_comments']})
+        capture_form('flock_form_',current,{'ACCOUNT_ID': ['flock_form_account'], 'FACILITY_ID': ['flock_form_account', 'flock_form_facility'], 'FACILITY_DETAIL_ID': ['flock_form_account', 'flock_form_detail', 'flock_form_facility'], 'QUOTA_ID': ['flock_form_account', 'flock_form_quota'], 'FLOCK_QUOTA_TYPE': ['flock_form_quota_type'], 'STATUS': ['flock_form_status'], 'CREATE_DELIVERY_TRANSACTION': ['flock_form_delivery'], 'PERMIT_NUMBER': ['flock_form_permit'], 'PERMIT_DATE': ['flock_form_permit_date'], 'HATCH_DATE': ['flock_form_hatch'], 'DATE_ORDERED': ['flock_form_ordered'], 'BIRD_COUNT': ['flock_form_birds_text','flock_form_birds'], 'EGG_COLOUR': ['flock_form_colour'], 'BIRD_STRAIN': ['flock_form_strain', 'flock_form_strain_other'], 'PLACEMENT_DATE': ['flock_form_placement'], 'EST_DISPOSAL': ['flock_form_est_disposal'], 'DISPOSAL_DATE': ['flock_form_disposal'], 'BIRDS_DISPOSED': ['flock_form_disposed_text'], 'COMMENTS': ['flock_form_comments'], 'HATCHERY': ['flock_form_hatchery'], 'BREEDER': ['flock_form_breeder']})
         if action == "save":
             try:
                 if view.record_id: bird_count = normalize_numeric_bind(bird_count_input,"BIRD_COUNT",1,integer=True) if field_changed("flock_form_","BIRD_COUNT") else current.get("BIRD_COUNT")
@@ -249,10 +255,19 @@ else:
             except RepositoryError as exc:
                 show_data_error(exc)
                 st.stop()
-            record = {"FLOCK_ID": view.record_id, "FLOCK_NUMBER": flock_number.strip(), "ACCOUNT_ID": account_id, "FACILITY_ID": facility_id, "FACILITY_DETAIL_ID": detail_options[detail_label], "QUOTA_ID": quota_options[quota_label], "FLOCK_QUOTA_TYPE": quota_type, "STATUS": status, "CREATE_DELIVERY_TRANSACTION": create_delivery, "PERMIT_NUMBER": permit_number.strip(), "PERMIT_DATE": permit_date, "HATCH_DATE": hatch_date, "DATE_ORDERED": ordered_date, "BIRD_COUNT": bird_count, "EGG_COLOUR": egg_colour, "BIRD_STRAIN": bird_strain or None, "PLACEMENT_DATE": placement_date, "EST_DISPOSAL": estimated_disposal, "DISPOSAL_DATE": disposal_date, "BIRDS_DISPOSED": birds_disposed, "COMMENTS": comments or None}
-            if not view.record_id: record.pop("FLOCK_ID")
+            record = {"FLOCK_ID": view.record_id, "ACCOUNT_ID": account_id, "FACILITY_ID": facility_id, "FACILITY_DETAIL_ID": detail_options[detail_label], "QUOTA_ID": quota_options[quota_label], "FLOCK_QUOTA_TYPE": quota_type, "STATUS": status, "CREATE_DELIVERY_TRANSACTION": create_delivery, "PERMIT_NUMBER": current.get("PERMIT_NUMBER") if view.record_id else permit_number.strip(), "PERMIT_DATE": permit_date, "HATCH_DATE": hatch_date, "DATE_ORDERED": ordered_date, "BIRD_COUNT": bird_count, "EGG_COLOUR": egg_colour, "BIRD_STRAIN": bird_strain or None, "PLACEMENT_DATE": placement_date, "EST_DISPOSAL": estimated_disposal, "DISPOSAL_DATE": disposal_date, "BIRDS_DISPOSED": birds_disposed, "COMMENTS": comments or None, "HATCHERY": hatchery, "BREEDER": breeder}
+            if not view.record_id:
+                record.pop("FLOCK_ID")
+                record["FLOCK_NUMBER"] = permit_number.strip()
             else: record["EXPECTED_UPDATED_AT"] = st.session_state.get(expected_key)
-            errors = validate_flock(repo, record) if not view.record_id else []
+            errors = []
+            if not view.record_id:
+                if not permit_number.strip():
+                    errors.append("Permit Number is required.")
+                else:
+                    errors = validate_flock(repo, record)
+                    retry_id = creation_retry_id(record, st.session_state.get('_efns_request_flock_form_'), st.session_state.flock_form_initial_request if initial_confirmed else None)
+                    errors.extend(duplicate_permit_errors(permit_number, repo.get_flocks(), accounts, facilities, current_id=retry_id))
             if errors:
                 for error in errors: st.error(error)
             else:
