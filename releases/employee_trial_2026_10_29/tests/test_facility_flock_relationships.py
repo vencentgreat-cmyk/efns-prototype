@@ -106,12 +106,11 @@ def test_flock_form_allows_occupied_facility_with_editable_date_defaults(tmp_pat
         account_id=app.session_state.repo.get_accounts().iloc[0].ACCOUNT_ID).iloc[0].FACILITY_ID
     before = app.session_state.repo.get_flocks().copy(deep=True)
     assert not app.session_state.repo.get_flocks(facility_id=facility_id).empty
-    app.text_input(key="flock_form_number").set_value("SYN-FORM-SHARED")
     app.text_input(key="flock_form_permit").set_value("SYN-PERMIT-SHARED")
     next(button for button in app.button if button.label == "Save").click().run()
     assert not app.exception
     assert not app.error
-    saved = app.session_state.repo.get_flocks().query("FLOCK_NUMBER == 'SYN-FORM-SHARED'").iloc[0]
+    saved = app.session_state.repo.get_flocks().query("FLOCK_NUMBER == 'SYN-PERMIT-SHARED'").iloc[0]
     assert saved.FACILITY_ID == facility_id
     assert saved.PLACEMENT_DATE == placement_from_hatch(saved.HATCH_DATE)
     assert saved.EST_DISPOSAL == estimated_disposal_from_placement(saved.PLACEMENT_DATE)

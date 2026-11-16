@@ -103,7 +103,6 @@ def test_create_save_uses_defaults_without_initial_position_or_delivery(chain,tm
     repo,*_ = chain
     before_transactions = repo.get_flock_transactions().copy()
     app = entry_app(repo,tmp_path,monkeypatch,'5_Flocks')
-    app.text_input(key='flock_form_number').input('SYNTHETIC date defaults')
     app.text_input(key='flock_form_permit').input('SYNTHETIC date permit')
     app.number_input(key='flock_form_birds').set_value(10)
     app.date_input(key='flock_form_hatch').set_value(date(2026,1,1)).run()
@@ -111,7 +110,7 @@ def test_create_save_uses_defaults_without_initial_position_or_delivery(chain,tm
     assert not app.checkbox(key='flock_form_delivery').value
     app.button(key='flock_record_save').click().run()
     assert not app.exception and not app.error
-    saved = repo.get_flocks().loc[lambda frame: frame.FLOCK_NUMBER.eq('SYNTHETIC date defaults')].iloc[0]
+    saved = repo.get_flocks().loc[lambda frame: frame.FLOCK_NUMBER.eq('SYNTHETIC date permit')].iloc[0]
     assert saved.PLACEMENT_DATE == date(2026,5,14)
     assert saved.EST_DISPOSAL == date(2027,5,13)
     assert repo.get_flock_transactions().equals(before_transactions)
@@ -120,7 +119,6 @@ def test_create_save_uses_defaults_without_initial_position_or_delivery(chain,tm
 def test_create_defaults_keep_explicit_initial_position_and_delivery_selection(chain,tmp_path,monkeypatch):
     repo,*_ = chain
     app = entry_app(repo,tmp_path,monkeypatch,'5_Flocks')
-    app.text_input(key='flock_form_number').input('SYNTHETIC confirmed dates')
     app.text_input(key='flock_form_permit').input('SYNTHETIC confirmed permit')
     app.number_input(key='flock_form_birds').set_value(10)
     app.date_input(key='flock_form_hatch').set_value(date(2026,1,1)).run()
@@ -129,7 +127,7 @@ def test_create_defaults_keep_explicit_initial_position_and_delivery_selection(c
     app.text_input(key='flock_form_initial_reason').input('Synthetic confirmed placement evidence')
     app.button(key='flock_record_save').click().run()
     assert not app.exception and not app.error
-    saved = repo.get_flocks().loc[lambda frame: frame.FLOCK_NUMBER.eq('SYNTHETIC confirmed dates')].iloc[0]
+    saved = repo.get_flocks().loc[lambda frame: frame.FLOCK_NUMBER.eq('SYNTHETIC confirmed permit')].iloc[0]
     assert saved.PLACEMENT_DATE == date(2026,5,14)
     assert saved.CREATE_DELIVERY_TRANSACTION
     events = repo.get_flock_events(saved.FLOCK_ID)

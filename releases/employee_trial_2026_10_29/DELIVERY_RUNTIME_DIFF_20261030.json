@@ -75,9 +75,9 @@
     {
       "path": "app/pages/5_Flocks.py",
       "status": "MODIFIED",
-      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained. Main-list null rendering uses Streamlit native em-dash placeholder only; unchanged Arrow values and exports.",
+      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained. Main-list null rendering uses Streamlit native em-dash placeholder only; unchanged Arrow values and exports. Permit-only Flock entry and readonly edit, create-only page duplicate guard, exact role-account Hatchery/Breeder names; existing identifiers, writer/audit/permission/export logic retained.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
-      "candidate_lf_sha256": "7345d5c9396ad04bfb6543ea5b121b564c4033edd51e56ed55eb71d9b8e081e0"
+      "candidate_lf_sha256": "6d023457aaf72617271989c82dae0f8b653456fad0b16d85709d2b36d195de2a"
     },
     {
       "path": "app/pages/6_Flock_Transactions.py",
@@ -575,13 +575,13 @@
       "path": "tests/test_facility_flock_relationships.py",
       "status": "MODIFIED",
       "reason": "Align occupied-facility create-form expectation with the requested date defaults, retaining preservation checks.",
-      "candidate_lf_sha256": "a1f5c729d1e7104c41ba3cc64ca56b0b93ef4ef8aa1a4a84f0b89706ba44fb79"
+      "candidate_lf_sha256": "e71fa922b18d5a6ad0273f70a2eb20666f0d1662ad8c2bd0426e280e1fa1e6a4"
     },
     {
       "path": "tests/test_flock_date_defaults.py",
       "status": "NEW",
       "reason": "Synthetic calendar, override, clear, edit preservation and real form save/rerun regressions.",
-      "candidate_lf_sha256": "fc42d58b327fd665d17c68bd00ea44bd8ea63873299deab3d062bef1f74ff0f1"
+      "candidate_lf_sha256": "2d07fca169c131a12c52258689c98ece7c40f33b87c38720907fc9301723d2ab"
     },
     {
       "path": "docs/codex_reports/FLOCK_DATE_DEFAULTS_20261111.md",
@@ -731,7 +731,7 @@
       "path": "tests/test_flocks_accounts_legacy_labels.py",
       "status": "NEW",
       "reason": "Synthetic both-entrypoint labels/order, confirmed linked Location, filters, selection/edit/save, related headers and original exports.",
-      "candidate_lf_sha256": "ed9b0cf39976552a738f7c6ded9c83a0b8e62903fa934d6eddd4577797cb00f5"
+      "candidate_lf_sha256": "da5440acf36a670509fdbb8ec6645fcbdce841fbca584b87119871b479aec3e6"
     },
     {
       "path": "docs/codex_reports/FLOCKS_ACCOUNTS_LEGACY_LABELS_20261113.md",
@@ -766,6 +766,38 @@
       "status": "NEW",
       "reason": "Presentation-only scope, validation results and shipped-byte proof.",
       "candidate_lf_sha256": "1981c31a208252b0fa7114ef6b1d0362d3aae40c3ad08451ebcc3d942e1fa4ce"
+    }
+  ],
+  "flock_form_legacy_artifacts": [
+    {
+      "path": "app/services/flock_form_fields.py",
+      "status": "NEW",
+      "reason": "Pure role-account name choices, create-only permit duplicate messages and matching creation retry target identification; no repository writes.",
+      "candidate_lf_sha256": "4b5472dbfa884e6990e871dd00efc018d35b1c49519cf5c8f23919749648e839"
+    },
+    {
+      "path": "tests/test_flock_form_legacy.py",
+      "status": "NEW",
+      "reason": "Both-entrypoint permit-only create/readonly edit, duplicate protection without legacy edit blocking, role-name preservation and creation retry regressions.",
+      "candidate_lf_sha256": "4f11ddfe9216cb421fea49f8113b2dc9fbee507e92c886b88e14b97476869efb"
+    },
+    {
+      "path": "tests/test_staff_workflow_ui.py",
+      "status": "MODIFIED",
+      "reason": "Preserve existing edit/workflow regression via a Comments correction now that Flock Number is no longer editable.",
+      "candidate_lf_sha256": "3cb89f96ecd16fbfd636097458da6cfac26bbcb4a214c7506c3507ddbda1970d"
+    },
+    {
+      "path": "docs/codex_reports/FLOCK_FORM_LEGACY_AUDIT_20261116.md",
+      "status": "NEW",
+      "reason": "Pre-change FLOCK_NUMBER audit, complete tracked source inventory and confirmed user decisions.",
+      "candidate_lf_sha256": "0beafb5ec3d199c31770778eec876c52a40e59677a5a144e0a9534866b798a31"
+    },
+    {
+      "path": "docs/codex_reports/FLOCK_FORM_LEGACY_20261116.md",
+      "status": "NEW",
+      "reason": "Permit-only form behavior, explicit limits, preservation of existing identifiers, validation and shipped-byte proof.",
+      "candidate_lf_sha256": "ee1c2b3cbff66312eae245a717e6d6a32eece13528c126ba0708d25c30a2310f"
     }
   ]
 }
