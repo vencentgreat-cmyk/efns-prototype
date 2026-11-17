@@ -16,3 +16,7 @@ backgroundColor = "#F1F5F9"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#172033"
 borderColor = "#C7D0DF"
+
+[snowflake]
+[snowflake.sleep]
+streamlitSleepTimeoutMinutes = 10

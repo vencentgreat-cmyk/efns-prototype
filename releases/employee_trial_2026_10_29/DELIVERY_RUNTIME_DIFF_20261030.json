@@ -799,5 +799,25 @@
       "reason": "Permit-only form behavior, explicit limits, preservation of existing identifiers, validation and shipped-byte proof.",
       "candidate_lf_sha256": "ee1c2b3cbff66312eae245a717e6d6a32eece13528c126ba0708d25c30a2310f"
     }
+  ],
+  "sleep_timer_artifacts": [
+    {
+      "path": "tests/test_sleep_timer_config.py",
+      "status": "NEW",
+      "reason": "Parse shipped TOML, require exact integer 10 in the 5..240 range, and retain original config artifact destination.",
+      "candidate_lf_sha256": "5c85863da5a5cb3ffdc4f53691d3aee8b66e15d7b8e7d453c558db059fcc12f9"
+    },
+    {
+      "path": ".streamlit/config.toml",
+      "status": "MODIFIED",
+      "reason": "Append the requested Snowflake 10-minute sleep setting; preserve all existing settings and bytes.",
+      "candidate_lf_sha256": "1c03edd1669cbb70594b6115f2a16734234297cde61e2c57e060f1223b5987e6"
+    },
+    {
+      "path": "tests/test_light_theme.py",
+      "status": "MODIFIED",
+      "reason": "Retain exact theme/packaging checks while allowing only the explicitly requested Snowflake sleep section and exact value.",
+      "candidate_lf_sha256": "ff846833edc57d1df3bb3345b038c8de5b81fafd9032be05d143dd9496c2b2b0"
+    }
   ]
 }

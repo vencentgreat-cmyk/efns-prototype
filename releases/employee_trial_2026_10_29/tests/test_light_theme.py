@@ -19,9 +19,10 @@ def contrast(a, b):
     return (high+.05)/(low+.05)
 
 
-def test_native_light_config_is_theme_only_and_deployed_exactly_once():
+def test_native_light_config_and_sleep_setting_are_deployed_exactly_once():
     config = tomllib.loads((ROOT/'.streamlit/config.toml').read_text())
-    assert set(config) == {'theme'}
+    assert set(config) == {'theme', 'snowflake'}
+    assert config['snowflake'] == {'sleep': {'streamlitSleepTimeoutMinutes': 10}}
     theme = config['theme']
     assert theme['base'] == 'light'
     assert theme['primaryColor'] == '#3F56D9'
