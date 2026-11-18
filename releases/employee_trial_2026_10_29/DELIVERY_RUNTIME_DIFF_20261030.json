@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "28e9e76025548b053438c1dee1d2c5a5ae9f52e94d6691bf960abc407d26f2f0"
+      "candidate_lf_sha256": "007be5f8af432cee3c2aa97efa68f661731cdbc6c0d4302754dc870682d41013"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -246,7 +246,7 @@
       "path": "app/services/production_reports.py",
       "status": "NEW",
       "reason": "Pure Production Management family with retained source grain, exact component totals, provisional rounding/inclusion, one rounding summary and separate record diagnostics for collapsed display and an XLSX Notes sheet.",
-      "candidate_lf_sha256": "869b7a5c0841beb61338d700acadb2b303826ee87457a011660ec5485a7e51dd"
+      "candidate_lf_sha256": "6802b2f96f2a66bf2fb8140a15143e4e868fe1c1a0bcf49e41451bf62ed59902"
     },
     {
       "path": "app/services/quota_reports.py",
@@ -447,7 +447,7 @@
       "path": "tests/test_production_reports.py",
       "status": "MODIFIED",
       "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
-      "candidate_lf_sha256": "0dc6c6c40d7861308e2c419610d78ecbcd41f7f79854deece7241bafedbac275"
+      "candidate_lf_sha256": "87dca0502d7909312f4646f34faeadad3dc9fbbeee5ee153a810b595abb9720c"
     },
     {
       "path": "tests/test_quota_reports.py",
@@ -459,7 +459,7 @@
       "path": "tests/test_production_report_notes.py",
       "status": "MODIFIED",
       "reason": "Assert the new third PDF export button while retaining existing Production note/CSV/XLSX checks.",
-      "candidate_lf_sha256": "e13d9c45eb5bec4da29bc593f10ce4337f6430838a2946c81daa1528a79c2bbc"
+      "candidate_lf_sha256": "83b5ffa50fd71bce424e045e9dacd2ead4432209ee17b298c4b801ebb76cba13"
     }
   ],
   "producers_over_quota_artifacts": [

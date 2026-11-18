@@ -23,7 +23,7 @@ from data.position_evidence import number as quota_number
 from data.producer_identity import text as stored_text
 from app.services.production_reports import (build_production_report, build_nest_run_report,
     production_grader_options, week_range, MARKETING_TYPES, AMOUNTS, NEST_FIELDS,
-    PRODUCTION_CAPTION, production_rounding_summary, production_compact_caption, production_notes_frame)
+    production_rounding_summary, production_table_caption, production_table_frame, production_notes_frame)
 from app.services.flock_age_report import build_flock_age_report, build_flock_age_quotas
 from app.services.quota_state import get_inactive_quota_transaction_ids
 from app.services.report_pdf_ui import pdf_download_button, custom_parameter_lines
@@ -179,7 +179,8 @@ if section == "Report Library":
             if isinstance(result,pd.DataFrame):
                 metadata = st.session_state[prefix+'_metadata']
                 for header in metadata['headers']: st.markdown(header)
-                notes_caption.caption(production_compact_caption(metadata))
+                table_result = production_table_frame(result)
+                notes_caption.caption(production_table_caption(metadata))
                 rounding_summary = production_rounding_summary(metadata)
                 if rounding_summary:
                     st.info(rounding_summary)
@@ -190,16 +191,16 @@ if section == "Report Library":
                         st.text('\n'.join(metadata['record_notes']))
                 if result.empty: st.info('No production records match the selected parameters.')
                 else:
-                    formats = {column:lambda value:'' if quota_number(value) is None else f'{quota_number(value):,}' for column in [*AMOUNTS,*NEST_FIELDS] if column in result}
-                    st.dataframe(result.style.format(formats),hide_index=True,width='stretch')
+                    formats = {column:lambda value:'' if quota_number(value) is None else f'{quota_number(value):,}' for column in [*AMOUNTS,*NEST_FIELDS] if column in table_result}
+                    st.dataframe(table_result.style.format(formats),hide_index=True,width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
                     csv_col,xlsx_col,pdf_col=st.columns(3)
-                    csv_col.download_button('Export CSV',report_csv(user,result),prefix+'.csv','text/csv',key=prefix+'_csv')
-                    xlsx_col.download_button('Export XLSX',report_xlsx(user,result,notes=production_notes_frame(metadata)),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
+                    csv_col.download_button('Export CSV',report_csv(user,table_result),prefix+'.csv','text/csv',key=prefix+'_csv')
+                    xlsx_col.download_button('Export XLSX',report_xlsx(user,table_result,notes=production_notes_frame(metadata)),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
                     pdf_download_button(user,result,definition.name,metadata['headers'],prefix+'.pdf',definition.report_id,
                         notes=production_notes_frame(metadata),key=prefix+'_pdf',target=pdf_col)
             else:
-                notes_caption.caption(PRODUCTION_CAPTION)
+                notes_caption.caption(production_table_caption())
         elif definition.handler in {'quota_transactions', 'quota_leases', 'quota_leases_by_end_date', 'quota_history'}:
             prefix = definition.handler
             source_accounts, source_registrations = repo.get_accounts(), repo.get_quota_registrations()

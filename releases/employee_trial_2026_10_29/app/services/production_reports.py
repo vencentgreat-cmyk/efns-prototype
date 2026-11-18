@@ -21,6 +21,17 @@ PRODUCTION_CAPTION = ('In Dozens. Fractional component rounding is provisional H
     'J2 repeats J and is excluded from Levy. Totals sum displayed rows. Explicit DEV_TEST records excluded.')
 
 
+def production_table_frame(frame):
+    """Hide the SSRS jumbo alias in tables/downloads without changing calculations."""
+    return frame.drop(columns=['J2'], errors='ignore').copy()
+
+
+def production_table_caption(metadata=None):
+    """Staff-facing caption; retain the original wording for existing PDFs."""
+    return production_compact_caption(metadata or {}).replace(
+        'J2 repeats J and is excluded from Levy. ', '')
+
+
 def production_rounding_summary(metadata):
     differences = metadata.get('rounding_differences', [])
     if not differences:

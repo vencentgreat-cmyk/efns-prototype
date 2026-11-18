@@ -7,10 +7,13 @@ import pandas as pd
 import pytest
 
 from app.services.production_reports import (build_production_report,build_nest_run_report,
-    prepare_production,production_grader_options,production_week,validate_week,COMPONENTS,AMOUNTS,NEST_FIELDS)
+    prepare_production,production_grader_options,production_week,validate_week,COMPONENTS,AMOUNTS,NEST_FIELDS,
+    production_table_frame,production_table_caption)
 from app.services.report_center import report_csv,report_xlsx,report_definition
-from tests.production_report_fixtures import mock_fixture,read_fixture,amount,MEASURES,expected_signature
+from tests.production_report_fixtures import mock_fixture,read_fixture,amount,MEASURES as LEGACY_MEASURES,expected_signature
 from tests.test_report_center import user
+
+MEASURES = ['J' if key == 'J2' else key for key in LEGACY_MEASURES]
 
 
 @pytest.mark.parametrize('layout,count',[('summary',79),('producer',79),('details',25),('grader',129)])
@@ -18,15 +21,17 @@ def test_every_fixture_detail_number_and_displayed_totals(layout,count):
     records,accounts,expected=mock_fixture(layout)
     start,end=(202601,202610) if layout=='grader' else (202601,202602)
     grader=next(iter(production_grader_options(records,accounts,start,end))) if layout=='grader' else None
-    frame,meta=build_production_report(records,accounts,start,end,layout=layout,grader_key=grader)
+    raw_frame,meta=build_production_report(records,accounts,start,end,layout=layout,grader_key=grader)
+    assert raw_frame.J.tolist()==raw_frame.J2.tolist()  # Internal alias is retained.
+    frame=production_table_frame(raw_frame)
+    assert 'J' in frame and 'J2' not in frame
     details=frame.loc[frame['Row Type'].eq('Data')]
     actual=[(row['Reg No'],row['Week'],row['Marketing Type'],*[row[key] for key in MEASURES]) for row in details.to_dict('records')]
     assert len(details)==count
     assert Counter(actual)==Counter(expected_signature(row,layout) for row in expected)
     assert not meta['notes']
-    assert details.J.tolist()==details.J2.tolist()
     grand=frame.iloc[-1]
-    for key in AMOUNTS:
+    for key in (key for key in AMOUNTS if key != 'J2'):
         assert grand[key]==details[key].sum()
     for row in expected:
         # Verify every SSRS repeated subtotal number where its scope can be
@@ -183,3 +188,40 @@ def test_catalog_page_and_formula_safe_exports(layout,tmp_path,monkeypatch):
     if layout!='nest_run':
         for exported in [pd.read_csv(BytesIO(report_csv(user(),frame))),pd.read_excel(BytesIO(report_xlsx(user(),frame)))]:
             assert "'=1+1" in exported['Account Name'].tolist()
+
+
+@pytest.mark.parametrize('layout', ['summary', 'producer', 'details', 'grader'])
+def test_jumbo_projection_downloads_preserve_every_value_and_total(layout):
+    records, accounts, _ = mock_fixture(layout)
+    end = 202610 if layout == 'grader' else 202602
+    grader = next(iter(production_grader_options(records, accounts, 202601, end))) if layout == 'grader' else None
+    raw, metadata = build_production_report(records, accounts, 202601, end, layout=layout, grader_key=grader)
+    before = raw.copy(deep=True)
+    shown = production_table_frame(raw)
+    pd.testing.assert_frame_equal(raw, before)
+    pd.testing.assert_frame_equal(shown, before.drop(columns='J2'), check_exact=True)
+    assert list(shown).count('J') == 1 and 'J2' not in shown
+    # Compare CSV bytes of all total rows, including producer/week/grand totals.
+    totals = raw['Row Type'].str.contains('Total')
+    assert totals.any()
+    assert report_csv(user(), shown.loc[totals]) == report_csv(user(), before.loc[totals].drop(columns='J2'))
+    for export, read in [
+        (report_csv, lambda data: pd.read_csv(BytesIO(data), dtype=str, keep_default_na=False)),
+        (report_xlsx, lambda data: pd.read_excel(BytesIO(data), dtype=str, keep_default_na=False)),
+    ]:
+        old = read(export(user(), before))
+        new = read(export(user(), shown))
+        assert 'J' in new and 'J2' not in new
+        pd.testing.assert_frame_equal(new, old.drop(columns='J2'), check_exact=True)
+    assert 'J2' not in production_table_caption(metadata)
+
+
+def test_jumbo_projection_empty_and_nest_run_are_safe_and_unchanged():
+    records, accounts, _ = mock_fixture('producer')
+    raw, _ = build_production_report(records, accounts, 202601, 202602, marketing_types=[])
+    shown = production_table_frame(raw)
+    assert shown.empty and 'J' in shown and 'J2' not in shown
+    nest, metadata = build_nest_run_report(records, accounts, 2026, 202601, 202602)
+    assert not {'J', 'J2'} & set(nest)
+    pd.testing.assert_frame_equal(production_table_frame(nest), nest, check_exact=True)
+    assert 'J2' not in production_table_caption(metadata)
