@@ -819,5 +819,13 @@
       "reason": "Retain exact theme/packaging checks while allowing only the explicitly requested Snowflake sleep section and exact value.",
       "candidate_lf_sha256": "ff846833edc57d1df3bb3345b038c8de5b81fafd9032be05d143dd9496c2b2b0"
     }
+  ],
+  "production_j2_review_artifacts": [
+    {
+      "path": "docs/codex_reports/PRODUCTION_J2_INVESTIGATION_20261118.md",
+      "status": "NEW",
+      "reason": "Investigation only: preserve existing output because the legacy Summary export contains both J and J2.",
+      "candidate_lf_sha256": "c6748464dbfd0218ed5528661f8f2ec6fc81386090a8dc4e32d9892d1a0ef9ea"
+    }
   ]
 }
