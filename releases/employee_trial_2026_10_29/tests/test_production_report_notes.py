@@ -162,8 +162,44 @@ def test_page_notes_are_one_summary_with_collapsed_details_and_notes_export(layo
     xlsx_frame=pd.read_excel(BytesIO(exports[-1]),sheet_name='EFNS Report',keep_default_na=False)
     assert list(displayed)==list(csv_frame)==list(xlsx_frame)
     assert 'J2' not in csv_frame and 'J2' not in xlsx_frame
-    # Every PDF keeps its original calculation frame and metadata, including J2.
-    assert pdf_frames
-    pd.testing.assert_frame_equal(pdf_frames[-1],raw,check_exact=True)
+    # PDF/table/download projections agree; internal calculation alias is retained.
+    assert pdf_frames and 'J2' not in pdf_frames[-1]
+    pd.testing.assert_frame_equal(pdf_frames[-1],raw.drop(columns=['J2'],errors='ignore'),check_exact=True)
+    notes=pd.read_excel(BytesIO(exports[-1]),sheet_name='Notes',keep_default_na=False)
+    assert not notes.Note.str.contains('J2',regex=False).any()
+    assert len(notes.loc[notes.Section.eq('Rounding differences')])==80
     if layout != 'nest_run':
         assert 'J2' in raw and 'J' in raw
+
+
+@pytest.mark.parametrize('layout',['summary','producer','details','grader','nest_run'])
+def test_all_production_pdfs_have_one_rounding_summary_and_no_internal_diagnostics(layout):
+    from pypdf import PdfReader
+    from app.services.report_pdf import render_report_pdf
+    from app.services.production_reports import production_table_frame
+    records,accounts=noisy_source(nest=layout=='nest_run')
+    # This produces a source-note ID too; neither ID category belongs in the PDF.
+    records.loc[0,'JUMBO']=None
+    records.loc[0,'PRODUCTION_ID']='internal-source-note-id'
+    frame,metadata=build(layout,records,accounts)
+    before=frame.copy(deep=True)
+    notes=production_notes_frame(metadata)
+    original_notes=notes.copy(deep=True)
+    report_id='production-nest-run' if layout=='nest_run' else 'production-management-'+layout
+    pdf=render_report_pdf('Production audit',metadata['headers'],frame,notes,report_id=report_id)
+    text=' '.join(' '.join(page.extract_text().split()) for page in PdfReader(BytesIO(pdf)).pages)
+    summary=production_rounding_summary(metadata)
+    assert summary==('79 source rows have a stored TOTAL that differs from the displayed component sum '
+                     'by rounding (largest difference 2 dozens).')
+    assert text.count(summary)==1
+    assert 'Rounding differences:' not in text and 'Source notes:' not in text
+    assert 'J2' not in text
+    assert not any(identity in text for identity in records.PRODUCTION_ID)
+    pd.testing.assert_frame_equal(frame,before,check_exact=True)
+    pd.testing.assert_frame_equal(notes,original_notes,check_exact=True)
+    # Detailed diagnostics remain available to both the screen expander and XLSX.
+    assert metadata['record_notes'] and metadata['rounding_differences']
+    assert notes.loc[notes.Section.eq('Source notes'),'Note'].str.contains('internal-source-note-id',regex=False).any()
+    workbook=report_xlsx(user(),production_table_frame(frame),notes=notes)
+    exported=pd.read_excel(BytesIO(workbook),sheet_name='Notes',keep_default_na=False)
+    pd.testing.assert_frame_equal(exported,notes,check_exact=True)

@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "007be5f8af432cee3c2aa97efa68f661731cdbc6c0d4302754dc870682d41013"
+      "candidate_lf_sha256": "0ab890331a7db3d9bcde3a9c1ffc9644c38550c1911cc2d03fdbe89f7bbc7adb"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -246,7 +246,7 @@
       "path": "app/services/production_reports.py",
       "status": "NEW",
       "reason": "Pure Production Management family with retained source grain, exact component totals, provisional rounding/inclusion, one rounding summary and separate record diagnostics for collapsed display and an XLSX Notes sheet.",
-      "candidate_lf_sha256": "6802b2f96f2a66bf2fb8140a15143e4e868fe1c1a0bcf49e41451bf62ed59902"
+      "candidate_lf_sha256": "7eea87c8d9622b31166b229a09c5e5fb54de5ed7b8b2b6d82dc507184bb2b75b"
     },
     {
       "path": "app/services/quota_reports.py",
@@ -324,7 +324,7 @@
       "path": "app/services/report_pdf.py",
       "status": "NEW",
       "reason": "Shared presentation-only SSRS-style PDF renderer using exact CSV cell text, bounded row count, fitting, pagination and Halifax footer.",
-      "candidate_lf_sha256": "d2b4746d545c0adba5fcc97be3cd3eb385d9056238c26c60f743da6e4c85077f"
+      "candidate_lf_sha256": "47247031b8704f13c441f0566911c211ec849fdd323ba4c4361a8636262f3d24"
     },
     {
       "path": "app/services/report_pdf_ui.py",
@@ -405,7 +405,7 @@
       "path": "tests/test_report_pdf.py",
       "status": "NEW",
       "reason": "PDF export regression coverage, catalog capability assertion or coverage/limitations documentation.",
-      "candidate_lf_sha256": "ab494188056039297a13afc427678b930f6808bb309fd72c4fb53d5c2a337f06"
+      "candidate_lf_sha256": "26ad054d1428f7b4f091c5ac43d37fe16197496f3387fb3c2ebf1b23c576f1a6"
     },
     {
       "path": "docs/codex_reports/REPORT_PDF_EXPORT_20261109.md",
@@ -459,7 +459,7 @@
       "path": "tests/test_production_report_notes.py",
       "status": "MODIFIED",
       "reason": "Assert the new third PDF export button while retaining existing Production note/CSV/XLSX checks.",
-      "candidate_lf_sha256": "83b5ffa50fd71bce424e045e9dacd2ead4432209ee17b298c4b801ebb76cba13"
+      "candidate_lf_sha256": "3083230af561d61f4a498a60413ebe8e4666dd29007b24aafba1461775e7e179"
     }
   ],
   "producers_over_quota_artifacts": [
@@ -635,13 +635,13 @@
       "path": "app/services/production_pdf.py",
       "status": "NEW",
       "reason": "PDF-only legacy Production column projection, week headings, atomic word/number sizing on Letter, and compact rounding notes; refuse overflow instead of Legal fallback.",
-      "candidate_lf_sha256": "85d44bb231fb0916700051b1349f203c8fa8e6f805d65cf72071a6ead40fad34"
+      "candidate_lf_sha256": "a2fc0df97fffca62d5b974cbfe5ffc89048a168ae26e95066e46d2e24be6a916"
     },
     {
       "path": "tests/test_production_mgmt_pdf.py",
       "status": "NEW",
       "reason": "Synthetic layout, exact totals/exports, repository paths, pagination, Letter overflow refusal, compact PDF notes, empty-data, permission and audit coverage.",
-      "candidate_lf_sha256": "2e3c2fcc3778e78565929dc3273d1d2076aba3400fffc82d15eda5f8832f6bf2"
+      "candidate_lf_sha256": "4f88199578502cf3e9b237d10a4a977406d73bb8e7819fe9a51e16d5ea13dd39"
     },
     {
       "path": "docs/codex_reports/PRODUCTION_MGMT_PDF_20261112.md",
@@ -826,6 +826,14 @@
       "status": "NEW",
       "reason": "Investigation only: preserve existing output because the legacy Summary export contains both J and J2.",
       "candidate_lf_sha256": "c6748464dbfd0218ed5528661f8f2ec6fc81386090a8dc4e32d9892d1a0ef9ea"
+    }
+  ],
+  "pdf_empty_state_artifacts": [
+    {
+      "path": "tests/test_report_empty_states.py",
+      "status": "NEW",
+      "reason": "Synthetic source-week/inclusion counts and Flock Age empty messages through both app entrypoints.",
+      "candidate_lf_sha256": "96d1614b7cbd112c4112f8c3a95993fd8c117f51f07698375715395e4a538ee2"
     }
   ]
 }

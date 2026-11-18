@@ -18,7 +18,7 @@ NEST_FIELDS = {'NR':'NEST_RUN', **{f'NR{n}':f'NEST_RUN_{n}_PLUS' for n in range(
                'FG':'FARM_GATE_SALES','FC':'ON_FARM_CONSUMPTION'}
 DISPLAY = ['Row Type','Week','Reg No','Account Name','Marketing Type','Specialty','Housing System','Colour','Grading Station']
 PRODUCTION_CAPTION = ('In Dozens. Fractional component rounding is provisional HALF_UP per stored row. '
-    'J2 repeats J and is excluded from Levy. Totals sum displayed rows. Explicit DEV_TEST records excluded.')
+    'Totals sum displayed rows. Explicit DEV_TEST records excluded.')
 
 
 def production_table_frame(frame):
@@ -27,9 +27,8 @@ def production_table_frame(frame):
 
 
 def production_table_caption(metadata=None):
-    """Staff-facing caption; retain the original wording for existing PDFs."""
-    return production_compact_caption(metadata or {}).replace(
-        'J2 repeats J and is excluded from Levy. ', '')
+    """Shared staff-facing wording for tables, PDFs and spreadsheet notes."""
+    return production_compact_caption(metadata or {})
 
 
 def production_rounding_summary(metadata):
@@ -249,6 +248,7 @@ def build_nest_run_report(records,accounts,year,start_week,end_week):
     if start//100 != int(year) or end//100 != int(year):
         raise ValueError('Start and End Week must belong to the selected Year.')
     rows,meta = prepare_production(records,accounts,start,end)
+    meta['source_week_count'] = len({row['Week'] for row in rows})
     # PROVISIONAL inclusion: observed nest-run/farm activity OR a non-RE/non-UN
     # marketing type, retaining zero-valued Leghorn Breeder rows in the screenshot.
     rows = [row for row in rows if row['Marketing Type'] not in {'RE','UN',''} or
@@ -259,6 +259,7 @@ def build_nest_run_report(records,accounts,year,start_week,end_week):
     for row in rows: groups.setdefault((row['Marketing Type'],row['Week'],row['_producer']),[]).append(row)
     details = [dict(_total(group,'Data',keys=NEST_FIELDS),**{'Marketing Type':kind,'Week':week,
         'Reg No':group[0]['Reg No'],'Account Name':group[0]['Account Name']}) for (kind,week,_),group in groups.items()]
+    meta['included_row_count'] = len(details)
     output=[]
     for kind,week in sorted({(row['Marketing Type'],row['Week']) for row in details}):
         scoped = sorted([row for row in details if row['Marketing Type']==kind and row['Week']==week],key=lambda row:_order(row['Reg No']))
