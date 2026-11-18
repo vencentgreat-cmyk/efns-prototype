@@ -114,6 +114,20 @@ def test_page_notes_are_one_summary_with_collapsed_details_and_notes_export(layo
     report_id='production-nest-run' if layout=='nest_run' else 'production-management-'+layout
     app.session_state['report_center_open_report']=report_id
     exports=[]
+    csv_exports=[]
+    pdf_frames=[]
+    import app.services.report_pdf_ui as pdf_ui
+    original_pdf=pdf_ui.pdf_download_button
+    def captured_pdf(user,frame,*args,**kwargs):
+        pdf_frames.append(frame.copy(deep=True))
+        return original_pdf(user,frame,*args,**kwargs)
+    monkeypatch.setattr(pdf_ui,'pdf_download_button',captured_pdf)
+    original_csv=reports.report_csv
+    def captured_csv(*args,**kwargs):
+        content=original_csv(*args,**kwargs)
+        csv_exports.append(content)
+        return content
+    monkeypatch.setattr(reports,'report_csv',captured_csv)
     original=reports.report_xlsx
     def captured(*args,**kwargs):
         content=original(*args,**kwargs)
@@ -132,10 +146,24 @@ def test_page_notes_are_one_summary_with_collapsed_details_and_notes_export(layo
     summaries=[item.value for item in app.info if 'stored TOTAL' in item.value]
     assert len(summaries)==1 and summaries[0].startswith('80 source rows')
     assert '\n' not in summaries[0]
-    assert sum('J2 repeats J' in item.value for item in app.caption)==1
+    assert all('J2 repeats J' not in item.value for item in app.caption)
     for item in [*app.caption,*app.info,*app.markdown]:
         assert not any(identity in item.value for identity in records.PRODUCTION_ID)
     expander=next(item for item in app.expander if item.label=='Rounding differences')
     assert not expander.proto.expanded
     assert len(app.get('download_button'))==3
     assert exports and pd.ExcelFile(BytesIO(exports[-1])).sheet_names[-1]=='Notes'
+
+    raw=app.session_state[prefix+'_result']
+    displayed=app.dataframe[-1].value
+    assert 'J2' not in displayed
+    assert ('J' in displayed) == (layout != 'nest_run')
+    csv_frame=pd.read_csv(BytesIO(csv_exports[-1]),keep_default_na=False)
+    xlsx_frame=pd.read_excel(BytesIO(exports[-1]),sheet_name='EFNS Report',keep_default_na=False)
+    assert list(displayed)==list(csv_frame)==list(xlsx_frame)
+    assert 'J2' not in csv_frame and 'J2' not in xlsx_frame
+    # Every PDF keeps its original calculation frame and metadata, including J2.
+    assert pdf_frames
+    pd.testing.assert_frame_equal(pdf_frames[-1],raw,check_exact=True)
+    if layout != 'nest_run':
+        assert 'J2' in raw and 'J' in raw
