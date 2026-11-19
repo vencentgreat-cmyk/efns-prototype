@@ -861,5 +861,13 @@
       "reason": "Existing format inventory, confirmed behavior, assumptions and validation.",
       "candidate_lf_sha256": "c7a436e6f7554491a8cff116147d540e8673703c5027c9fd95588112858e0da6"
     }
+  ],
+  "flock_summary_calendar_review_artifacts": [
+    {
+      "path": "docs/codex_reports/FLOCK_SUMMARY_QUOTA_LEASE_20261119.md",
+      "status": "NEW",
+      "reason": "Part D calendar gate and current quota calculation/persistence map; no invented week dates.",
+      "candidate_lf_sha256": "36bc7e9c257082a4a4cfc67b81523e8b2d76cd68709b149f15d4926156b867d5"
+    }
   ]
 }
