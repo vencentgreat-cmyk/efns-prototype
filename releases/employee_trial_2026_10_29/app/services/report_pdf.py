@@ -11,7 +11,8 @@ import pandas as pd
 
 from app.services.printable_form_text import FORM_BLUE
 from app.services.production_pdf import (uses_production_layout, production_pdf_rows,
-    production_table_layout, production_pdf_notes, PRODUCTION_CAPTION)
+    production_table_layout, production_pdf_notes, PRODUCTION_CAPTION, PRODUCTION_REPORT_IDS)
+from app.services.production_reports import production_table_frame
 
 MAX_PDF_ROWS = 5000
 MIN_FONT_SIZE = 7
@@ -211,6 +212,9 @@ def table_layout(rows, available_width, *, keep_identifiers=False):
 def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=None, report_id=None):
     """Render the export frame with PDF-only quantity grouping. No repository access."""
     ensure_pdf_row_limit(len(frame))
+    production_report = report_id in PRODUCTION_REPORT_IDS
+    if production_report:
+        frame = production_table_frame(frame)
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_RIGHT
     from reportlab.lib.pagesizes import letter, landscape
@@ -336,7 +340,7 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
     if frame.empty:
         story.extend([Spacer(1,10),paragraph('No records found',parameter_style)])
     footnotes=note_lines(frame,notes)
-    if production:
+    if production_report:
         footnotes=production_pdf_notes(footnotes)
     if footnotes:
         story.extend([Spacer(1,12),paragraph('Notes',title_style),Spacer(1,5)])

@@ -81,7 +81,7 @@ def test_pdf_projection_preserves_every_total_and_export(layout):
     for value in ('Production Week: 202601 to 202653','Type: Regulated','In Dozens',
                   'provisional HALF_UP','Grand Total','0001'):
         assert value in text
-    assert 'J2' not in rows[0]  # It remains disclosed in the provisional wording.
+    assert 'J2' not in rows[0] and 'J2' not in text
     # Verify actual PDF text for every total value, without suppressing unknowns.
     for index in totals:
         for value in rows[index][5:]:
@@ -231,5 +231,5 @@ def test_pdf_notes_redact_source_ids_and_preserve_non_production_diagnostics():
     from app.services.report_pdf import note_lines
     diagnostic='Rounding differences: 00000000-0000-0000-0000-000000000064: stored TOTAL 1 versus displayed 2'
     notes=[diagnostic,'Source notes: 00000000-0000-0000-0000-000000000064: missing quantity']
-    assert production_pdf_notes(notes)==['Source notes: source record: missing quantity']
+    assert production_pdf_notes(notes)==[]  # Per-record diagnostics stay outside PDFs.
     assert note_lines(pd.DataFrame(),notes)==notes

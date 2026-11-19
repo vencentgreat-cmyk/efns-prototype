@@ -189,7 +189,14 @@ if section == "Report Library":
                 if metadata.get('record_notes'):
                     with st.expander('Source notes', expanded=False):
                         st.text('\n'.join(metadata['record_notes']))
-                if result.empty: st.info('No production records match the selected parameters.')
+                if prefix == 'production_nest_run':
+                    st.caption(f"Source weeks found: {metadata['source_week_count']:,}; Included rows: {metadata['included_row_count']:,} (excluding totals).")
+                if result.empty:
+                    if prefix == 'production_nest_run':
+                        st.info('No production weeks were found for the requested year and week range.' if metadata['source_week_count'] == 0
+                            else 'Production weeks were found, but no rows pass the current provisional Nest Run inclusion rule.')
+                    else:
+                        st.info('No production records match the selected parameters.')
                 else:
                     formats = {column:lambda value:'' if quota_number(value) is None else f'{quota_number(value):,}' for column in [*AMOUNTS,*NEST_FIELDS] if column in table_result}
                     st.dataframe(table_result.style.format(formats),hide_index=True,width='stretch')
@@ -197,7 +204,7 @@ if section == "Report Library":
                     csv_col,xlsx_col,pdf_col=st.columns(3)
                     csv_col.download_button('Export CSV',report_csv(user,table_result),prefix+'.csv','text/csv',key=prefix+'_csv')
                     xlsx_col.download_button('Export XLSX',report_xlsx(user,table_result,notes=production_notes_frame(metadata)),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
-                    pdf_download_button(user,result,definition.name,metadata['headers'],prefix+'.pdf',definition.report_id,
+                    pdf_download_button(user,table_result,definition.name,metadata['headers'],prefix+'.pdf',definition.report_id,
                         notes=production_notes_frame(metadata),key=prefix+'_pdf',target=pdf_col)
             else:
                 notes_caption.caption(production_table_caption())
@@ -483,7 +490,10 @@ if section == "Report Library":
                 st.caption(summary['Notes'])
                 for reason in st.session_state.get('flock_age_quota_reasons', []):
                     st.caption(reason)
-                st.dataframe(result, hide_index=True, width='stretch')
+                if result.empty:
+                    st.info('No flocks are included for the selected Flock Age report parameters. Review the filters and any evidence notes above.')
+                else:
+                    st.dataframe(result, hide_index=True, width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
                     csv_col,xlsx_col,pdf_col=st.columns(3)
                     csv_col.download_button('Export CSV', report_csv(user, result), 'flock_age_report.csv', 'text/csv', key='flock_age_csv')

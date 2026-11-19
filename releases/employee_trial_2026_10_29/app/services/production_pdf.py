@@ -4,6 +4,8 @@ import re
 from app.services.production_reports import AMOUNTS, PRODUCTION_CAPTION
 
 PRODUCTION_PDF_REPORTS = frozenset({'production-management-summary', 'production-management-details'})
+PRODUCTION_REPORT_IDS = PRODUCTION_PDF_REPORTS | frozenset({
+    'production-management-producer', 'production-management-grader', 'production-nest-run'})
 PDF_COLUMNS = ('Reg No', 'Marketing Type', 'Specialty', 'Housing System', 'Colour',
                *(column for column in AMOUNTS if column != 'J2'))
 PDF_LABELS = {'Reg No': 'REG#', 'Marketing Type': 'Type', 'Specialty': 'Specialty Type',
@@ -15,7 +17,7 @@ def production_pdf_notes(lines):
     """Keep the existing summary, without the XLSX's per-record appendix or IDs."""
     result = []
     for line in lines:
-        if line.startswith('Rounding differences:'):
+        if line.startswith(('Rounding differences:', 'Source notes:')):
             continue
         line = line.removeprefix('Rounding summary: ')
         line = re.sub(r'\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b',
