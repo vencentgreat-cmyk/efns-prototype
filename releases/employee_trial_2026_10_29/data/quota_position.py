@@ -74,7 +74,13 @@ def quota_position(registrations, transactions, account_id, quota_type, as_of, r
     gaps conservatively rather than assigning them using labels/counterparties.
     Allocation rows are outside this model, not missing account entitlement.
     """
-    reasons = []
+    from data.quota_leases import is_lease, lease_effects
+    lease_delta, _incoming, _adjustments, lease_reasons = lease_effects(
+        registrations, transactions, account_id, quota_type, as_of,
+        {guid(row.get('QUOTA_TRANSACTION_ID')) for row in records(transactions) if inactive(row)})
+    lease_rows = [row for row in records(transactions) if is_lease(row)]
+    transactions = [row for row in records(transactions) if not is_lease(row)]
+    reasons = list(lease_reasons)
     account = guid(account_id)
     date = day(as_of)
     regs = [r for r in records(registrations) if guid(r.get('ACCOUNT_ID')) == account
@@ -210,6 +216,14 @@ def quota_position(registrations, transactions, account_id, quota_type, as_of, r
         reasons.append(f'{unknown} unknown transaction type rows')
     if inactive_count:
         reasons.append(f'{inactive_count} Inactive CORE-linked transactions excluded; business meaning unconfirmed')
+    candidate += lease_delta
+    for row in lease_rows:
+        identity = guid(row.get('QUOTA_TRANSACTION_ID'))
+        if identity not in _adjustments:
+            continue  # Only this Account/type's eligible, active lease components.
+        active_leases.append(row)
+        label = 'Leased in' if _adjustments[identity] > 0 else 'Leased out'
+        buckets.setdefault(label, []).append(abs(_adjustments[identity]))
     reasons = list(dict.fromkeys(reasons))
     return {'account_id': account_id, 'quota_type': quota_type, 'as_of': date,
             'components': {k: known_sum(v) for k, v in buckets.items()},

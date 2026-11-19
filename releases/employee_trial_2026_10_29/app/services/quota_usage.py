@@ -31,7 +31,11 @@ def account_usage_context(repo, account_id, *, rules=None, source_evidence=None,
     quotas=repo.get_quota_registrations(account_id=account_id).copy()
     facilities=repo.get_facilities(account_id=account_id)
     activity=repo.get_quota_transactions(account_id=account_id)
-    if not activity.empty: activity=activity[activity.OWNER_ACCOUNT_ID==account_id]
+    from data.quota_leases import is_lease
+    if not activity.empty:
+        activity=activity[(activity.OWNER_ACCOUNT_ID==account_id) | activity.apply(is_lease,axis=1)]
+    # Incoming leases reference the lessor registration; reuse existing reads.
+    calculation_quotas = repo.get_quota_registrations() if any(is_lease(row) for row in activity.to_dict('records')) else quotas
     reasons=[]
     draft_unavailable = False
     conflicting=set()
@@ -69,7 +73,7 @@ def account_usage_context(repo, account_id, *, rules=None, source_evidence=None,
         total=sum(known,Decimal(0)) if known else (Decimal(0) if not selected else None)
         evidence = (source_evidence or {}).get(kind, {})
         try:
-            position = quota_position(quotas, activity, account_id, kind, halifax_today(), rules, **evidence)
+            position = quota_position(calculation_quotas, activity, account_id, kind, halifax_today(), rules, **evidence)
             for required in ('net_position', 'components', 'reasons'):
                 position[required]
         except Exception as exc:

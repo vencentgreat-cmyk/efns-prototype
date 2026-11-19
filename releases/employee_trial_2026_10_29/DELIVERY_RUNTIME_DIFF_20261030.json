@@ -91,7 +91,7 @@
       "status": "MODIFIED",
       "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
-      "candidate_lf_sha256": "9de5d165cfac5d880ce74a16ffc608aaa2d681ab44d7d854592fd4ddea161dad"
+      "candidate_lf_sha256": "15f998518a53dbe06d99afb53d91c4f1a4a556f02ad9c621bd4f1388b9672063"
     },
     {
       "path": "app/pages/9_Salmonella_Tests.py",
@@ -105,7 +105,7 @@
       "status": "MODIFIED",
       "reason": "Account-wide Bird Count panel retained behind SHOW_QUOTA_USAGE_PANEL=False for the staff trial; existing contexts and calculations unchanged and can be re-enabled.",
       "baseline_lf_sha256": "452859f1faa2cfe43c1b6394ad517205ce63737c07c276f6ea11a433d5f17417",
-      "candidate_lf_sha256": "a0948b154fdf923fa065c012e800834c3d68f4b2979e150b050394fc2b49d0cd"
+      "candidate_lf_sha256": "e9d61ebb5ff6bd3c8fa5d82985f5a7a7e6a941ff39f648c0b62bcf917fc46e38"
     },
     {
       "path": "app/services/report_builder.py",
@@ -189,7 +189,7 @@
       "status": "NEW",
       "reason": "PENDING owner component/latest-Base draft plus logged built-in PENDING fallback for missing/invalid rules.",
       "baseline_lf_sha256": null,
-      "candidate_lf_sha256": "fc40cc98eee47640eeba6da0cfc6044c5fe3a31f2b11b03c1b44d4f50d50ee38"
+      "candidate_lf_sha256": "7281d09de798d14307647d993db000d33560014be90a71c3846283d6965ac717"
     },
     {
       "path": "data/quota_types.py",
@@ -203,7 +203,7 @@
       "status": "MODIFIED",
       "reason": "Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained.",
       "baseline_lf_sha256": "814cc38fb0fba545d419a49e4132d3a5e10fe7d4f5ac6707725df04831e80579",
-      "candidate_lf_sha256": "6abda45d67e9bb83394652584c37a150f41427efe8c0abf00484cc66220793e4"
+      "candidate_lf_sha256": "aa9b8eb097b6e4ccc753dc0cce8be95da18b43401882a1953fa06ae4dfdfd65a"
     },
     {
       "path": "data/repositories/base.py",
@@ -224,14 +224,14 @@
       "status": "MODIFIED",
       "reason": "Existing alias-compatible reads plus shared daily quota validation at commit, before writer, preserving rollback behavior.",
       "baseline_lf_sha256": "0c19af988ddc3596ae25e5e871740bb0b23fddcaceed72d0ec8c82c6d7532330",
-      "candidate_lf_sha256": "e7228f71085de31807b64be077106ab6a4a599b29f125c542ddbad483728e924"
+      "candidate_lf_sha256": "c5aadd1f105b7d3df414cc37969debbe5ee32050922c74df482e4500c9d2d7b7"
     },
     {
       "path": "data/repositories/snowflake.py",
       "status": "MODIFIED",
       "reason": "Existing alias-compatible reads plus shared daily quota validation and unique parent checks inside existing commit transaction; no executor/transaction implementation change.",
       "baseline_lf_sha256": "b7f42aa1c5f14fd888d8d7f3ea01f7baacf9850f9bfcb51b4ab04c184f7af5e3",
-      "candidate_lf_sha256": "1c65c1fed7cf2977a82fd9a99771cee951e05b403e93762ce2379750b3199667"
+      "candidate_lf_sha256": "c0833732f9f1224c142f31750e9495e0a102bfb9d30b63e5c0e7d34cb8dd34a9"
     },
     {
       "path": "data/validation.py",
@@ -252,7 +252,7 @@
       "path": "app/services/quota_reports.py",
       "status": "NEW",
       "reason": "Pure quota Transactions, Leases, End Date ordering and History projections; Active state evidence, explicit DEV_TEST exclusion, stored rows retained and confirmed signed contributions reused.",
-      "candidate_lf_sha256": "0aba7babc53d499499df32f7e19617e9420ff8ec3ac8fe7c0ff2cbd433d458f8"
+      "candidate_lf_sha256": "8a42840f1d883ae192f9225c86eba5f60a2648d737d7bb0604c3520d7bfa5139"
     },
     {
       "path": "app/services/flock_reports.py",
@@ -264,7 +264,7 @@
       "path": "data/confirmed_quota_position.py",
       "status": "NEW",
       "reason": "Pure confirmed owner quota calculation with Active state evidence, latest Base/Created At ordering and active lease bounds; per-type sums and per-transaction signed contributions share the exact net eligibility loop for quota reports.",
-      "candidate_lf_sha256": "1a929d786eef9d56dc8871ff10f659522b4109abe1cb31cd74c8719f45cb0566"
+      "candidate_lf_sha256": "10917b56bdf7fb1160ad5a491ca5139239b28e057359a32487338b01843f2f9d"
     },
     {
       "path": "app/services/quota_state.py",
@@ -860,6 +860,52 @@
       "status": "NEW",
       "reason": "Existing format inventory, confirmed behavior, assumptions and validation.",
       "candidate_lf_sha256": "c7a436e6f7554491a8cff116147d540e8673703c5027c9fd95588112858e0da6"
+    }
+  ],
+  "flock_summary_calendar_review_artifacts": [
+    {
+      "path": "docs/codex_reports/FLOCK_SUMMARY_QUOTA_LEASE_20261119.md",
+      "status": "NEW",
+      "reason": "Part D calendar gate and current quota calculation/persistence map; no invented week dates.",
+      "candidate_lf_sha256": "15910e2677b3fc7fe15a79c736fa40cf2961e8282ac6d48c0271b38416495d2a"
+    }
+  ],
+  "quota_lease_20261119_artifacts": [
+    {
+      "path": "app/services/quota_lease_entry.py",
+      "status": "NEW",
+      "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
+      "candidate_lf_sha256": "317815d069b283fd05fbe867a85433d359400aa8450f0bc06da968e542e383a1"
+    },
+    {
+      "path": "data/quota_leases.py",
+      "status": "NEW",
+      "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
+      "candidate_lf_sha256": "1a8235ba33d205175eb5d93e2d0f6b189bdabf0b0a901d249f3de866904c6ebf"
+    },
+    {
+      "path": "data/quota_lease_persistence.py",
+      "status": "NEW",
+      "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
+      "candidate_lf_sha256": "fb878ac0b79be151706410ceb6000c27e69e5a39a83a1d50c5ac70f42fbae48c"
+    },
+    {
+      "path": "sql/02_core_tables.sql",
+      "status": "MODIFIED",
+      "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
+      "candidate_lf_sha256": "33894c83bd79b19771d0365f9c7fa44fbf6f63f3e61a20312dc0d78f4585b1f0"
+    },
+    {
+      "path": "sql/32_quota_transaction_method_20261119.sql",
+      "status": "NEW",
+      "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
+      "candidate_lf_sha256": "d02b3c8d2448a475a118cfd8d94a85cfb5fef14d3df8e432445a0b8d4a324668"
+    },
+    {
+      "path": "tests/test_quota_leases.py",
+      "status": "NEW",
+      "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
+      "candidate_lf_sha256": "399f2f93c0308dc45564b8ed5aa0baa239e77b9c9a273ebdc23de5a238ad14c6"
     }
   ]
 }

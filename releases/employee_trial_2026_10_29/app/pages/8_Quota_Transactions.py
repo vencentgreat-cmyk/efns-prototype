@@ -21,6 +21,8 @@ from data.repositories.base import RepositoryError
 from data.validation import validate_quota_transaction, quota_related_account_required, parse_optional_quota_price
 from data.quota_position import component_table
 from app.services.entry_fields import quota_owner_errors
+from data.quota_leases import is_lease
+from data.quota_lease_persistence import IMMUTABLE_LEASE
 
 
 require_operational_page()
@@ -90,12 +92,12 @@ def related_transaction_options(current_id=None):
 
 if view.name == "list":
     page_header("Quota Transactions", "Search and maintain provisional quota activity records.", "QUOTA MANAGEMENT")
-    st.info("Transactions represent activity. Available quota balance is not calculated or inferred by this prototype.")
+    st.info("Allocations retain the existing transaction rules. Leases move quota between Accounts for the selected dates and check available quota when saved.")
     selected_index = selected_row_index("quota_tx_list_grid")
     row_ids = st.session_state.get("quota_tx_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("quota_tx_list", selected=bool(selected_id))
-    if action == "new": start_new_form('quota_tx_form_'); open_view("new")
+    if action == "new": start_new_form('quota_tx_form_'); start_new_form('quota_lease_form_'); open_view("new")
     if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": st.rerun()
     if action == "delete" and selected_id: st.session_state['quota_tx_form___delete_pending']=selected_id
@@ -126,6 +128,7 @@ if view.name == "list":
         display["QUOTA_NAME"] = display["QUOTA_ID"].map(quota_names)
         display["OWNER_NAME"] = display["OWNER_ACCOUNT_ID"].map(account_names)
         display["RELATED_NAME"] = display["RELATED_ACCOUNT_ID"].map(account_names)
+        display["TRANSACTION_TYPE"] = display.apply(lambda row: 'Leased out' if is_lease(row) else row["TRANSACTION_TYPE"],axis=1)
         if keyword:
             columns = ["QUOTA_TRANSACTION_ID", "TRANSACTION_TYPE", "QUOTA_NAME", "OWNER_NAME", "RELATED_NAME"]
             display = display[display[columns].fillna("").astype(str).apply(lambda column: column.str.contains(keyword, case=False, regex=False)).any(axis=1)]
@@ -164,6 +167,7 @@ else:
     if action == "edit": start_new_form("quota_tx_form_"); open_view("edit", view.record_id)
     if action == "delete" and view.record_id: st.session_state['quota_tx_form___delete_pending']=view.record_id
 
+    method_area = st.empty()
     if not is_form:
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
         summary, relationships = st.tabs(["Summary", "Relationships"])
@@ -175,6 +179,10 @@ else:
         with summary:
             with st.container(border=True):
                 left, middle, right = st.columns(3)
+                if is_lease(current):
+                    st.markdown('**Method: Lease**')
+                    st.markdown('**Leased out (lessor)**  \n'+str(account_names.get(owner_id) or 'Unknown'))
+                    st.markdown('**Leased in (lessee)**  \n'+str(account_names.get(related_account_id) or 'Unknown'))
                 left.markdown(f"**Transaction Type**  \n{current.get('TRANSACTION_TYPE') or '—'}")
                 left.markdown(f"**Effective Date**  \n{as_date(current.get('EFFECTIVE_DATE'), '—')}")
                 left.markdown(f"**End Date**  \n{as_date(current.get('END_DATE'), '—')}")
@@ -205,9 +213,15 @@ else:
     else:
         current = current or {}
         begin_form('quota_tx_form_',view.record_id)
+        begin_form('quota_lease_form_',view.record_id)
+        ensure_record_form_state("quota_tx_form_", view.record_id)
+        method = method_area.selectbox('Method',['Allocation','Lease'],index=1 if is_lease(current) else 0,disabled=bool(view.record_id),key='quota_tx_form_method')
+        if method == 'Lease':
+            from app.services.quota_lease_entry import render_lease_form
+            render_lease_form(repo,current,action)
+            st.stop()
         if quotas.empty:
             st.error("Create a Quota Registration before creating a Quota Transaction."); st.stop()
-        ensure_record_form_state("quota_tx_form_", view.record_id)
         expected_key = f"quota_tx_form_expected_{view.record_id}"
         if view.name == "edit": st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
         requested_quota = view_parameter("quota_id")

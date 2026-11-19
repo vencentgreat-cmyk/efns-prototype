@@ -7,6 +7,7 @@ from data.confirmed_quota_position import confirmed_quota_position, EXCLUDED
 from data.position_evidence import day, guid, known_sum, number
 from data.producer_identity import text
 from data.quota_types import quota_type_key
+from data.quota_leases import is_lease, projected_lease_rows
 
 TRANSACTION_COLUMNS = ['Reg No', 'Account Name', 'Transaction Date', 'Quota End Date',
     'Related Reg No', 'Related Account Name', 'Quota Transaction Type', 'Bird Count']
@@ -57,13 +58,15 @@ def _index(frame, field):
     return dict(zip(ids, rows))
 
 
-def _sources(accounts, registrations, transactions, inactive_ids, quota_type, *, active_registrations=True):
+def _sources(accounts, registrations, transactions, inactive_ids, quota_type, *, active_registrations=True, as_of=None, range_start=None):
     """No date restriction on registrations. Preserve each stored transaction.
 
     Explicit DEV_TEST prefixes on identities, names, numbers or Comments mark
     test data. Related test Accounts are excluded too. Missing state evidence
     cannot establish Active rows: no report rows are produced in that case.
     """
+    if as_of is not None:
+        transactions = projected_lease_rows(registrations,transactions,as_of,range_start)
     owners = _index(accounts, 'ACCOUNT_ID')
     all_owner_ids = set(owners)
     regs = _index(registrations, 'QUOTA_ID')
@@ -83,8 +86,12 @@ def _sources(accounts, registrations, transactions, inactive_ids, quota_type, *,
         registration = regs.get(guid(row.get('QUOTA_ID')))
         owner = guid(row.get('OWNER_ACCOUNT_ID'))
         related = guid(row.get('RELATED_ACCOUNT_ID'))
-        if (registration is None or owner != guid(registration.get('ACCOUNT_ID')) or owner not in owners
-                or guid(row.get('QUOTA_TRANSACTION_ID')) in inactive
+        valid_registration = registration is not None and owner == guid(registration.get('ACCOUNT_ID'))
+        if is_lease(row) and row.get('_LEASE_SIDE'):
+            valid_registration = (quota_type_key(row.get('_LEASE_QUOTA_TYPE')) == quota_type_key(quota_type)
+                and any(guid(reg.get('ACCOUNT_ID'))==owner for reg in regs.values()))
+        if (not valid_registration or owner not in owners
+                or (guid(row.get('_LEASE_SOURCE_ID')) or guid(row.get('QUOTA_TRANSACTION_ID'))) in inactive
                 or _test(row, ('QUOTA_TRANSACTION_ID','COMMENTS'))):
             continue
         if related is not None and related not in owners and related in all_owner_ids:
@@ -105,7 +112,7 @@ def _row(transaction, owners):
     return {'Reg No':_text(owner.get('REGISTRATION_NUMBER')), 'Account Name':_text(owner.get('ORGANIZATION_NAME')),
         'Transaction Date':_date(transaction.get('EFFECTIVE_DATE')), 'Quota End Date':_date(transaction.get('END_DATE')),
         'Related Reg No':_text(related.get('REGISTRATION_NUMBER')), 'Related Account Name':_text(related.get('ORGANIZATION_NAME')),
-        'Quota Transaction Type':_kind(transaction), 'Bird Count':number(transaction.get('QUOTA_COUNT')),
+        'Quota Transaction Type':('Leased in' if _kind(transaction)=='Lease (In)' else 'Leased out') if is_lease(transaction) else _kind(transaction), 'Bird Count':number(transaction.get('QUOTA_COUNT')),
         'Price':number(transaction.get('PRICE')), 'Comments':_text(transaction.get('COMMENTS'))}
 
 
@@ -123,7 +130,7 @@ def build_quota_transactions_report(accounts, registrations, transactions, inact
     start, end = _required_date(start_date), _required_date(end_date)
     if start > end:
         raise ValueError('Start Date must be on or before End Date.')
-    owners, _regs, source, notes = _sources(accounts, registrations, transactions, inactive_transaction_ids, quota_type)
+    owners, _regs, source, notes = _sources(accounts, registrations, transactions, inactive_transaction_ids, quota_type, as_of=end, range_start=start)
     rows = []
     for transaction in source:
         when, until, kind = day(transaction.get('EFFECTIVE_DATE')), day(transaction.get('END_DATE')), _kind(transaction)
@@ -141,7 +148,7 @@ def build_quota_transactions_report(accounts, registrations, transactions, inact
 def build_quota_leases_report(accounts, registrations, transactions, inactive_transaction_ids,
                               as_of_date, quota_type='Egg Production', *, by_end_date=False):
     as_of = _required_date(as_of_date)
-    owners, _regs, source, notes = _sources(accounts, registrations, transactions, inactive_transaction_ids, quota_type)
+    owners, _regs, source, notes = _sources(accounts, registrations, transactions, inactive_transaction_ids, quota_type, as_of=as_of)
     rows, missing = [], 0
     for transaction in source:
         if _kind(transaction) != 'Lease (Out)':
@@ -176,7 +183,7 @@ def build_quota_history_report(accounts, registrations, transactions, inactive_t
                                as_of_date, quota_type='Egg Production', account_id=None, *, rules):
     as_of = _required_date(as_of_date)
     owners, regs, source, notes = _sources(accounts, registrations, transactions, inactive_transaction_ids,
-                                          quota_type, active_registrations=True)
+                                          quota_type, active_registrations=True, as_of=as_of)
     groups = {}
     for transaction in source:
         owner, when = guid(transaction.get('OWNER_ACCOUNT_ID')), day(transaction.get('EFFECTIVE_DATE'))
