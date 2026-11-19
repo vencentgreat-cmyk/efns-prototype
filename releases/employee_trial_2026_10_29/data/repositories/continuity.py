@@ -329,6 +329,8 @@ class ContinuityRepository:
 
     def commit_staged_production(self, import_id, actor=None, new_observations_confirmed=False):
         from data.production_intake import prepare_workbook
+        from data.production_replacement import upload_errors, SUMMARY_KEY
+        from data.repositories.production_replacement import replace_sets
         with self._continuity_transaction() as tx:
             if self._is_memory:
                 batches = [row for row in self._import_batches if row["IMPORT_ID"] == import_id]
@@ -356,22 +358,49 @@ class ContinuityRepository:
                 payload = row["RAW_DATA"]
                 payload = json.loads(payload) if isinstance(payload, str) else dict(payload)
                 rows.append(dict(payload, SOURCE_ROW_NUMBER=row["SOURCE_ROW_NUMBER"]))
-            records, reviewed_rows, _, _ = prepare_workbook(pd.DataFrame(rows), batch["SOURCE_FILE_ID"], self.get_accounts())
+            accounts = self.get_accounts()
+            records, reviewed_rows, errors, _ = prepare_workbook(pd.DataFrame(rows), batch["SOURCE_FILE_ID"], accounts)
             from data.production_intake import review_token
             try:metadata=json.loads(batch.get('NOTES') or '{}')
             except (TypeError,ValueError):metadata={}
             if not isinstance(metadata,dict) or metadata.get('_EFNS_PREVIEW_TOKEN')!=review_token(reviewed_rows):
                 raise ConcurrencyError('Producer matching or validation changed after preview, or the staged batch has no review token. Re-review the staged source; no business records committed.')
-            if new_observations_confirmed is not True:
-                raise RepositoryError("Workbook upload is not an automatic correction. A corrected workbook needs the original Production ID: use Production corrections. Otherwise explicitly confirm these are independent new observations. RAW remains Staged; no CORE write occurred.")
-            count = self.insert_production_records(records, import_id) if self._is_memory else self._insert_production(tx, records, import_id)
-            for record in records.to_dict("records"):
-                self._append_match(tx, record, actor, "AUTO")
-            if self._is_memory:
-                batch.update(STATUS="Committed", ROW_COUNT=count)
-            else:
-                tx.execute(f"UPDATE {self._table('IMPORT_BATCH', self.schema_raw)} SET STATUS='Committed',ROW_COUNT=%s,UPDATED_AT={NOW} WHERE IMPORT_ID=%s", (count, import_id))
+            blocking = upload_errors(pd.DataFrame(rows), records, errors)
+            if blocking:
+                raise RepositoryError('Import blocked: '+ '; '.join(blocking[:10]))
+            # The legacy confirmation argument is retained for API compatibility,
+            # but producer-week replacement no longer asks for observation intent.
+            with replace_sets(self, tx, records, accounts, import_id, actor) as summary:
+                count = self.insert_production_records(records, import_id) if self._is_memory else self._insert_production(tx, records, import_id)
+                if count != len(records):
+                    raise RepositoryError('Not every uploaded row was inserted; replacement was rolled back.')
+                for record in records.to_dict("records"):
+                    self._append_match(tx, record, actor, "AUTO")
+                metadata[SUMMARY_KEY] = summary
+                notes = json.dumps(metadata, sort_keys=True, default=str)
+                if len(notes)>2000:
+                    raise RepositoryError('Import summary exceeds the batch metadata limit.')
+                if summary['rows_replaced']:
+                    from data.record_safety import history_audit
+                    self._append_history(tx,'RECORD_REVISION',dict(REVISION_ID=stable_id('production-replace',import_id),
+                        ENTITY_TYPE='IMPORT_BATCH',ENTITY_ID=import_id,CHANGE_KIND='PRODUCTION_SET_REPLACE',BUSINESS_AT=None,
+                        RECORDED_AT=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),RECORDED_BY=actor,
+                        REASON='Later upload replaces complete producer-week sets; original values retained in RAW backup',
+                        BEFORE_DATA={'backup_table':'PRODUCTION_REPLACEMENT_BACKUP','rows':summary['rows_replaced']},AFTER_DATA=summary))
+                    history_audit(self,tx,'IMPORT_BATCH',import_id,import_id,actor,'Production producer-week replacement','UPDATE',None,summary)
+                if self._is_memory:
+                    batch.update(STATUS="Committed", ROW_COUNT=count, NOTES=notes)
+                elif tx.execute(f"UPDATE {self._table('IMPORT_BATCH', self.schema_raw)} SET STATUS='Committed',ROW_COUNT=%s,NOTES=%s,UPDATED_AT={NOW} WHERE IMPORT_ID=%s AND STATUS='Staged'", (count, notes, import_id))!=1:
+                    raise ConcurrencyError('Import Batch finalization changed concurrently; replacement was rolled back.')
         return import_id, count
+
+    def get_production_replacement_backups(self, import_id):
+        from data.repositories.production_replacement import get_backups
+        return get_backups(self, import_id)
+
+    def get_production_import_summary(self, import_id):
+        from data.repositories.production_replacement import get_summary
+        return get_summary(self, import_id)
 
     def _append_match(self, tx, record, actor, handling, decision_id=None):
         decision = dict(MATCH_DECISION_ID=decision_id or str(uuid.uuid4()), PRODUCTION_ID=record["PRODUCTION_ID"],

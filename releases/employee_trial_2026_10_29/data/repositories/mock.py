@@ -59,6 +59,7 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
 
     def __init__(self, seed: int = 42):
         self._init_continuity()
+        self._continuity_rows["PRODUCTION_REPLACEMENT_BACKUP"] = []
         data = generate_all(seed=seed)
         self._accounts = data["accounts"].copy()
         self._contacts = pd.DataFrame(columns=["CONTACT_ID", "ACCOUNT_ID", "FULL_NAME", "STATUS"])

@@ -143,7 +143,7 @@ class AuthorizedRepository:
                     self._audit_warning(name,str(entity_id),exc)
                 return result
             return continuity_call
-        if name in {"get_source_file_bytes", "get_source_review_rows", "get_source_raw_rows", "get_facility_source_descriptions"}:
+        if name in {"get_production_replacement_backups", "get_production_import_summary", "get_source_file_bytes", "get_source_review_rows", "get_source_raw_rows", "get_facility_source_descriptions"}:
             return self._authorized_call(attribute, Permission.IMPORT_DATA)
         if name in UPSERT_METHODS:
             return self._authorized_upsert(name, attribute)
