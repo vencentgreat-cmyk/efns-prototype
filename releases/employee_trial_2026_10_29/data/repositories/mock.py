@@ -537,6 +537,10 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
 
     @serialized_write
     def upsert_quota_transaction(self, record: dict) -> str:
+        from data.quota_leases import is_lease
+        from data.quota_lease_persistence import save_new_lease, reject_saved_lease
+        if is_lease(record):return save_new_lease(self,record)
+        reject_saved_lease(self,record.get('QUOTA_TRANSACTION_ID'))
         errors = validate_quota_transaction(self, record)
         if errors:
             raise ValueError(" ".join(errors))
@@ -581,6 +585,8 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
 
     @guarded_delete
     def delete_quota_transaction(self, transaction_id: str) -> bool:
+        from data.quota_lease_persistence import reject_saved_lease
+        reject_saved_lease(self,transaction_id)
         if "RELATED_TRANSACTION_ID" in self._quota_transactions and bool(
             (self._quota_transactions["RELATED_TRANSACTION_ID"] == transaction_id).any()
         ):

@@ -18,7 +18,11 @@ def confirmed_quota_position(registrations, transactions, account_id, quota_type
     Without an Active Base, sum all eligible Active activity. Invalid required
     dates/quantities or an unresolved Base tie still produce unknown.
     """
-    reasons = []
+    from data.quota_leases import is_lease, lease_effects
+    lease_delta, lease_in, lease_adjustments, lease_reasons = lease_effects(
+        registrations, transactions, account_id, quota_type, as_of, inactive_transaction_ids)
+    transactions = [row for row in records(transactions) if not is_lease(row)]
+    reasons = list(lease_reasons)
     if rules.get('status') != 'CONFIRMED':
         reasons.append('Quota rules UNCONFIRMED')
     if inactive_transaction_ids is None:
@@ -95,7 +99,10 @@ def confirmed_quota_position(registrations, transactions, account_id, quota_type
             if kind in INCREASING_TYPES:
                 per_type_sums[kind] = per_type_sums.get(kind, number(0)) + value
         totals[registration] = total
-    return {'net_position': None if reasons else sum(totals.values(), number(0)),
+    transaction_adjustments.update(lease_adjustments)
+    if lease_in:
+        per_type_sums['Lease (In)'] = per_type_sums.get('Lease (In)', number(0)) + lease_in
+    return {'net_position': None if reasons else sum(totals.values(), number(0)) + lease_delta,
             'per_type_sums': None if reasons else per_type_sums,
             'transaction_adjustments': None if reasons else transaction_adjustments,
             'registration_totals': totals, 'selected_bases': selected_bases,

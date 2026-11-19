@@ -54,7 +54,7 @@ MODEL = {
     "FLOCK": ("FLOCK_ID", "FLOCK_NUMBER ACCOUNT_ID FACILITY_ID FACILITY_DETAIL_ID QUOTA_ID FLOCK_QUOTA_TYPE STATUS CREATE_DELIVERY_TRANSACTION PERMIT_NUMBER PERMIT_DATE HATCH_DATE DATE_ORDERED BIRD_COUNT EGG_COLOUR BIRD_STRAIN PLACEMENT_DATE EST_DISPOSAL DISPOSAL_DATE BIRDS_DISPOSED BREEDER HATCHERY PULLET_GROWER DISPOSAL_PLANT DISPOSAL_METHOD COMMENTS"),
     "FLOCK_TRANSACTION": ("FLOCK_TRANSACTION_ID", "FLOCK_ID TRANSACTION_TYPE QUANTITY TRANSACTION_DATE NOTES COUNT_SOURCE_LABEL"),
     "QUOTA_REGISTRATION": ("QUOTA_ID", "REGISTRATION_NUMBER ACCOUNT_ID QUOTA_NAME QUOTA_TYPE STATUS EFFECTIVE_DATE END_DATE COMMENTS"),
-    "QUOTA_TRANSACTION": ("QUOTA_TRANSACTION_ID", "TRANSACTION_TYPE QUOTA_ID EFFECTIVE_DATE END_DATE QUOTA_COUNT OWNER_ACCOUNT_ID RELATED_ACCOUNT_ID RELATED_QUOTA_ID RELATED_TRANSACTION_ID PRICE QUOTA_LEASE_TYPE COMMENTS"),
+    "QUOTA_TRANSACTION": ("QUOTA_TRANSACTION_ID", "TRANSACTION_TYPE QUOTA_ID EFFECTIVE_DATE END_DATE QUOTA_COUNT OWNER_ACCOUNT_ID RELATED_ACCOUNT_ID RELATED_QUOTA_ID RELATED_TRANSACTION_ID PRICE QUOTA_LEASE_TYPE COMMENTS TRANSACTION_METHOD"),
     "SALMONELLA_TEST": ("SALMONELLA_TEST_ID", "FLOCK_ID ACCOUNT_ID PERMIT_NUMBER TESTING_DATE INSPECTOR NUMBER_OF_SAMPLES TEST_RESULT TEST_TYPE DATE_RESULT_SENT DATE_RECEIVED CASE_FILE_NUMBER INVOICE_NUMBER INVOICE_DATE COMMENTS"),
     "SALMONELLA_TEST_SAMPLE": ("SALMONELLA_TEST_SAMPLE_ID", "SALMONELLA_TEST_ID SAMPLE_REFERENCE TEST_AREA SEROTYPE PHAGE STATUS COMMENTS"),
     "QUOTA_ALLOCATION": ("QUOTA_ALLOCATION_ID", "ALLOCATION_COUNT COMMENTS EFFECTIVE_DATE EIMS_ALLOCATION_ID PROVINCE QUOTA_TYPE STATUS"),
@@ -654,6 +654,10 @@ class SnowflakeRepository(ControlledSupplementRepository, FlockDateRepairReposit
         if conditions: sql += " WHERE " + " AND ".join(conditions)
         return self._query(sql, tuple(params) if params else None)
     def upsert_quota_transaction(self, record):
+        from data.quota_leases import is_lease
+        from data.quota_lease_persistence import save_new_lease, reject_saved_lease
+        if is_lease(record):return save_new_lease(self,record)
+        reject_saved_lease(self,record.get('QUOTA_TRANSACTION_ID'))
         record = self._normalize_date_fields("QUOTA_TRANSACTION", record)
         if record.get("EFFECTIVE_DATE") is None:
             raise RepositoryError("Effective Date is required.")
@@ -690,7 +694,10 @@ WHERE {" AND ".join(conditions)}
 ORDER BY ACCOUNT_NAME, REGISTRATION_NUMBER, QUOTA_ID
 """
         return self._query(sql, tuple(params))
-    def delete_quota_transaction(self, value): return self._delete("QUOTA_TRANSACTION", "QUOTA_TRANSACTION_ID", value, (("QUOTA_TRANSACTION", "RELATED_TRANSACTION_ID"),))
+    def delete_quota_transaction(self, value):
+        from data.quota_lease_persistence import reject_saved_lease
+        reject_saved_lease(self,value)
+        return self._delete("QUOTA_TRANSACTION", "QUOTA_TRANSACTION_ID", value, (("QUOTA_TRANSACTION", "RELATED_TRANSACTION_ID"),))
 
     def get_quota_allocations(self, quota_type=None, province=None, statuses=None):
         return self._filtered(

@@ -185,6 +185,10 @@ def revise_entity(repo,entity,record_id,changes,reason,request_id,actor,business
         if before is None:raise RepositoryError('The record no longer exists.')
         if version_bind(before['UPDATED_AT'])!=version_bind(expected_updated_at):raise ConcurrencyError('Record changed after review; reload and confirm again.')
         if entity=='FLOCK_TRANSACTION':repo._guard_applied_quantity_transaction(record_id)
+        if entity=='QUOTA_TRANSACTION':
+            from data.quota_leases import is_lease
+            from data.quota_lease_persistence import IMMUTABLE_LEASE
+            if is_lease(before) or is_lease(changes):raise RepositoryError(IMMUTABLE_LEASE)
         changes=validate_edit(repo,entity,before,changes)
         updated=dict(before,**changes,EXPECTED_UPDATED_AT=before['UPDATED_AT'])
         if repo._is_memory:repo._upsert_frame(ENTITIES[entity][0],key,updated)
