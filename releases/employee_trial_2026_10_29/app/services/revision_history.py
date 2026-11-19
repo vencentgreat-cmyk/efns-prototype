@@ -85,6 +85,10 @@ def _label_parts(*values):
 
 def record_option_label(entity_type, row, id_column, quota_numbers=None):
     """Build a compact staff-facing label while retaining the full ID as value."""
+    if entity_type == 'QUOTA_TRANSACTION':
+        from data.quota_leases import is_voided
+        if is_voided(row):
+            row = dict(row, TRANSACTION_TYPE='Voided lease')
     identity = row[id_column]
     short = _short_id(identity)
     quota_numbers = quota_numbers or {}

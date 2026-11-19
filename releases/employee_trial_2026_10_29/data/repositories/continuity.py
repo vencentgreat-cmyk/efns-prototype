@@ -282,6 +282,10 @@ class ContinuityRepository:
         from data.flock_quantity import record_current_quantity
         return record_current_quantity(self,record,request_id,expected_updated_at,reason,confirmed=confirmed,actor=actor,expected_bird_count=expected_bird_count)
 
+    def void_quota_lease(self, transaction_id, reason, request_id, expected_updated_at, actor=None):
+        from data.quota_lease_void import void_lease
+        return void_lease(self, transaction_id, reason, request_id, expected_updated_at, actor)
+
     def create_record_once(self, entity, record, request_id, actor=None):
         from data.record_safety import create_once
         return create_once(self,entity,record,request_id,actor)

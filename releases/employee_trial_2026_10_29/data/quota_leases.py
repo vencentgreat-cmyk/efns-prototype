@@ -15,7 +15,13 @@ def is_lease(row):
     return (text(row.get(METHOD_FIELD)) or '').casefold() == 'lease'
 
 
+def is_voided(row):
+    return is_lease(row) and (text(row.get('LEASE_STATUS')) or '').casefold() == 'voided'
+
+
 def lease_active(row, as_of):
+    if is_voided(row):
+        return False
     start,end,when = day(row.get('EFFECTIVE_DATE')),day(row.get('END_DATE')),day(as_of)
     if start is None or end is None or when is None:
         return False

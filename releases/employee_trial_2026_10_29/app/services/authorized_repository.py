@@ -83,6 +83,15 @@ class AuthorizedRepository:
                     kwargs['actor']={'user_id':self.actor.user_id,'email':self.actor.email}
                 return attribute(*args,**kwargs)
             return controlled_call
+        if name=='void_quota_lease':
+            @wraps(attribute)
+            def void_lease_call(*args,**kwargs):
+                self._require(Permission.UPDATE_DATA)
+                if self.actor.role!=Role.ADMIN:
+                    raise RepositoryError('Only an application Admin can void a lease.')
+                kwargs['actor']={'user_id':self.actor.user_id,'email':self.actor.email,'role':self.actor.role.value}
+                return attribute(*args,**kwargs)
+            return void_lease_call
         if name=='create_record_once':
             @wraps(attribute)
             def create_call(*args,**kwargs):
