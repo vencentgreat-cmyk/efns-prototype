@@ -46,7 +46,7 @@ def legacy_rows():
 
 def account_totals(frame):
     totals={};registration=None
-    for row in frame.to_dict('records'):
+    for row in frame.iloc[:frame.attrs.get('overall_total_row')].to_dict('records'):
         registration=row['Reg No'] or registration
         if row['Account Name']=='Total':totals[registration]=(row['Inventory'],row['% Quota'])
     return totals
@@ -93,7 +93,7 @@ def test_source_observations_reproduce_7038_7159_7402_and_shared_summary():
             expected['age'],expected['inventory'],expected['percent'],expected['placed'],expected['disposed'],expected['counted'])
     assert indexed.loc['40407','Inventory'] == 0 and indexed.loc['40407','Flock Age'] == 9
     assert indexed.loc['40407','Last Count'] == indexed.loc['40402','Last Count'] == ''
-    assert summary['Inventory Birds'] == result.loc[result['Account Name'].eq('Total'),'Inventory'].sum()
+    assert summary['Inventory Birds'] == result.iloc[:result.attrs['overall_total_row']].loc[lambda frame: frame['Account Name'].eq('Total'),'Inventory'].sum()
     for frame, original in zip((f,t,a,b),before):pd.testing.assert_frame_equal(frame,original)
 
 
@@ -117,7 +117,7 @@ def test_all_legacy_account_totals_projection_from_pdf_not_reconstructed_counts(
     monkeypatch.setattr(report,'build_flock_current_report',observed)
     frame, summary = report.build_producers_over_quota_report(flocks,tx,accounts,pd.DataFrame(),{key:QUOTAS[key] for key in expected_totals},DAY)
     actual = {}; reg = None
-    for row in frame.to_dict('records'):
+    for row in frame.iloc[:frame.attrs.get('overall_total_row')].to_dict('records'):
         reg = row['Reg No'] or reg
         if row['Account Name']=='Total':actual[reg]=(row['Inventory'],row['% Quota'])
         elif row['Permit No']:

@@ -69,6 +69,7 @@ def build_producers_over_quota_report(flocks, transactions, accounts, facilities
         if str(owner_id) in owners:
             groups.setdefault(str(owner_id), [])
     output, highlighted, listed = [], [], 0
+    listed_inventories, listed_quotas = [], []
     for owner_id in sorted(groups, key=lambda key: (_order(owners.get(key, {}).get('REGISTRATION_NUMBER')), key)):
         owner = owners.get(owner_id, {})
         registration, name = text(owner.get('REGISTRATION_NUMBER')), text(owner.get('ORGANIZATION_NAME'))
@@ -86,6 +87,8 @@ def build_producers_over_quota_report(flocks, transactions, accounts, facilities
         if inventory is None:
             notes.append(f'{account_label}: no known Inventory is available; total and % Quota are blank.')
         listed += 1
+        listed_inventories.append(inventory)
+        listed_quotas.append(quota)
         if not rows:
             heading = dict.fromkeys(COLUMNS, '')
             heading.update({'Reg No': registration, 'Account Name': name})
@@ -106,7 +109,31 @@ def build_producers_over_quota_report(flocks, transactions, accounts, facilities
         if inventory is not None and inventory > quota:
             highlighted.append(len(output))  # Unrounded comparison; never filters producers.
         output.append(total)
+    overall_index, overall = None, None
+    if listed:
+        inventory = known_total(listed_inventories)
+        quota = sum(listed_quotas)
+        overall = {'Inventory': inventory, 'Quota': quota, '% Quota': utilization(inventory, quota) if inventory is not None else ''}
+        total = dict.fromkeys(COLUMNS, '')
+        total.update({'Account Name': 'Total', 'Inventory': inventory if inventory is not None else '',
+                      '% Quota': overall['% Quota']})
+        overall_index = len(output)
+        if inventory is not None and inventory > quota:
+            highlighted.append(overall_index)
+        output.append(total)
+        differences = []
+        for label, value in [('Inventory Birds', inventory), ('NFPMC Allocation', quota)]:
+            province = summary.get(label)
+            if value is not None and province is not None and value != province:
+                differences.append(f'{label} difference {value - province:,}')
+        if overall['% Quota'] != summary.get('Provincial Utilization'):
+            differences.append('utilization differs from the province summary')
+        if differences:
+            notes.append('Overall Total uses only listed producers; '+ '; '.join(differences)+'. Province summary is unchanged.')
     result = pd.DataFrame(output, columns=COLUMNS, dtype=object)
+    result.attrs['overall_total_row'] = overall_index
+    result.attrs['overall_total'] = ({key: int(value) if isinstance(value, Decimal) else value
+                                    for key, value in overall.items()} if overall else None)
     result.attrs['notes'] = list(dict.fromkeys(notes))
     result.attrs['over_quota_total_rows'] = highlighted
     summary = {**summary, 'Producers with Quota': listed}

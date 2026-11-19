@@ -44,7 +44,7 @@ def production_rounding_summary(metadata):
 
 
 def production_compact_caption(metadata):
-    return ' '.join([PRODUCTION_CAPTION, *dict.fromkeys(metadata.get('notes', []))])
+    return ' '.join([metadata.get('unit_caption', PRODUCTION_CAPTION), *dict.fromkeys(metadata.get('notes', []))])
 
 
 def production_notes_frame(metadata):

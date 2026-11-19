@@ -13,6 +13,7 @@ from app.services.printable_form_text import FORM_BLUE
 from app.services.production_pdf import (uses_production_layout, production_pdf_rows,
     production_table_layout, production_pdf_notes, PRODUCTION_CAPTION, PRODUCTION_REPORT_IDS)
 from app.services.production_reports import production_table_frame
+from app.services.production_presentation import BOXES_CAPTION
 
 MAX_PDF_ROWS = 5000
 MIN_FONT_SIZE = 7
@@ -136,7 +137,7 @@ def is_total_row(headers, values):
         text = display_text(value)
         if index == 0 or display_text(headers[index]).casefold() in labels:
             if text.casefold() in {'total','totals','subtotal','account total','quota total',
-                'grand total','producer total','week total','grader total','total bird count'} or text.startswith('Producers:'):
+                'grand total','producer total','week total','week totals','grader total','total bird count'} or text.startswith('Producers:'):
                 return True
     return False
 
@@ -234,8 +235,9 @@ def render_report_pdf(title, subtitle_lines, frame, notes=None, *, generated_at=
     week_rows,total_rows=[],[]
     if production:
         rows,week_rows,total_rows=production_pdf_rows(rows)
-        if PRODUCTION_CAPTION not in subtitles:
-            subtitles.append(PRODUCTION_CAPTION)
+        unit_caption = BOXES_CAPTION if frame.attrs.get('unit') == 'Boxes' else PRODUCTION_CAPTION
+        if unit_caption not in subtitles:
+            subtitles.append(unit_caption)
     keep_identifiers=report_id=='custom-builder'
     pagesize=landscape(letter) if len(frame.columns)>7 else letter
     layout=None

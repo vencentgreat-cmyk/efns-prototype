@@ -70,7 +70,7 @@
       "status": "MODIFIED",
       "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "0ab890331a7db3d9bcde3a9c1ffc9644c38550c1911cc2d03fdbe89f7bbc7adb"
+      "candidate_lf_sha256": "c5788ba09a23b077774566597bbc22127d4714a3bee2c280fffcab0d0929ebc0"
     },
     {
       "path": "app/pages/5_Flocks.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "fb22b99d84f55db4e2ae8fa4de4723286520c2c8099534788a828ff4d62e233a"
+      "candidate_lf_sha256": "5370a7b7a376b6f5dc616bef3ec480d58fb00d0f4cd8ae116806dbfe00b57dfb"
     },
     {
       "path": "app/services/revision_history.py",
@@ -246,7 +246,7 @@
       "path": "app/services/production_reports.py",
       "status": "NEW",
       "reason": "Pure Production Management family with retained source grain, exact component totals, provisional rounding/inclusion, one rounding summary and separate record diagnostics for collapsed display and an XLSX Notes sheet.",
-      "candidate_lf_sha256": "7eea87c8d9622b31166b229a09c5e5fb54de5ed7b8b2b6d82dc507184bb2b75b"
+      "candidate_lf_sha256": "6839803beae470811d41ca77d31d181b8fd6e2cfdcbbbb63064ace87bdaf197a"
     },
     {
       "path": "app/services/quota_reports.py",
@@ -324,7 +324,7 @@
       "path": "app/services/report_pdf.py",
       "status": "NEW",
       "reason": "Shared presentation-only SSRS-style PDF renderer using exact CSV cell text, bounded row count, fitting, pagination and Halifax footer.",
-      "candidate_lf_sha256": "47247031b8704f13c441f0566911c211ec849fdd323ba4c4361a8636262f3d24"
+      "candidate_lf_sha256": "f41239fc2b2c96152cfe2327cfbb825dd790eb1423512a3a958738e3260d2ed1"
     },
     {
       "path": "app/services/report_pdf_ui.py",
@@ -467,13 +467,13 @@
       "path": "app/services/producers_over_quota_report.py",
       "status": "NEW",
       "reason": "New legacy Producers Over Quota report, fixture, evidence/limits or regression coverage.",
-      "candidate_lf_sha256": "4a16a57e68a02cfd5bbbb1a4e9a8d01fc3e44d141b59439cc98dfd48f8dde2b4"
+      "candidate_lf_sha256": "3d965067613901675f21832327e2781bfbcce9bdb1dc29a5561f7e199fed1a38"
     },
     {
       "path": "tests/test_producers_over_quota.py",
       "status": "NEW",
       "reason": "New legacy Producers Over Quota report, fixture, evidence/limits or regression coverage.",
-      "candidate_lf_sha256": "aa8c5465c77bbd5d772e9a91d382ddce3d6597d5ae66d6fd6021ec5a784aecc1"
+      "candidate_lf_sha256": "c9cbc1f42ac605dc81667b5d310ac4408b3249080fd3f564e282c7411bd8fb27"
     },
     {
       "path": "tests/fixtures/legacy_reports/EIMSProducersOverQuota.pdf",
@@ -537,7 +537,7 @@
       "path": "tests/test_poq_parity.py",
       "status": "NEW",
       "reason": "Complete legacy/DEV parity evidence and regression coverage.",
-      "candidate_lf_sha256": "fd77b75a03e3e1e64be7706c20299d0da87a7d51849646cd7ceb28bbe55dccf8"
+      "candidate_lf_sha256": "4a88fee3c5d53ea444793cffc174895e038906c499fe3d5eae2c97c880297611"
     },
     {
       "path": "tests/fixtures/legacy_reports/EIMSProducersOverQuota.csv",
@@ -635,7 +635,7 @@
       "path": "app/services/production_pdf.py",
       "status": "NEW",
       "reason": "PDF-only legacy Production column projection, week headings, atomic word/number sizing on Letter, and compact rounding notes; refuse overflow instead of Legal fallback.",
-      "candidate_lf_sha256": "a2fc0df97fffca62d5b974cbfe5ffc89048a168ae26e95066e46d2e24be6a916"
+      "candidate_lf_sha256": "bb2b9b49fca28f66c7dda33d2289c7c6be10f6832b3d3fb4e1e3727d65f9a567"
     },
     {
       "path": "tests/test_production_mgmt_pdf.py",
@@ -834,6 +834,32 @@
       "status": "NEW",
       "reason": "Synthetic source-week/inclusion counts and Flock Age empty messages through both app entrypoints.",
       "candidate_lf_sha256": "96d1614b7cbd112c4112f8c3a95993fd8c117f51f07698375715395e4a538ee2"
+    }
+  ],
+  "production_units_week_artifacts": [
+    {
+      "path": "app/services/production_presentation.py",
+      "status": "NEW",
+      "reason": "Pure row-level Boxes conversion, weekly presentation and unit metadata; Dozens calculations remain untouched.",
+      "candidate_lf_sha256": "97e165e5129acdb4eda1b1320f41ca1c58e3bef121a0a434596c051b36f8d40f"
+    },
+    {
+      "path": "tests/test_production_units_week_totals.py",
+      "status": "NEW",
+      "reason": "Synthetic unit, total, CSV/XLSX/PDF and UI invariants.",
+      "candidate_lf_sha256": "70040eaab07b3abd3a494ae63d0b7ce6cd7095477739184663a6e96ea6837eb7"
+    },
+    {
+      "path": "tests/test_producers_over_quota_overall_total.py",
+      "status": "NEW",
+      "reason": "Synthetic overall-total, styling, export and scope-discrepancy checks.",
+      "candidate_lf_sha256": "626ac075177851dd9a3feb535a90920f944d5c3b139e8b1cca88f562f24788af"
+    },
+    {
+      "path": "docs/codex_reports/PROD_WEEK_TOTALS_UNITS_20261119.md",
+      "status": "NEW",
+      "reason": "Existing format inventory, confirmed behavior, assumptions and validation.",
+      "candidate_lf_sha256": "c7a436e6f7554491a8cff116147d540e8673703c5027c9fd95588112858e0da6"
     }
   ]
 }
