@@ -118,7 +118,9 @@ def test_only_over_quota_total_percentages_are_red_in_ui_and_pdf():
     f,t,a,b,q=inputs();frame,_=build_producers_over_quota_report(f,t,a,b,q,'2026-11-10')
     styles=report.style_producers_over_quota(frame)._compute().ctx
     column=frame.columns.get_loc('% Quota');marked=frame.attrs['over_quota_total_rows']
-    assert len(marked)==16
+    overall=frame.attrs['overall_total_row']
+    assert len([position for position in marked if position != overall])==16
+    assert (overall in marked)==(frame.attrs['overall_total']['Inventory'] > frame.attrs['overall_total']['Quota'])
     assert set(styles)=={(position,column) for position in marked}
     assert all(('color','#c00000') in styles[(position,column)] for position in marked)
     assert all(frame.iloc[position]['Account Name']=='Total' for position in marked)
@@ -129,7 +131,7 @@ def test_only_over_quota_total_percentages_are_red_in_ui_and_pdf():
     def text(value,*unused):
         if value.strip() and state['rgb'][0]>.7 and state['rgb'][1:]==(0,0):red_text.append(value.strip())
     for page in PdfReader(BytesIO(payload)).pages:page.extract_text(visitor_operand_before=operand,visitor_text=text)
-    assert len(red_text)==16 and all(value.endswith('%') for value in red_text)
+    assert len(red_text)==len(marked) and all(value.endswith('%') for value in red_text)
 
 
 def test_page_calculation_notes_are_collapsed_and_table_styled(tmp_path,monkeypatch):

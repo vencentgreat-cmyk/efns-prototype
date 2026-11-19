@@ -24,6 +24,7 @@ from data.producer_identity import text as stored_text
 from app.services.production_reports import (build_production_report, build_nest_run_report,
     production_grader_options, week_range, MARKETING_TYPES, AMOUNTS, NEST_FIELDS,
     production_rounding_summary, production_table_caption, production_table_frame, production_notes_frame)
+from app.services.production_presentation import (production_report_view, production_view_metadata, production_csv_frame, UNITS)
 from app.services.flock_age_report import build_flock_age_report, build_flock_age_quotas
 from app.services.quota_state import get_inactive_quota_transaction_ids
 from app.services.report_pdf_ui import pdf_download_button, custom_parameter_lines
@@ -141,8 +142,12 @@ if section == "Report Library":
             end = parameters[2].text_input('End Week',value=str(year)+'53',key=prefix+'_end')
             source_accounts = repo.get_accounts()
             types,selected_accounts,grader_key = list(MARKETING_TYPES),None,None
+            unit, weekly_only = 'Dozens', False
+            if prefix != 'production_nest_run':
+                view_options = st.columns(2)
+                unit = view_options[0].selectbox('Unit of Measure',UNITS,key=prefix+'_unit')
+                weekly_only = view_options[1].checkbox('Weekly totals only',value=False,key=prefix+'_weekly_only')
             if prefix == 'production_management_grader':
-                st.selectbox('Unit of Measure',['Dozens'],key=prefix+'_unit')
                 account_options = {str(row['ACCOUNT_ID']):quota_account_label(row) for row in source_accounts.to_dict('records')}
                 selected_accounts = st.multiselect('Account',list(account_options),default=list(account_options),format_func=account_options.get,key=prefix+'_accounts')
                 selected_type = st.selectbox('Marketing Type',list(MARKETING_TYPES),index=list(MARKETING_TYPES).index('Regulated'),key=prefix+'_marketing')
@@ -171,6 +176,8 @@ if section == "Report Library":
                     else:
                         layout = prefix.removeprefix('production_management_')
                         result,metadata = build_production_report(source_records,source_accounts,*bounds,types,layout=layout,account_ids=selected_accounts,grader_key=grader_key)
+                        result = production_report_view(result,unit,weekly_totals_only=weekly_only)
+                        metadata = production_view_metadata(metadata,unit,weekly_totals_only=weekly_only)
                     st.session_state[prefix+'_result'] = result
                     st.session_state[prefix+'_metadata'] = metadata
                 except ValueError as exc:
@@ -202,7 +209,7 @@ if section == "Report Library":
                     st.dataframe(table_result.style.format(formats),hide_index=True,width='stretch')
                 if can_current(Permission.EXPORT_REPORT):
                     csv_col,xlsx_col,pdf_col=st.columns(3)
-                    csv_col.download_button('Export CSV',report_csv(user,table_result),prefix+'.csv','text/csv',key=prefix+'_csv')
+                    csv_col.download_button('Export CSV',report_csv(user,production_csv_frame(table_result)),prefix+'.csv','text/csv',key=prefix+'_csv')
                     xlsx_col.download_button('Export XLSX',report_xlsx(user,table_result,notes=production_notes_frame(metadata)),prefix+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',key=prefix+'_xlsx')
                     pdf_download_button(user,table_result,definition.name,metadata['headers'],prefix+'.pdf',definition.report_id,
                         notes=production_notes_frame(metadata),key=prefix+'_pdf',target=pdf_col)

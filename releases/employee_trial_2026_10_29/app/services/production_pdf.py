@@ -42,6 +42,8 @@ def production_pdf_rows(rows):
     weeks, totals = [], []
     previous = None
     for row in rows[1:]:
+        if row[positions['Row Type']] == 'Week Totals':
+            previous = None
         week = row[positions['Week']]
         if week and week != previous:
             weeks.append(len(result))
