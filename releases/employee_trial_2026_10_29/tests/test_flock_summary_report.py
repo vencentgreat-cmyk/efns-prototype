@@ -56,3 +56,27 @@ def test_empty_and_calendar_gaps():
     assert build_flock_summary_report(f.iloc[:0],t,a,b,synthetic_efc_calendar(2026),202601,202602).empty
     with pytest.raises(ValueError,match='Sunday-to-Saturday'):
         resolve_production_week(synthetic_efc_calendar(2026).iloc[1:],202601)
+
+
+@pytest.mark.parametrize('grouped',[False,True])
+def test_absent_type_zero_does_not_turn_unknown_stock_into_zero(grouped):
+    f,t,a,b=sources()
+    f.loc[f.FLOCK_ID.eq('b'),'STATUS']='Inactive'
+    t.loc[t.FLOCK_ID.eq('a'),'QUANTITY']=None
+    _,summary=build_flock_status_report(f,t,a,b,{},date(2026,1,3))
+    assert summary['Inventory Birds'] is None
+    result=build_flock_summary_report(f,t,a,b,synthetic_efc_calendar(2026),202601,202601,group_by_producer=grouped)
+    assert result['Total Inventory'].tolist()==['—']
+    assert result['Commercial Pullet Grower'].tolist()==[0]
+
+
+def test_partial_known_total_retains_stock_value_and_discloses_excluded_unknown():
+    f,t,a,b=sources()
+    f.loc[f.FLOCK_ID.eq('b'),'STATUS']='Inactive'
+    t.loc[t.FLOCK_ID.eq('a'),'QUANTITY']=None
+    extra=dict(f.iloc[0],FLOCK_ID='known',PERMIT_NUMBER='known',FLOCK_NUMBER='known')
+    f=pd.concat([f,pd.DataFrame([extra])],ignore_index=True)
+    t=pd.concat([t,pd.DataFrame([dict(t.iloc[0],FLOCK_ID='known',FLOCK_TRANSACTION_ID='known',QUANTITY=10)])],ignore_index=True)
+    result=build_flock_summary_report(f,t,a,b,synthetic_efc_calendar(2026),202601,202601,mortality='0')
+    assert result['Total Inventory'].tolist()==[10]
+    assert sum('unavailable' in note for note in result.attrs['notes'])==1

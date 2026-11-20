@@ -102,6 +102,11 @@ def confirmed_quota_position(registrations, transactions, account_id, quota_type
     transaction_adjustments.update(lease_adjustments)
     if lease_in:
         per_type_sums['Lease (In)'] = per_type_sums.get('Lease (In)', number(0)) + lease_in
+    # Details keeps historical gross eligibility unchanged. Only new-method
+    # leases add a negative outgoing side, so transferring quota conserves its total.
+    lease_out = lease_delta - lease_in
+    if lease_out:
+        per_type_sums['Lease (Out)'] = lease_out
     return {'net_position': None if reasons else sum(totals.values(), number(0)) + lease_delta,
             'per_type_sums': None if reasons else per_type_sums,
             'transaction_adjustments': None if reasons else transaction_adjustments,

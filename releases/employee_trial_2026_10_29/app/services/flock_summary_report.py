@@ -30,6 +30,8 @@ def build_flock_summary_report(flocks,transactions,accounts,facilities,calendar,
             if quota_type!='All' and quota_type_key(quota_type)!=kind:continue
             source=flocks.loc[flocks.get('FLOCK_QUOTA_TYPE',pd.Series(index=flocks.index,dtype=object)).map(lambda value: quota_type_key(value) or 'Not specified').eq(kind)]
             frame,_=build_flock_status_report(source,transactions,internal,facilities,{},end,mortality,'All' if kind=='Not specified' else kind)
+            if any(number(value) is None for value in frame['Inventory']):
+                notes.append('Some flock Inventory values are unavailable; totals sum known inventory only.')
             for row in frame.to_dict('records'):
                 if row['Permit No']!='Total':continue
                 identity=row['Account'];value=number(row['Inventory'])
@@ -39,11 +41,13 @@ def build_flock_summary_report(flocks,transactions,accounts,facilities,calendar,
         def combined(values):
             known=[v for v in values if v is not None]
             return sum(known,Decimal(0)) if known else None
+        stock_total=combined([value for values in groups.values() for value in values.values()])
         targets=[(identity,values) for identity,values in groups.items()] if group_by_producer else [('',{kind:combined([values.get(kind,Decimal(0)) for values in groups.values()]) for kind in kinds})]
         for identity,values in targets:
             owner=owners.get(identity,{})
             row={'Week':code,'Week Start':begin.isoformat(),'As-of Date':end.isoformat(),**{kind:values.get(kind,Decimal(0)) for kind in kinds}}
-            row['Total Inventory']=combined(list(values.values()))
+            # Presentation-only zeros for absent types are not inventory evidence.
+            row['Total Inventory']=combined(list(values.values())) if group_by_producer else stock_total
             if group_by_producer:row.update({'Reg No':text(owner.get('REGISTRATION_NUMBER')),'Account':text(owner.get('ORGANIZATION_NAME'))})
             output.append(row)
     result=pd.DataFrame(output,columns=columns,dtype=object)

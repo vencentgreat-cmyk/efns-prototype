@@ -68,7 +68,8 @@ def downloads(frame: pd.DataFrame, stem: str, report_id: str, *, subtitle_lines=
     left, right, pdf_col = st.columns(3)
     if left.download_button("Export CSV", report_csv(user, frame), f"{stem}.csv", "text/csv", width="stretch"):
         audit("EXPORT", report_id, {"format": "CSV", "row_count": len(frame)})
-    if right.download_button("Export XLSX", report_xlsx(user, frame, notes=pd.DataFrame({"Note":frame.attrs.get("notes",[])}) if report_id=="flock-summary" else None), f"{stem}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch"):
+    xlsx_options = {"notes": pd.DataFrame({"Note": frame.attrs.get("notes", [])})} if report_id == "flock-summary" else {}
+    if right.download_button("Export XLSX", report_xlsx(user, frame, **xlsx_options), f"{stem}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch"):
         audit("EXPORT", report_id, {"format": "XLSX", "row_count": len(frame)})
     pdf_download_button(user,frame,report_definition(report_id).name,subtitle_lines,f'{stem}.pdf',report_id,
         notes=notes,key=stem+'_pdf',target=pdf_col)
@@ -283,7 +284,7 @@ if section == "Report Library":
             if prefix == 'quota_summary':
                 st.caption('Issuance is the confirmed owner quota position at the as-of date.')
             else:
-                st.caption('Details shows gross Base, Adjustment, Purchase, Global Adjustment and Lease (In) totals. Sale, Lease (Out) and Terminate Quota are not shown or subtracted; these totals differ from net Issuance.')
+                st.caption('Details retains existing transaction totals. New leases show positive Lease (In) and negative Lease (Out), using their effective amounts at the as-of date. Existing Sale, historical Lease (Out) and Terminate Quota are not subtracted; historical totals can still differ from net Issuance.')
             if st.button("Run Report", type="primary", icon=":material/play_arrow:", key="run_"+prefix):
                 st.session_state.pop(prefix+'_result', None)
                 try:
@@ -355,6 +356,8 @@ if section == "Report Library":
                     if isinstance(result, pd.DataFrame):
                         if result.empty: st.info('No flock inventory rows match the selected weeks and parameters.')
                         else: st.dataframe(result, hide_index=True, width='stretch')
+                        for note in result.attrs.get('notes', []):
+                            if note != WEEKLY_INVENTORY_CAPTION: st.caption(note)
                         downloads(result, 'flock_summary_report', definition.report_id, subtitle_lines=st.session_state['flock_summary_parameters'], notes=result.attrs.get('notes'))
         elif definition.handler == 'producers_over_quota':
             handler = definition.handler

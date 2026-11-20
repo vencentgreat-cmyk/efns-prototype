@@ -51,7 +51,7 @@ REPORT_CATALOG = (
     ReportDefinition("flock-salmonella-schedule", "Flock Salmonella Testing Schedule", "Flock", "Operational Report", "Current Flock Age inventory within inclusive age bounds; unknown inventory excluded.", ("Report Date", "Mortality", "Quota Type", "Flock Minimum Age", "Flock Maximum Age"), Permission.VIEW_REPORTS, "Available", "flock_salmonella_schedule", ("CSV", "XLSX")),
     ReportDefinition("scheduled-flock-placements", "Scheduled Flock Placements", "Flock", "Operational Report", "Upcoming placements with initial Delivery quantities and confirmed Account quota at the start date. Mortality is unused.", ("Mortality", "Quota Type", "Scheduled Placements Date Start", "Scheduled Placements End Date"), Permission.VIEW_REPORTS, "Available", "scheduled_flock_placements", ("CSV", "XLSX")),
     ReportDefinition("quota-summary", "Quota Summary Report", "Quota", "Summary Report", "One row per Account. Issuance is the confirmed owner quota position at the as-of date; unknown when state evidence is unavailable.", ("As of Date", "Quota Type", "Account", "Status"), Permission.VIEW_REPORTS, "Available", "quota_summary", ("CSV", "XLSX")),
-    ReportDefinition("quota-summary-details", "Quota Summary Details", "Quota", "Summary Report", "Gross increasing quota transaction totals using confirmed position eligibility; amounts remain unknown when state evidence is unavailable.", ("As of Date", "Quota Type", "Account", "Status"), Permission.VIEW_REPORTS, "Available", "quota_summary_details", ("CSV", "XLSX")),
+    ReportDefinition("quota-summary-details", "Quota Summary Details", "Quota", "Summary Report", "Existing quota transaction totals plus both signed sides of new leases, using confirmed eligibility; unknown when state evidence is unavailable.", ("As of Date", "Quota Type", "Account", "Status"), Permission.VIEW_REPORTS, "Available", "quota_summary_details", ("CSV", "XLSX")),
     ReportDefinition("flock-age", "Flock Age Report", "Flock", "Operational Report", "Age and inventory by Account with confirmed owner quota positions and evidence-gated utilization. Special Permit excluded.", ("As of Date", "Mortality", "Quota Type"), Permission.VIEW_REPORTS, "Available", "flock_age", ("CSV", "XLSX")),
     ReportDefinition("flock-status", "Flock Status Report", "Flock", "Operational Report", "Flock Age calculations ordered by registration number with Account totals first.", ("As of Date", "Mortality", "Quota Type"), Permission.VIEW_REPORTS, "Available", "flock_status", ("CSV", "XLSX")),
     ReportDefinition('producers-over-quota', 'Producers Over Quota Report', 'Flock', 'Operational Report', 'All producers with positive confirmed Egg Production quota; over-quota Account Total percentages highlighted red, with province-wide Flock Status metrics.', ('Report Date', 'Mortality', 'Quota Type'), Permission.VIEW_REPORTS, 'Available', 'producers_over_quota', ('CSV','XLSX')),
@@ -234,14 +234,14 @@ def build_quota_summary(repo, *, user: User, as_of_date, quota_type: str,
 
 def build_quota_summary_details(repo, *, user: User, as_of_date, quota_type: str,
                                 account_id=None, status='Active'):
-    """Gross increasing types; eligibility and unknown evidence come from net position."""
+    """Historical increasing types plus signed new leases; one eligibility source."""
     accounts, positions = _quota_report_accounts(repo, user, as_of_date, quota_type, account_id, status)
     rows, totals = [], []
     for account, position in zip(accounts, positions):
         sums = position['per_type_sums']
         total = known_sum(list(sums.values())) if sums is not None else None
         totals.append(total)
-        types = [kind for kind in INCREASING_TYPES if sums is not None and kind in sums]
+        types = [kind for kind in (*INCREASING_TYPES, 'Lease (Out)') if sums is not None and kind in sums]
         if sums is None:
             types = ['']  # Preserve the Account with blank amounts; never guess its types.
         for kind in types:
