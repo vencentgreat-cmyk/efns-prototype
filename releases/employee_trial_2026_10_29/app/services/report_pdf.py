@@ -40,6 +40,7 @@ QUANTITY_COLUMNS_BY_REPORT = {
     'quota-history': ('Bird Count','Quota Count Adjust','Running Balance','Current Quota'),
     'quota-summary': ('Issuance',),
     'quota-summary-details': ('Account Total','Quota Bird Count'),
+    'flock-summary': ('Total Inventory','Egg Production'),
     'flock-status': ('Sold','Inventory','Quota','Up. Flocks'),
     'flock-status-producer': ('Sold','Inventory','Quota','Up. Flocks'),
     'flock-age': ('Inventory','Quota','Up. Flocks'),

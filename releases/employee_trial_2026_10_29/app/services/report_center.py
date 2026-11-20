@@ -37,6 +37,7 @@ class ReportDefinition:
 
 
 REPORT_CATALOG = (
+    ReportDefinition('flock-summary', 'Flock Summary', 'Flock', 'Operational Report', 'Weekly Saturday inventory snapshots; never summed across weeks.', ('Start Week','End Week','Mortality','Quota Type','Group by producer'), Permission.VIEW_REPORTS, 'Available', 'flock_summary', ('CSV','XLSX')),
     ReportDefinition('production-management-summary','Production Management Summary','Production','Operational Report','Weekly production in Dozens or Boxes with size components, week totals and range total.',('Start Week','End Week','Type','Unit of Measure','Weekly totals only'),Permission.VIEW_REPORTS,'Available','production_management_summary',('CSV','XLSX')),
     ReportDefinition('production-management-producer','Production Management by Producer','Production','Operational Report','Production by producer and week, with producer-range and grand totals.',('Start Week','End Week','Type','Unit of Measure','Weekly totals only'),Permission.VIEW_REPORTS,'Available','production_management_producer',('CSV','XLSX')),
     ReportDefinition('production-management-details','Production Management Details','Production','Operational Report','Stored production details in Dozens or Boxes, with a Week Totals block.',('Start Week','End Week','Type','Unit of Measure','Weekly totals only'),Permission.VIEW_REPORTS,'Available','production_management_details',('CSV','XLSX')),

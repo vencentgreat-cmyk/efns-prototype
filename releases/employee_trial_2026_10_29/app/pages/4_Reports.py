@@ -36,6 +36,7 @@ from app.services.flock_reports import (
     build_flock_salmonella_schedule, build_scheduled_flock_placements,
     build_flock_status_by_producer_report,
 )
+from data.quota_types import quota_type_key
 from data.quota_position import load_rules
 from app.ui import apply_theme, page_header, section_intro, show_data_error
 from data.constants import (
@@ -67,7 +68,7 @@ def downloads(frame: pd.DataFrame, stem: str, report_id: str, *, subtitle_lines=
     left, right, pdf_col = st.columns(3)
     if left.download_button("Export CSV", report_csv(user, frame), f"{stem}.csv", "text/csv", width="stretch"):
         audit("EXPORT", report_id, {"format": "CSV", "row_count": len(frame)})
-    if right.download_button("Export XLSX", report_xlsx(user, frame), f"{stem}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch"):
+    if right.download_button("Export XLSX", report_xlsx(user, frame, notes=pd.DataFrame({"Note":frame.attrs.get("notes",[])}) if report_id=="flock-summary" else None), f"{stem}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch"):
         audit("EXPORT", report_id, {"format": "XLSX", "row_count": len(frame)})
     pdf_download_button(user,frame,report_definition(report_id).name,subtitle_lines,f'{stem}.pdf',report_id,
         notes=notes,key=stem+'_pdf',target=pdf_col)
@@ -321,6 +322,40 @@ if section == "Report Library":
                 else: st.dataframe(result, width="stretch", hide_index=True)
                 downloads(result, prefix+"_report", definition.report_id,
                     subtitle_lines=[f'Quota Type: {applied.get("quota_type", "")} · As of: {applied.get("as_of", "")} · Account: {applied.get("account", "")} · Status: {applied.get("status", "")}'],notes=metrics['notes'])
+        elif definition.handler == 'flock_summary':
+            from app.services.flock_summary_report import (build_flock_summary_report, default_flock_summary_weeks, WEEKLY_INVENTORY_CAPTION)
+            calendar = repo.get_efc_dates()
+            if calendar.empty:
+                st.info('No EFC calendar dates are available. Flock Summary requires the maintained calendar.')
+            else:
+                try:
+                    first, last = default_flock_summary_weeks(calendar, halifax_today())
+                except ValueError as exc:
+                    st.info(str(exc))
+                else:
+                    params = st.columns(2)
+                    first = params[0].text_input('Start Week', value=str(first), key='flock_summary_start')
+                    last = params[1].text_input('End Week', value=str(last), key='flock_summary_end')
+                    mortality = st.text_input('Mortality (% per month)', value='0.4', key='flock_summary_mortality')
+                    flocks = repo.get_flocks()
+                    kinds = {quota_type_key(v) for v in flocks.get('FLOCK_QUOTA_TYPE', []) if stored_text(v)} - {'Special Permit','Egg Production','All',None}
+                    quota_type = st.selectbox('Quota Type', ['Egg Production','All',*sorted(kinds)], key='flock_summary_type')
+                    grouped = st.checkbox('Group by producer', value=False, key='flock_summary_group')
+                    st.caption(WEEKLY_INVENTORY_CAPTION)
+                    if st.button('Run Report', type='primary', key='run_flock_summary'):
+                        st.session_state.pop('flock_summary_result', None)
+                        try:
+                            result = build_flock_summary_report(flocks, repo.get_flock_transactions(), repo.get_accounts(), repo.get_facilities(), calendar, first, last, mortality, quota_type, grouped)
+                            st.session_state['flock_summary_result'] = result
+                            st.session_state['flock_summary_parameters'] = [f'Production Week: {first} to {last}', f'Quota Type: {quota_type} · Mortality: {mortality}% per month', WEEKLY_INVENTORY_CAPTION]
+                            audit('RUN_REPORT', definition.report_id, {'row_count':len(result)})
+                        except ValueError as exc:
+                            st.info(str(exc))
+                    result = st.session_state.get('flock_summary_result')
+                    if isinstance(result, pd.DataFrame):
+                        if result.empty: st.info('No flock inventory rows match the selected weeks and parameters.')
+                        else: st.dataframe(result, hide_index=True, width='stretch')
+                        downloads(result, 'flock_summary_report', definition.report_id, subtitle_lines=st.session_state['flock_summary_parameters'], notes=result.attrs.get('notes'))
         elif definition.handler == 'producers_over_quota':
             handler = definition.handler
             source_flocks, source_accounts = repo.get_flocks(), repo.get_accounts()
