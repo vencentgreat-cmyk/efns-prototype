@@ -49,9 +49,8 @@ def resolve_runtime_mode(
     """Resolve ``local``, ``snowflake``, or automatic runtime selection."""
     selected = str(configured if configured is not None else os.getenv("EFNS_RUNTIME_MODE", "auto")).strip().lower()
     if selected == "auto":
-        identity = viewer_email if viewer_email is not None else snowflake_viewer_email()
         active_session = active_warehouse_session_available() if warehouse_session is None else warehouse_session
-        return RuntimeMode.SNOWFLAKE if identity and active_session else RuntimeMode.LOCAL
+        return RuntimeMode.SNOWFLAKE if active_session else RuntimeMode.LOCAL
     try:
         return RuntimeMode(selected)
     except ValueError as exc:

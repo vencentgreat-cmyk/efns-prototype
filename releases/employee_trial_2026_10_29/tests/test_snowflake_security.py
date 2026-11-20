@@ -24,6 +24,7 @@ def user_frame(user_id="u-1", email="person@nsegg.ca", role="Data Editor", activ
         "DISPLAY_NAME": "Person",
         "ROLE": role,
         "ACTIVE": active,
+        "SNOWFLAKE_USERNAME": "USER_A",
         "CREATED_AT": "2026-01-01T00:00:00+00:00",
         "UPDATED_AT": "2026-01-01T00:00:00+00:00",
         "LAST_LOGIN_AT": None,
@@ -70,7 +71,7 @@ def test_runtime_mode_is_explicit_or_uses_viewer_identity():
     assert resolve_runtime_mode("snowflake", None) == RuntimeMode.SNOWFLAKE
     assert resolve_runtime_mode("auto", "person@nsegg.ca", True) == RuntimeMode.SNOWFLAKE
     assert resolve_runtime_mode("auto", "person@nsegg.ca", False) == RuntimeMode.LOCAL
-    assert resolve_runtime_mode("auto", None, True) == RuntimeMode.LOCAL
+    assert resolve_runtime_mode("auto", None, True) == RuntimeMode.SNOWFLAKE
     with pytest.raises(RuntimeConfigurationError):
         resolve_runtime_mode("invalid", None)
 
@@ -79,17 +80,17 @@ def test_snowflake_identity_requires_internal_active_user(monkeypatch):
     monkeypatch.setenv("SNOWFLAKE_DATABASE", "EFNS_DEV")
     executor = QueueExecutor([user_frame(), user_frame(active=False)])
     store = SnowflakeAuthStore(executor)
-    resolved = store.resolve_identity(" Person@NSEGG.CA ")
+    resolved = store.resolve_identity(" user_a ")
     assert resolved.email == "person@nsegg.ca"
-    assert store.resolve_identity("person@nsegg.ca") is None
+    assert store.resolve_identity("USER_A") is None
     before = len(executor.calls)
     assert store.resolve_identity("outsider@example.ca") is None
     assert len(executor.calls) == before
-    assert executor.calls[0][2] == ("person@nsegg.ca",)
+    assert executor.calls[0][2] == ("USER_A",)
 
 
 def test_snowflake_user_create_and_audit_are_bound_and_transactional():
-    executor = QueueExecutor([pd.DataFrame(), pd.DataFrame(), user_frame()])
+    executor = QueueExecutor([pd.DataFrame(), user_frame()])
     store = SnowflakeAuthStore(executor)
     created, temporary_password = store.create_user(
         user(), " Person@NSEGG.CA ", "Person", Role.DATA_EDITOR

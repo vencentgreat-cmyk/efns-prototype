@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 import os
 import re
 from uuid import uuid4
@@ -22,6 +23,7 @@ from app.security import (
     validate_internal_email,
 )
 from data.connection import SqlExecutor, create_executor
+from app.snowflake_identity import normalize_snowflake_username, MAIN_SNOWFLAKE_ADMIN_USERNAME, MAIN_ADMIN_USER_ID, main_admin_user
 from data.repositories.base import RepositoryError
 
 
@@ -58,6 +60,7 @@ class SnowflakeAuthStore(AuthStore):
         app_schema = _identifier(os.getenv("SNOWFLAKE_SCHEMA_APP", "APP"), "APP schema")
         self.user_table = f"{database}.{security_schema}.APP_USER"
         self.audit_table = f"{database}.{app_schema}.AUDIT_EVENT"
+        self.username_mapping_available = None
 
     @staticmethod
     def _user_from_row(row: dict | None) -> User | None:
@@ -69,32 +72,65 @@ class SnowflakeAuthStore(AuthStore):
             email=str(values["EMAIL"]).casefold(),
             display_name=str(values["DISPLAY_NAME"]),
             role=Role(str(values["ROLE"])),
-            active=bool(values["ACTIVE"]),
+            active=str(values.get("ACTIVE",False)).strip().casefold() in {"true","1"},
             must_change_password=False,
             created_at=_timestamp(values.get("CREATED_AT")) or "",
             updated_at=_timestamp(values.get("UPDATED_AT")) or "",
             last_login_at=_timestamp(values.get("LAST_LOGIN_AT")),
+            snowflake_username=(str(values["SNOWFLAKE_USERNAME"]).strip().upper() if pd.notna(values.get("SNOWFLAKE_USERNAME")) else None),
         )
 
     def _one(self, column: str, value: str, executor: SqlExecutor | None = None) -> User | None:
         query_executor = executor or self.executor
         frame = query_executor.query(
-            f"SELECT USER_ID, EMAIL, DISPLAY_NAME, ROLE, ACTIVE, CREATED_AT, UPDATED_AT, LAST_LOGIN_AT "
+            f"SELECT * "
             f"FROM {self.user_table} WHERE {column} = %s LIMIT 1",
             (value,),
         )
         return None if frame.empty else self._user_from_row(frame.iloc[0].to_dict())
 
     def get_user(self, user_id: str) -> User | None:
+        if user_id==MAIN_ADMIN_USER_ID:
+            return main_admin_user()
         return self._one("USER_ID", str(user_id))
 
-    def resolve_identity(self, email: str) -> User | None:
+    def resolve_identity(self, username: str) -> User | None:
         try:
-            normalized = validate_internal_email(email)
+            normalized = normalize_snowflake_username(username,allow_main=True)
         except UserValidationError:
             return None
-        user = self._one("LOWER(EMAIL)", normalized)
+        if not normalized:return None
+        if normalized==MAIN_SNOWFLAKE_ADMIN_USERNAME:
+            return main_admin_user() if username==MAIN_SNOWFLAKE_ADMIN_USERNAME else None
+        try:
+            frame=self.executor.query(f"SELECT * FROM {self.user_table} WHERE UPPER(TRIM(SNOWFLAKE_USERNAME)) = %s LIMIT 2",(normalized,))
+        except Exception:
+            self.username_mapping_available=False
+            return None
+        self.username_mapping_available='SNOWFLAKE_USERNAME' in frame.columns
+        if not self.username_mapping_available or len(frame)!=1:return None
+        try:
+            user=self._user_from_row(frame.iloc[0].to_dict())
+        except (ValueError,KeyError,TypeError):
+            return None
         return user if user and user.active else None
+
+    @contextmanager
+    def _username_transaction(self):
+        # Reuse the established global app write boundary; no new lock/session.
+        from data.repositories.snowflake import SnowflakeRepository
+        with SnowflakeRepository(self.executor)._continuity_transaction() as tx:
+            yield tx
+
+    def _check_username(self, tx, username, user_id):
+        try:
+            frame=tx.query(f"SELECT USER_ID FROM {self.user_table} WHERE UPPER(TRIM(SNOWFLAKE_USERNAME)) = %s AND USER_ID <> %s",(username,user_id))
+        except Exception as exc:
+            self.username_mapping_available=False
+            raise UserValidationError('Snowflake username mapping requires the reviewed schema update and existing app-owner access.') from exc
+        if not frame.empty:
+            raise UserValidationError('Snowflake username is already assigned to another user.')
+        self.username_mapping_available=True
 
     def login(self, email: str, password: str) -> tuple[User, str]:
         del email, password
@@ -110,28 +146,32 @@ class SnowflakeAuthStore(AuthStore):
     def list_users(self, actor: User) -> list[User]:
         require_permission(actor, Permission.MANAGE_USERS)
         frame = self.executor.query(
-            f"SELECT USER_ID, EMAIL, DISPLAY_NAME, ROLE, ACTIVE, CREATED_AT, UPDATED_AT, LAST_LOGIN_AT "
+            f"SELECT * "
             f"FROM {self.user_table} ORDER BY EMAIL"
         )
+        self.username_mapping_available="SNOWFLAKE_USERNAME" in frame.columns
         return [self._user_from_row(row) for row in frame.to_dict("records")]
 
-    def create_user(self, actor: User, email: str, display_name: str, role: Role) -> tuple[User, str | None]:
+    def create_user(self, actor: User, email: str, display_name: str, role: Role, *, snowflake_username=...) -> tuple[User, str | None]:
         require_permission(actor, Permission.MANAGE_USERS)
         normalized = validate_internal_email(email)
         name = str(display_name or "").strip()
         if not name:
             raise UserValidationError("Display name is required.")
-        if self.resolve_identity(normalized) or self._one("LOWER(EMAIL)", normalized):
+        if self._one("LOWER(EMAIL)", normalized):
             raise UserValidationError("A user with this email address already exists.")
         user_id = str(uuid4())
         assigned_role = Role(role)
-        with self.executor.transaction() as tx:
+        mapping=None if snowflake_username is ... else normalize_snowflake_username(snowflake_username)
+        transaction=self.executor.transaction if snowflake_username is ... else self._username_transaction
+        with transaction() as tx:
+            if snowflake_username is not ...:self._check_username(tx,mapping,user_id)
             affected = tx.execute(
                 f"INSERT INTO {self.user_table} "
-                "(USER_ID, EMAIL, DISPLAY_NAME, ROLE, ACTIVE, CREATED_AT, UPDATED_AT) "
-                "VALUES (%s, %s, %s, %s, TRUE, "
+                f"(USER_ID, EMAIL, DISPLAY_NAME, ROLE, {'SNOWFLAKE_USERNAME, ' if snowflake_username is not ... else ''}ACTIVE, CREATED_AT, UPDATED_AT) "
+                f"VALUES (%s, %s, %s, %s, {'%s, ' if snowflake_username is not ... else ''}TRUE, "
                 "CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()), CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()))",
-                (user_id, normalized, name, assigned_role.value),
+                (user_id, normalized, name, assigned_role.value, *([mapping] if snowflake_username is not ... else [])),
             )
             if affected == 0:
                 raise RepositoryError("Snowflake did not create the application user.")
@@ -153,8 +193,10 @@ class SnowflakeAuthStore(AuthStore):
         if frame.empty or int(frame.iloc[0].get("ADMIN_COUNT", 0)) < 1:
             raise UserValidationError("At least one active Admin account must remain.")
 
-    def update_user(self, actor: User, user_id: str, *, role: Role, active: bool) -> User:
+    def update_user(self, actor: User, user_id: str, *, role: Role, active: bool, snowflake_username=...) -> User:
         require_permission(actor, Permission.MANAGE_USERS)
+        if user_id==MAIN_ADMIN_USER_ID:
+            raise UserValidationError('The main Snowflake Admin is an explicit runtime identity and cannot be modified in User Management.')
         current = self.get_user(user_id)
         if current is None:
             raise UserValidationError("The selected user no longer exists.")
@@ -163,12 +205,15 @@ class SnowflakeAuthStore(AuthStore):
             raise UserValidationError("You cannot deactivate your own account.")
         if current.role == Role.ADMIN and current.active and (assigned_role != Role.ADMIN or not active):
             self._ensure_another_active_admin(user_id)
-        with self.executor.transaction() as tx:
+        mapping=current.snowflake_username if snowflake_username is ... else normalize_snowflake_username(snowflake_username)
+        transaction=self.executor.transaction if snowflake_username is ... else self._username_transaction
+        with transaction() as tx:
+            if snowflake_username is not ...:self._check_username(tx,mapping,user_id)
             affected = tx.execute(
-                f"UPDATE {self.user_table} SET ROLE = %s, ACTIVE = %s, "
+                f"UPDATE {self.user_table} SET ROLE = %s, ACTIVE = %s, {'SNOWFLAKE_USERNAME = %s, ' if snowflake_username is not ... else ''}"
                 "UPDATED_AT = CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()) "
                 "WHERE USER_ID = %s",
-                (assigned_role.value, bool(active), user_id),
+                (assigned_role.value, bool(active), *([mapping] if snowflake_username is not ... else []), user_id),
             )
             if affected == 0:
                 raise RepositoryError("Snowflake did not update the application user.")
@@ -183,6 +228,8 @@ class SnowflakeAuthStore(AuthStore):
 
     def delete_user(self, actor: User, user_id: str) -> None:
         require_permission(actor, Permission.MANAGE_USERS)
+        if user_id==MAIN_ADMIN_USER_ID:
+            raise UserValidationError('The main Snowflake Admin is an explicit runtime identity and cannot be modified in User Management.')
         current = self.get_user(user_id)
         if current is None:
             raise UserValidationError("The selected user no longer exists.")

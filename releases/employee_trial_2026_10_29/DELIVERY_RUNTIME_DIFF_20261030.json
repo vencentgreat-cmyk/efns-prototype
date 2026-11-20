@@ -42,7 +42,7 @@
       "status": "MODIFIED",
       "reason": "R3 F4: deletion checkbox scoped to selected user and cleared on switch; auth-store and permission logic unchanged.",
       "baseline_lf_sha256": "fc6331979725bdd8bb34e18eaa4db484234cce8545fe2e30810f94199561aaa0",
-      "candidate_lf_sha256": "16c64a6e9dbfeff16fa751cad7b65040afd036b52561701cf87d1d5a15f41b2b"
+      "candidate_lf_sha256": "c4a8fad306f756b928823d2a0737447c00472abca4dae003dc89ceb01d79fc96"
     },
     {
       "path": "app/pages/16_Audit_Log.py",
@@ -1004,6 +1004,74 @@
       "status": "NEW",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
       "candidate_lf_sha256": "abe9d0b984229a200a6a4293a00a972c80668e6897ca0120d57a8db738bde549"
+    }
+  ],
+  "login_role_mapping_20261120_artifacts": [
+    {
+      "path": "app/auth.py",
+      "status": "MODIFIED",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "7af8b5d429d198cb9c7313f9287b0225c80565bd27b4a5ade8b79638f70da049"
+    },
+    {
+      "path": "app/runtime.py",
+      "status": "MODIFIED",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "5e6cf0d64fc36397bb9a6e85d53c7cfbd3d8cf647ce0d561e530119e31c68204"
+    },
+    {
+      "path": "app/security.py",
+      "status": "MODIFIED",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "733a7b92682e52a6b62b4fdcbb5dc41438a20b305a6af54219fb69726a59c6be"
+    },
+    {
+      "path": "app/snowflake_security.py",
+      "status": "MODIFIED",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "069e8c393681d5d25a7a85b5b8026ad53ffc09d4f119dbb8b241d7b58fc0f82d"
+    },
+    {
+      "path": "sql/05_security_tables.sql",
+      "status": "MODIFIED",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "17c2408a998e458fc9886c95d6f4eef2e1e61ece18bad79cbe8d5f93ecb0adad"
+    },
+    {
+      "path": "tests/test_snowflake_security.py",
+      "status": "MODIFIED",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "15624353067c8b1e9039a0f6be00ae2efb0d0a74fae90f66b5ce4e4fc4d9f06a"
+    },
+    {
+      "path": "app/snowflake_identity.py",
+      "status": "NEW",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "4744bb93554768c5cf511ddc4f00ca29933a78d17ca94f68eb0fb5471b395abc"
+    },
+    {
+      "path": "docs/codex_reports/LOGIN_ROLE_MAPPING_20261120.md",
+      "status": "NEW",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "b109bc30b5debb7965b7830dce0c3e2bec59464c233fac073f10c230e4c2e438"
+    },
+    {
+      "path": "sql/35_app_user_snowflake_username_20261120.sql",
+      "status": "NEW",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "6ec4e24fcad39c8116af89460c674777859090ddacb278c4eb3bf3eeffc09c89"
+    },
+    {
+      "path": "tests/test_snowflake_role_mapping.py",
+      "status": "NEW",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "80e16f573393318eebce451e2892d751e28b2cc7e21c304643746dd8dfb3f7f1"
+    },
+    {
+      "path": "tests/test_snowflake_navigation.py",
+      "status": "MODIFIED",
+      "reason": "Task 4 trusted Snowflake viewer-to-app role mapping, offline verification and review-only schema.",
+      "candidate_lf_sha256": "81420d815a1986a077d7f35103037a5470d5637359f37b0a48d9625cc8aca7e2"
     }
   ]
 }

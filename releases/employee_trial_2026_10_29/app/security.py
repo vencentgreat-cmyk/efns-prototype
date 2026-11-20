@@ -108,6 +108,7 @@ class User:
     created_at: str
     updated_at: str
     last_login_at: str | None
+    snowflake_username: str | None = None
 
 
 @dataclass(frozen=True)
@@ -261,10 +262,10 @@ class AuthStore(ABC):
     def list_users(self, actor: User) -> list[User]: ...
 
     @abstractmethod
-    def create_user(self, actor: User, email: str, display_name: str, role: Role) -> tuple[User, str | None]: ...
+    def create_user(self, actor: User, email: str, display_name: str, role: Role, *, snowflake_username=None) -> tuple[User, str | None]: ...
 
     @abstractmethod
-    def update_user(self, actor: User, user_id: str, *, role: Role, active: bool) -> User: ...
+    def update_user(self, actor: User, user_id: str, *, role: Role, active: bool, snowflake_username=...) -> User: ...
 
     @abstractmethod
     def delete_user(self, actor: User, user_id: str) -> None: ...
@@ -314,6 +315,7 @@ class SQLiteAuthStore(AuthStore):
                     user_id TEXT PRIMARY KEY,
                     email TEXT NOT NULL UNIQUE,
                     display_name TEXT NOT NULL,
+                    snowflake_username TEXT,
                     role TEXT NOT NULL,
                     password_hash TEXT NOT NULL,
                     active INTEGER NOT NULL DEFAULT 1,
@@ -341,6 +343,10 @@ class SQLiteAuthStore(AuthStore):
                 );
                 """
             )
+            columns={row[1] for row in database.execute('PRAGMA table_info(app_user)')}
+            if 'snowflake_username' not in columns:
+                database.execute('ALTER TABLE app_user ADD COLUMN snowflake_username TEXT')
+            database.execute('CREATE UNIQUE INDEX IF NOT EXISTS app_user_snowflake_username_unique ON app_user(UPPER(TRIM(snowflake_username))) WHERE snowflake_username IS NOT NULL')
             now = utc_now()
             for seed in self._seeds:
                 email = validate_internal_email(seed.email)
@@ -371,6 +377,7 @@ class SQLiteAuthStore(AuthStore):
             created_at=row["created_at"],
             updated_at=row["updated_at"],
             last_login_at=row["last_login_at"],
+            snowflake_username=row["snowflake_username"] if "snowflake_username" in row.keys() else None,
         )
 
     @staticmethod
@@ -452,8 +459,10 @@ class SQLiteAuthStore(AuthStore):
         with self._connect() as database:
             return [self._user(row) for row in database.execute("SELECT * FROM app_user ORDER BY email").fetchall()]
 
-    def create_user(self, actor: User, email: str, display_name: str, role: Role) -> tuple[User, str]:
+    def create_user(self, actor: User, email: str, display_name: str, role: Role, *, snowflake_username=None) -> tuple[User, str]:
         require_permission(actor, Permission.MANAGE_USERS)
+        from app.snowflake_identity import normalize_snowflake_username
+        mapping=normalize_snowflake_username(snowflake_username)
         normalized = validate_internal_email(email)
         name = str(display_name or "").strip()
         if not name:
@@ -466,22 +475,26 @@ class SQLiteAuthStore(AuthStore):
             with self._connect() as database:
                 database.execute(
                     """INSERT INTO app_user
-                       (user_id, email, display_name, role, password_hash, active,
+                       (user_id, email, display_name, role, password_hash, snowflake_username, active,
                         must_change_password, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)""",
-                    (user_id, normalized, name, role.value, hash_password(temporary_password), now, now),
+                       VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?)""",
+                    (user_id, normalized, name, role.value, hash_password(temporary_password), mapping, now, now),
                 )
                 user = self._user(database.execute("SELECT * FROM app_user WHERE user_id = ?", (user_id,)).fetchone())
                 self._insert_audit(database, actor, "CREATE_USER", "USER", user_id, {"email": normalized, "role": role.value})
         except sqlite3.IntegrityError as exc:
+            if 'snowflake' in str(exc).lower():
+                raise UserValidationError('Snowflake username is already assigned to another user.') from exc
             raise UserValidationError("A user with this email address already exists.") from exc
         return user, temporary_password
 
-    def update_user(self, actor: User, user_id: str, *, role: Role, active: bool) -> User:
+    def update_user(self, actor: User, user_id: str, *, role: Role, active: bool, snowflake_username=...) -> User:
         require_permission(actor, Permission.MANAGE_USERS)
         current = self.get_user(user_id)
         if current is None:
             raise UserValidationError("The selected user no longer exists.")
+        from app.snowflake_identity import normalize_snowflake_username
+        mapping=current.snowflake_username if snowflake_username is ... else normalize_snowflake_username(snowflake_username)
         role = Role(role)
         if actor.user_id == user_id and not active:
             raise UserValidationError("You cannot deactivate your own account.")
@@ -489,10 +502,15 @@ class SQLiteAuthStore(AuthStore):
             self._ensure_another_active_admin(user_id)
         now = utc_now()
         with self._connect() as database:
-            database.execute(
-                "UPDATE app_user SET role = ?, active = ?, updated_at = ? WHERE user_id = ?",
-                (role.value, int(active), now, user_id),
-            )
+            try:
+                if snowflake_username is ...:
+                    database.execute("UPDATE app_user SET role = ?, active = ?, updated_at = ? WHERE user_id = ?",
+                        (role.value,int(active),now,user_id))
+                else:
+                    database.execute("UPDATE app_user SET role = ?, active = ?, snowflake_username = ?, updated_at = ? WHERE user_id = ?",
+                        (role.value,int(active),mapping,now,user_id))
+            except sqlite3.IntegrityError as exc:
+                raise UserValidationError('Snowflake username is already assigned to another user.') from exc
             updated = self._user(database.execute("SELECT * FROM app_user WHERE user_id = ?", (user_id,)).fetchone())
             self._insert_audit(
                 database, actor, "UPDATE_USER", "USER", user_id,

@@ -115,6 +115,19 @@ def test_all_file_page_registrations_links_and_switches_share_path_resolver():
             target=node.args[0]
             if isinstance(target,ast.Name) and target.id=='dashboard':
                 assert node.func.attr=='Page'
+            elif isinstance(target,ast.Lambda):
+                # The denial page is a no-op callable, not a file-page target.
+                assert source == root/'app/auth.py' and node.func.attr == 'Page'
+                assert ast.unparse(target) == 'lambda: None'
+                assert {item.arg: ast.literal_eval(item.value) for item in node.keywords} == {
+                    'title': 'Access not provisioned', 'default': True,
+                }
+                denial=next(item for item in tree.body if isinstance(item,ast.FunctionDef)
+                            and item.name=='render_snowflake_access_denied')
+                assert node in list(ast.walk(denial))
+                assert any(isinstance(item,ast.Call) and ast.unparse(item.func)=='st.navigation'
+                           and any(key.arg=='position' and ast.literal_eval(key.value)=='hidden'
+                                   for key in item.keywords) for item in ast.walk(denial))
             elif isinstance(target,ast.Subscript):
                 assert ast.unparse(target)=='st.session_state[\'_efns_dashboard_page\']'
                 assert node.func.attr=='switch_page'

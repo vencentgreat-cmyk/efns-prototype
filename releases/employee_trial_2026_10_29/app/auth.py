@@ -18,7 +18,8 @@ from app.security import (
     has_permission,
     require_permission as enforce_permission,
 )
-from app.runtime import RuntimeMode, current_runtime_mode, snowflake_viewer_email
+from app.runtime import RuntimeMode, current_runtime_mode
+from app.snowflake_identity import resolve_snowflake_username, MAIN_SNOWFLAKE_ADMIN_USERNAME, main_admin_user
 from app.services.authorized_repository import AuthorizedRepository
 
 
@@ -47,10 +48,32 @@ def get_auth_store() -> AuthStore:
     return _cached_auth_store(_default_database_path())
 
 
+def _existing_identity_executor():
+    # Reading identity must not create or resolve another connection.
+    from data.connection import LazySqlExecutor
+    store=st.session_state.get('_snowflake_auth_store')
+    executor=getattr(store,'executor',None)
+    if executor is None:
+        executor=getattr(st.session_state.get('_base_repo'),'executor',None)
+    if executor is None or (isinstance(executor,LazySqlExecutor) and not executor.is_resolved):
+        raise LookupError('No existing identity executor')
+    return executor
+
+
 def current_user() -> User | None:
     if current_runtime_mode() == RuntimeMode.SNOWFLAKE:
-        email = snowflake_viewer_email()
-        return get_auth_store().resolve_identity(email) if email else None
+        details={}
+        username=resolve_snowflake_username(executor_factory=_existing_identity_executor,diagnostics=details)
+        user=None
+        if username==MAIN_SNOWFLAKE_ADMIN_USERNAME:
+            user=main_admin_user()
+            details['matched_entry']='Main account override; no User Management entry required'
+        elif username:
+            user=get_auth_store().resolve_identity(username)
+            if user is not None:
+                details['matched_entry']=dict(user_id=user.user_id,email=user.email,name=user.display_name,role=user.role.value)
+        st.session_state['_efns_signin_diagnostics']=details
+        return user
     token = st.session_state.get(SESSION_TOKEN_KEY)
     user = get_auth_store().resolve_session(token)
     if token and user is None:
@@ -100,21 +123,12 @@ def render_login() -> None:
 
 def render_snowflake_access_denied() -> None:
     from app.ui import apply_theme, page_header
-
     apply_theme()
-    page_header(
-        "Access not provisioned",
-        "EFNS uses your authenticated Snowflake viewer identity in this environment.",
-        "SECURE ACCESS",
-    )
-    email = snowflake_viewer_email()
-    if not email:
-        st.error("Snowflake did not provide a viewer email. Ask an administrator to verify the Snowflake user profile.")
-    elif not email.endswith("@nsegg.ca"):
-        st.error("Only authenticated @nsegg.ca viewers may use EFNS.")
-    else:
-        st.error("Your EFNS application account is missing or inactive. Ask an EFNS Admin to provision access.")
-    st.caption("Password sign-in is disabled inside Streamlit in Snowflake.")
+    # Reset any previously rendered business navigation without exposing pages.
+    st.navigation([st.Page(lambda: None,title='Access not provisioned',default=True)],position='hidden')
+    page_header('Access not provisioned','EFNS application access is managed by the administrator.','SECURE ACCESS')
+    st.error('You do not have access to the EFNS app yet. Please contact the administrator.')
+    st.caption('Administrators: verify username mappings, account activation and the required username-mapping schema update.')
 
 
 def _render_required_password_change(user: User) -> None:
@@ -152,20 +166,10 @@ def _render_required_password_change(user: User) -> None:
 def require_authenticated() -> User:
     try:
         user = current_user()
-    except Exception as exc:
+    except Exception:
         if current_runtime_mode() != RuntimeMode.SNOWFLAKE:
             raise
-        from app.ui import apply_theme, page_header
-
-        apply_theme()
-        page_header(
-            "Authorization unavailable",
-            "EFNS could not verify your application access in Snowflake.",
-            "SECURE ACCESS",
-        )
-        st.error("Ask an EFNS administrator to verify the SECURITY and APP schema setup and application-owner grants.")
-        st.caption(f"Reference: {type(exc).__name__}")
-        st.stop()
+        user=None
     if user is None:
         if current_runtime_mode() == RuntimeMode.SNOWFLAKE:
             render_snowflake_access_denied()
@@ -236,4 +240,15 @@ def render_user_sidebar(user: User) -> None:
         if st.button("Sign out", icon=":material/logout:", key="efns_logout", width="stretch"):
             _logout()
     else:
-        st.caption("Identity supplied by Snowflake")
+        st.caption('Snowflake username: '+(user.snowflake_username or 'Unavailable'))
+        if user.role.value=='Admin':
+            with st.expander('Sign-in diagnostics',expanded=False):
+                details=st.session_state.get('_efns_signin_diagnostics',{})
+                st.write('Snowflake username:',details.get('username') or 'Unavailable')
+                st.write('Identity source:',details.get('source') or 'Unavailable')
+                st.write('Matched User Management entry:',details.get('matched_entry') or 'No mapped entry')
+                schema=getattr(get_auth_store(),'username_mapping_available',None)
+                if schema is False:
+                    st.info('Snowflake username mapping requires the reviewed schema update. The main account remains Admin.')
+                elif schema is None:
+                    st.caption('Mapping schema has not been checked; open User Management to verify it.')

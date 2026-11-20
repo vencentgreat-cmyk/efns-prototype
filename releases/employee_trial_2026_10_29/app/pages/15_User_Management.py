@@ -35,10 +35,14 @@ if issued:
             st.rerun()
 
 users = store.list_users(admin)
+mapping_ready=getattr(store,'username_mapping_available',True)
+if mapping_ready is False:
+    st.info('Snowflake username mapping requires the reviewed schema update. Existing access settings remain available to the main account.')
 user_frame = pd.DataFrame(
     [
         {
             "EMAIL": user.email,
+            "SNOWFLAKE_USERNAME": user.snowflake_username or "",
             "DISPLAY_NAME": user.display_name,
             "ROLE": user.role.value,
             "ACTIVE": user.active,
@@ -56,6 +60,7 @@ st.dataframe(
     hide_index=True,
     column_config={
         "EMAIL": st.column_config.TextColumn("Email"),
+        "SNOWFLAKE_USERNAME": st.column_config.TextColumn("Snowflake username"),
         "DISPLAY_NAME": st.column_config.TextColumn("Name"),
         "ROLE": st.column_config.TextColumn("Role"),
         "ACTIVE": st.column_config.CheckboxColumn("Active"),
@@ -70,28 +75,38 @@ with create_tab:
     with st.form("create_prototype_user", clear_on_submit=True):
         email = st.text_input("Internal email address", placeholder="name@nsegg.ca")
         display_name = st.text_input("Display name")
+        snowflake_username=st.text_input('Snowflake username',key='user_create_snowflake_username',
+            disabled=mapping_ready is False,help='Use the actual Snowflake username, not the login email. Blank means no Snowflake app access.')
         role_name = st.selectbox("Role", [role.value for role in Role])
         create = st.form_submit_button("Add user", type="primary", icon=":material/person_add:")
     if create:
         try:
-            created, temporary_password = store.create_user(admin, email, display_name, Role(role_name))
+            created, temporary_password = store.create_user(admin, email, display_name, Role(role_name), **({"snowflake_username":snowflake_username} if mapping_ready is not False else {}))
             if temporary_password:
                 st.session_state["issued_temporary_credential"] = {
                     "email": created.email,
                     "password": temporary_password,
                 }
+            elif created.snowflake_username:
+                st.success('User entry created with its Snowflake username mapping.')
             else:
-                st.success(f"{created.email} can now use EFNS through Snowflake.")
+                st.success('User entry created. Assign a Snowflake username to enable access after the required schema update.')
             st.rerun()
         except Exception as exc:
             show_data_error(exc)
 
 with maintain_tab:
+    if not users:
+        st.info('No User Management entries yet. Use Add user to create the first mapping.')
+        st.stop()
     options = {f"{user.display_name} · {user.email}": user.user_id for user in users}
     selected_label = st.selectbox("User", list(options), key="admin_selected_user")
     selected = next(user for user in users if user.user_id == options[selected_label])
     with st.form("maintain_prototype_user"):
         st.text_input("Email", value=selected.email, disabled=True)
+        selected_username=st.text_input('Snowflake username',value=selected.snowflake_username or '',
+            key='user_mapping_'+selected.user_id,disabled=mapping_ready is False,
+            help='Case-insensitive and trimmed. Blank removes Snowflake app access for this entry.')
         role_name = st.selectbox(
             "Assigned role",
             [role.value for role in Role],
@@ -101,7 +116,7 @@ with maintain_tab:
         save = st.form_submit_button("Save access settings", type="primary", icon=":material/save:")
     if save:
         try:
-            store.update_user(admin, selected.user_id, role=Role(role_name), active=active)
+            store.update_user(admin, selected.user_id, role=Role(role_name), active=active, **({"snowflake_username":selected_username} if mapping_ready is not False else {}))
             st.success("User access settings updated.")
             st.rerun()
         except Exception as exc:
