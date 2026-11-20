@@ -21,6 +21,8 @@ from data.importing import (
 )
 from data.repositories import get_repository
 from data.production_intake import prepare_workbook
+from data.production_replacement import upload_errors
+from app.services.production_import_review import render_past_replacements, render_import_summary
 
 
 require_page_permission(Permission.IMPORT_DATA)
@@ -54,6 +56,8 @@ with st.container(border=True):
         label_visibility="collapsed",
     )
 
+render_past_replacements(repo)
+
 if uploaded is None:
     st.info("Choose an EIMS production workbook to begin validation.")
     st.stop()
@@ -75,6 +79,7 @@ except Exception as exc:
     st.stop()
 
 normalized_df, source_rows, errors, warnings = prepare_workbook(raw_df, archive["SOURCE_FILE_ID"], repo.get_accounts())
+errors = upload_errors(raw_df, normalized_df, errors)
 prepared_id = repo.stage_production_upload({
     "FILENAME": uploaded.name, "SOURCE": "EIMS Production Workbook - EIMS 3",
     "FILE_HASH": file_hash, "FILE_SIZE_BYTES": len(file_bytes),
@@ -175,21 +180,16 @@ with st.container(border=True):
     batch_week = int(weeks[0]) if len(weeks) == 1 else None
 
     if errors:
-        st.warning("Invalid rows are retained in RAW and excluded from the business commit. Review the errors before importing accepted rows.")
-
-    independent = st.checkbox("These are independent new observations, not corrections of previously accepted records.")
-    confirm_import = st.checkbox(
-        "I reviewed the validation results and want to import these records.",
-        disabled=normalized_df.empty or already_committed or not independent,
-    )
+        st.warning("Import is blocked until all validation errors and unresolved producers are corrected. Original source rows remain in RAW.")
+    st.caption('The uploaded rows replace the complete existing set for each matched producer and production week. Other producer-weeks are unchanged.')
     if st.button(
         "Import validated records",
         type="primary",
-        disabled=normalized_df.empty or not confirm_import or already_committed or not independent,
+        disabled=normalized_df.empty or bool(errors) or already_committed,
     ):
         try:
-            import_id, imported_count = repo.commit_staged_production(prepared_id, new_observations_confirmed=independent)
-            st.success(f"Imported {imported_count} production records. Invalid source rows remain traceable in RAW.")
+            import_id, imported_count = repo.commit_staged_production(prepared_id)
+            render_import_summary(repo.get_production_import_summary(import_id))
             st.code(import_id, language=None)
             if getattr(repo,'last_audit_warning',None): st.warning(repo.last_audit_warning)
         except RepositoryError as exc:

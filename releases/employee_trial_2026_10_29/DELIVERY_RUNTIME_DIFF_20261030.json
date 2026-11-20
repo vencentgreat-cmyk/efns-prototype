@@ -91,7 +91,7 @@
       "status": "MODIFIED",
       "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
-      "candidate_lf_sha256": "15f998518a53dbe06d99afb53d91c4f1a4a556f02ad9c621bd4f1388b9672063"
+      "candidate_lf_sha256": "048a409e31f2bac3254a5d18e69f16e73067eca2dfcac0c8febda582eab14990"
     },
     {
       "path": "app/pages/9_Salmonella_Tests.py",
@@ -126,7 +126,7 @@
       "status": "NEW",
       "reason": "Pure per-field history display projection with Halifax timestamps, page-scoped actor labels and record-specific selector labels; ignores technical metadata and never returns raw VARIANT columns.",
       "baseline_lf_sha256": null,
-      "candidate_lf_sha256": "872a0bf1e5eff89b9c1944f823c1dfc19330f97c4268663f2fcdf7b4db1a9c56"
+      "candidate_lf_sha256": "354c7394909790691349442eea1ec99e1c6b4c07359468cbfae445f46133b231"
     },
     {
       "path": "app/services/selector_options.py",
@@ -217,21 +217,21 @@
       "status": "MODIFIED",
       "reason": "2026-11-02: parameterized entity/ID-filtered, ordered, limited revision read; equivalent bounded memory path. No transaction/write logic changes.",
       "baseline_lf_sha256": "2d542fd6d12a2ac9acab51b2ac55bb7c29dfe64364d2a42f80b4312f569e7b7d",
-      "candidate_lf_sha256": "53dddf0bbd47d60b37857f34869c9f43b09c163decb4454024505b5d5b23baac"
+      "candidate_lf_sha256": "185d8b23c1014c222224926db81434fba05fe933b720bf8ded6bb1b61ea54f91"
     },
     {
       "path": "data/repositories/mock.py",
       "status": "MODIFIED",
       "reason": "Existing alias-compatible reads plus shared daily quota validation at commit, before writer, preserving rollback behavior.",
       "baseline_lf_sha256": "0c19af988ddc3596ae25e5e871740bb0b23fddcaceed72d0ec8c82c6d7532330",
-      "candidate_lf_sha256": "c5aadd1f105b7d3df414cc37969debbe5ee32050922c74df482e4500c9d2d7b7"
+      "candidate_lf_sha256": "578927c037cfb548eb3e028a8185a1a6c5b280df3aa520a1c1c34e4a8fe14e4e"
     },
     {
       "path": "data/repositories/snowflake.py",
       "status": "MODIFIED",
       "reason": "Existing alias-compatible reads plus shared daily quota validation and unique parent checks inside existing commit transaction; no executor/transaction implementation change.",
       "baseline_lf_sha256": "b7f42aa1c5f14fd888d8d7f3ea01f7baacf9850f9bfcb51b4ab04c184f7af5e3",
-      "candidate_lf_sha256": "c0833732f9f1224c142f31750e9495e0a102bfb9d30b63e5c0e7d34cb8dd34a9"
+      "candidate_lf_sha256": "8ff2a2c489398c33ebe73d4176f22e6cf755a57189e9f185a67cab5c19b7cc4e"
     },
     {
       "path": "data/validation.py",
@@ -881,19 +881,19 @@
       "path": "data/quota_leases.py",
       "status": "NEW",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "1a8235ba33d205175eb5d93e2d0f6b189bdabf0b0a901d249f3de866904c6ebf"
+      "candidate_lf_sha256": "21f72513253a6dab04a562bdd5efb8348f14dc43c3935c4960864d8bce1e2fd5"
     },
     {
       "path": "data/quota_lease_persistence.py",
       "status": "NEW",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "fb878ac0b79be151706410ceb6000c27e69e5a39a83a1d50c5ac70f42fbae48c"
+      "candidate_lf_sha256": "a2e2f3979c23ff34dc964f9008849801f9eed2c426fe8d8c191c059bc1010c87"
     },
     {
       "path": "sql/02_core_tables.sql",
       "status": "MODIFIED",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "33894c83bd79b19771d0365f9c7fa44fbf6f63f3e61a20312dc0d78f4585b1f0"
+      "candidate_lf_sha256": "5464f1567acbd949cfcd64537367f01448c764f585f3405570bd52677141c9a9"
     },
     {
       "path": "sql/32_quota_transaction_method_20261119.sql",
@@ -906,6 +906,104 @@
       "status": "NEW",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
       "candidate_lf_sha256": "399f2f93c0308dc45564b8ed5aa0baa239e77b9c9a273ebdc23de5a238ad14c6"
+    }
+  ],
+  "import_overwrite_lease_void_20261119_artifacts": [
+    {
+      "path": "app/pages/1_Production_Import.py",
+      "status": "MODIFIED",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "d87fa42c4d0198f0a9a9a7a38930be08e0993cb288b21c30755ea4a6d72f096d"
+    },
+    {
+      "path": "app/services/authorized_repository.py",
+      "status": "MODIFIED",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "a244719efa48455be53a942f12d27230d31c54e842c08a89fc0805c6b081ff90"
+    },
+    {
+      "path": "tests/test_continuity.py",
+      "status": "MODIFIED",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "e80f3f0504a96492ca5d1aee736027a3db923808e362ee87f79c12177766cad9"
+    },
+    {
+      "path": "tests/test_review_integrated.py",
+      "status": "MODIFIED",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "3e817a9cff5ca2d0bbec51676261d2bf62b1200b1b828f24bed8c423e71ce248"
+    },
+    {
+      "path": "tests/test_staff_workflows.py",
+      "status": "MODIFIED",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "d06380425b12c8ccb0910c865517c9a8469d95966adf956c171f573520771304"
+    },
+    {
+      "path": "tests/test_v6_consistency.py",
+      "status": "MODIFIED",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "6074187f0c3e29fcd11b6ed765764cf581406eb0e34030b06a51f6747ffbede8"
+    },
+    {
+      "path": "app/services/production_import_review.py",
+      "status": "NEW",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "5d30566d1beccdc8b8b83bfcc94e3cd6ccc5b7eb5316206e18d923e804c0f9c2"
+    },
+    {
+      "path": "data/production_replacement.py",
+      "status": "NEW",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "59a60fb1c1c209a2d968824db01c9884324f75b67ac34828fac42ffae4755396"
+    },
+    {
+      "path": "docs/codex_reports/IMPORT_OVERWRITE_LEASE_VOID_20261119.md",
+      "status": "NEW",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "ce105dcb2883b1b9b8927b44968c4da07f9c17c1cffd0dd57dfa0ff6d936bf31"
+    },
+    {
+      "path": "sql/33_production_replacement_backup_20261119.sql",
+      "status": "NEW",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "732fb281d18522335964ad9cf40bf20c5e1343768bac0c5d538ebc963ddf695c"
+    },
+    {
+      "path": "tests/test_production_replacement.py",
+      "status": "NEW",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "a746e90724733ec474c7634a0cf27b1474288305b2c06de117d13dfef93debb8"
+    },
+    {
+      "path": "app/services/quota_lease_void_ui.py",
+      "status": "NEW",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "a18b502015b6f23d4baa043c17bf54342bfd43a33839b3cff555d1deef2221fa"
+    },
+    {
+      "path": "data/quota_lease_void.py",
+      "status": "NEW",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "004f9fd54c248e6fa7b71c3522ef79ff15c10e62bb96fb860926bc1f9212de1b"
+    },
+    {
+      "path": "sql/34_quota_lease_void_20261119.sql",
+      "status": "NEW",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "f80c05db29744e38278846ad6de51f727dbb102931e5341c80ba536f8193d7a6"
+    },
+    {
+      "path": "tests/test_quota_lease_void.py",
+      "status": "NEW",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "12ee8b9c235ea87e03170e8a94f6728c0766a0618c853e991eff6a3a6243b83b"
+    },
+    {
+      "path": "data/repositories/production_replacement.py",
+      "status": "NEW",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "candidate_lf_sha256": "abe9d0b984229a200a6a4293a00a972c80668e6897ca0120d57a8db738bde549"
     }
   ]
 }

@@ -51,6 +51,14 @@ def workbook():
     return buffer.getvalue()
 
 
+def valid_workbook():
+    frame=read_eims_workbook(BytesIO(workbook())).iloc[:1].drop(columns=['SOURCE_ROW_NUMBER'])
+    buffer=BytesIO()
+    with pd.ExcelWriter(buffer,engine='openpyxl') as writer:
+        frame.to_excel(writer,sheet_name='EIMS 3',startrow=9,index=False)
+    return buffer.getvalue()
+
+
 def test_original_bytes_rows_validation_and_retry(repo):
     original = workbook()
     archive = repo.archive_source_file('synthetic.xlsm',original,'PRODUCTION_WORKBOOK',actor='test')
@@ -66,8 +74,15 @@ def test_original_bytes_rows_validation_and_retry(repo):
     import_id=repo.stage_production_upload(batch,rows)
     before=len(repo._production)
     assert len(repo.get_raw_rows(import_id))==3 and len(repo._production)==before
-    assert repo.commit_staged_production(import_id,'test',new_observations_confirmed=True) == (import_id,1)
-    assert repo.commit_staged_production(import_id,'test') == (import_id,1)
+    with pytest.raises(RepositoryError,match='Import blocked'):
+        repo.commit_staged_production(import_id,'test')
+    assert len(repo._production)==before
+    assert len(repo.get_raw_rows(import_id))==3
+    valid=repo.archive_source_file('synthetic-valid.xlsx',valid_workbook(),'PRODUCTION_WORKBOOK','test')
+    _,valid_rows,_,_=prepare_workbook(read_eims_workbook(BytesIO(valid_workbook())),valid['SOURCE_FILE_ID'],repo._accounts)
+    valid_batch=repo.stage_production_upload(dict(SOURCE_FILE_ID=valid['SOURCE_FILE_ID'],FILE_HASH=valid['FILE_HASH']),valid_rows)
+    assert repo.commit_staged_production(valid_batch,'test')==(valid_batch,1)
+    assert repo.commit_staged_production(valid_batch,'test')==(valid_batch,1)
     assert len(repo._production)==before+1
     match=repo.get_production_match_decisions().iloc[0]
     assert match.HANDLING=='AUTO'
@@ -75,7 +90,7 @@ def test_original_bytes_rows_validation_and_retry(repo):
 
 
 def test_failed_commit_keeps_original_raw(repo,monkeypatch):
-    original=workbook()
+    original=valid_workbook()
     archive=repo.archive_source_file('x.xlsx',original,'PRODUCTION_WORKBOOK')
     _,rows,_,_=prepare_workbook(read_eims_workbook(BytesIO(original)),archive['SOURCE_FILE_ID'],repo._accounts)
     batch=repo.stage_production_upload(dict(SOURCE_FILE_ID=archive['SOURCE_FILE_ID'],FILE_HASH=archive['FILE_HASH']),rows)
@@ -83,7 +98,7 @@ def test_failed_commit_keeps_original_raw(repo,monkeypatch):
     def fail(*args): raise RuntimeError('synthetic write failure')
     monkeypatch.setattr(repo,'_append_match',fail)
     with pytest.raises(RuntimeError):repo.commit_staged_production(batch,'test',new_observations_confirmed=True)
-    assert len(repo._production)==before and len(repo.get_raw_rows(batch))==3
+    assert len(repo._production)==before and len(repo.get_raw_rows(batch))==1
     assert repo.find_import_by_hash(archive['FILE_HASH'])['STATUS']=='Staged'
     assert repo.get_source_file_bytes(archive['SOURCE_FILE_ID'])==original
 

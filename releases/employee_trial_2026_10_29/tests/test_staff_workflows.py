@@ -15,6 +15,7 @@ from tests.test_report_center import user
 from tests.test_continuity import workbook
 from data.importing import read_eims_workbook
 from data.production_intake import prepare_workbook
+from data.source_evidence import evidence_json
 
 
 @pytest.fixture
@@ -54,7 +55,7 @@ def test_continuous_production_chain_matching_query_and_revision(chain):
     current=r._production[r._production.PRODUCTION_ID==pid].iloc[0]
     r.revise_record('PRODUCTION_RECORD',pid,{'TOTAL':650},'Synthetic source correction','rev-1',actor='staff',expected_updated_at=current.UPDATED_AT)
     from data.constants import EIMS_REQUIRED_COLUMNS
-    source=pd.DataFrame([{'Producer #':'001','Week':'1526','Total':400,'MarketingType':'DEV_TEST recorded category'},{'Producer #':None,'Week':'1526','Total':12}])
+    source=pd.DataFrame([{'Producer #':'001','Week':'202615','Total':400,'MarketingType':'DEV_TEST recorded category'},{'Producer #':None,'Week':'202615','Total':12}])
     for column in EIMS_REQUIRED_COLUMNS:
         if column not in source: source[column]=None
     buffer=BytesIO()
@@ -67,14 +68,22 @@ def test_continuous_production_chain_matching_query_and_revision(chain):
     assert len(rows)==2 and len(accepted)==1 and accepted.iloc[0].PRODUCER_ACCOUNT_ID==a
     assert accepted.iloc[0].MARKETING_TYPE=='DEV_TEST recorded category'
     batch=r.stage_production_upload(dict(SOURCE_FILE_ID=archive['SOURCE_FILE_ID'],FILE_HASH=archive['FILE_HASH']),rows)
-    before=len(r._production)
-    r.commit_staged_production(batch,'staff',new_observations_confirmed=True)
-    r.commit_staged_production(batch,'staff',new_observations_confirmed=True)
-    assert len(r._production)==before+1 and len(r.get_raw_rows(batch))==2
+    before=len(r._production);history_before=len(r.get_record_revisions())
+    with pytest.raises(RepositoryError,match='Import blocked'):
+        r.commit_staged_production(batch,'staff')
+    assert len(r._production)==before and len(r.get_raw_rows(batch))==2
+    clean=frame.iloc[:1].copy()
+    clean_archive=r.archive_source_file('synthetic-valid.xlsx',evidence_json(clean.to_dict('records')).encode(),'PRODUCTION_WORKBOOK','staff')
+    _,clean_rows,_,_=prepare_workbook(clean,clean_archive['SOURCE_FILE_ID'],r.get_accounts())
+    clean_batch=r.stage_production_upload(dict(SOURCE_FILE_ID=clean_archive['SOURCE_FILE_ID'],FILE_HASH=clean_archive['FILE_HASH']),clean_rows)
+    r.commit_staged_production(clean_batch,'staff')
+    r.commit_staged_production(clean_batch,'staff')
+    assert len(r._production)==before and len(r.get_raw_rows(clean_batch))==1
     result=build_custom_report(r,user=user(),dataset='Production Records',selected_fields=['PRODUCTION_ID','TOTAL'])
-    assert sorted(result['Source Total'].tolist())==[400,650]
+    assert result['Source Total'].tolist()==[400]
     assert r.get_source_file_bytes(archive['SOURCE_FILE_ID'])==original
-    assert len(r.get_record_revisions())==1
+    assert len(r.get_record_revisions())==history_before+1
+    assert r.get_production_replacement_backups(clean_batch).iloc[0].OLD_VALUES['TOTAL']==650
 
 
 def test_flock_transactions_are_activity_not_automatic_inventory(chain):

@@ -196,5 +196,6 @@ def test_U6_matching_changes_after_preview_block_commit_until_explicit_review(ch
     assert r._production.empty and r._raw_rows==before
     _,reviewed,_,_=prepare_workbook(raw,archive['SOURCE_FILE_ID'],r.get_accounts())
     assert r.stage_production_upload(batch,reviewed,actor='synthetic',review_again=True)==bid
-    result=r.commit_staged_production(bid,'synthetic',new_observations_confirmed=True)
-    assert result[1]>=0 and r._raw_rows==before
+    with pytest.raises(RepositoryError,match='Import blocked'):
+        r.commit_staged_production(bid,'synthetic')
+    assert r._production.empty and r._raw_rows==before  # Re-review cannot bypass invalid/unmatched rows.

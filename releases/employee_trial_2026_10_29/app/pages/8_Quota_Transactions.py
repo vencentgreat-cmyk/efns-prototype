@@ -21,7 +21,7 @@ from data.repositories.base import RepositoryError
 from data.validation import validate_quota_transaction, quota_related_account_required, parse_optional_quota_price
 from data.quota_position import component_table
 from app.services.entry_fields import quota_owner_errors
-from data.quota_leases import is_lease
+from data.quota_leases import is_lease, is_voided
 from data.quota_lease_persistence import IMMUTABLE_LEASE
 
 
@@ -57,6 +57,8 @@ def label_for_id(mapping, value, default=None):
 
 
 def transaction_title(record):
+    if is_voided(record):
+        return "Voided lease · "+str(record.get("QUOTA_TRANSACTION_ID") or "")[:8]
     return f"{record.get('TRANSACTION_TYPE') or 'Transaction'} · {str(record.get('QUOTA_TRANSACTION_ID') or '')[:8]}"
 
 
@@ -128,7 +130,7 @@ if view.name == "list":
         display["QUOTA_NAME"] = display["QUOTA_ID"].map(quota_names)
         display["OWNER_NAME"] = display["OWNER_ACCOUNT_ID"].map(account_names)
         display["RELATED_NAME"] = display["RELATED_ACCOUNT_ID"].map(account_names)
-        display["TRANSACTION_TYPE"] = display.apply(lambda row: 'Leased out' if is_lease(row) else row["TRANSACTION_TYPE"],axis=1)
+        display["TRANSACTION_TYPE"] = display.apply(lambda row: 'Voided' if is_voided(row) else 'Leased out' if is_lease(row) else row["TRANSACTION_TYPE"],axis=1)
         if keyword:
             columns = ["QUOTA_TRANSACTION_ID", "TRANSACTION_TYPE", "QUOTA_NAME", "OWNER_NAME", "RELATED_NAME"]
             display = display[display[columns].fillna("").astype(str).apply(lambda column: column.str.contains(keyword, case=False, regex=False)).any(axis=1)]
@@ -191,6 +193,9 @@ else:
                 middle.markdown(f"**Credit Type**  \n{current.get('QUOTA_LEASE_TYPE') or '—'}")
                 right.markdown(f"**Comments**  \n{current.get('COMMENTS') or 'No comments.'}")
                 st.info("This page shows transaction activity only. No available quota balance has been inferred.")
+            if is_lease(current):
+                from app.services.quota_lease_void_ui import render_void_action
+                render_void_action(repo,current)
         with relationships:
             with st.container(border=True):
                 if quota:

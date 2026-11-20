@@ -22,6 +22,9 @@ def save_new_lease(repo, record):
     continuity transaction; direct new-lease writes acquire the same boundary.
     Every Snowflake validation read explicitly uses the owning tx executor.
     """
+    from data.producer_identity import text
+    if text(record.get('LEASE_STATUS')):
+        raise RepositoryError('New leases cannot set a void status. Use the Admin Void lease action on a saved lease.')
     with repo._continuity_transaction() as tx:
         identity=record.get('QUOTA_TRANSACTION_ID')
         if repo._is_memory:

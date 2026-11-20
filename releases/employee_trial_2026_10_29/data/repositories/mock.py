@@ -59,6 +59,7 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
 
     def __init__(self, seed: int = 42):
         self._init_continuity()
+        self._continuity_rows["PRODUCTION_REPLACEMENT_BACKUP"] = []
         data = generate_all(seed=seed)
         self._accounts = data["accounts"].copy()
         self._contacts = pd.DataFrame(columns=["CONTACT_ID", "ACCOUNT_ID", "FULL_NAME", "STATUS"])
@@ -70,6 +71,7 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
         self._flock_transactions["COUNT_SOURCE_LABEL"] = None
         self._quota_registrations = data["quota_registrations"].copy()
         self._quota_transactions = data["quota_transactions"].copy()
+        self._quota_transactions["LEASE_STATUS"] = None
         self._quota_allocations = pd.DataFrame(columns=["QUOTA_ALLOCATION_ID", "QUOTA_TYPE", "PROVINCE", "STATUS"])
         self._salmonella_tests = data["salmonella_tests"].copy()
         self._salmonella_test_samples = data["salmonella_test_samples"].copy()

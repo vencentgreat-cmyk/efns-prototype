@@ -83,6 +83,15 @@ class AuthorizedRepository:
                     kwargs['actor']={'user_id':self.actor.user_id,'email':self.actor.email}
                 return attribute(*args,**kwargs)
             return controlled_call
+        if name=='void_quota_lease':
+            @wraps(attribute)
+            def void_lease_call(*args,**kwargs):
+                self._require(Permission.UPDATE_DATA)
+                if self.actor.role!=Role.ADMIN:
+                    raise RepositoryError('Only an application Admin can void a lease.')
+                kwargs['actor']={'user_id':self.actor.user_id,'email':self.actor.email,'role':self.actor.role.value}
+                return attribute(*args,**kwargs)
+            return void_lease_call
         if name=='create_record_once':
             @wraps(attribute)
             def create_call(*args,**kwargs):
@@ -143,7 +152,7 @@ class AuthorizedRepository:
                     self._audit_warning(name,str(entity_id),exc)
                 return result
             return continuity_call
-        if name in {"get_source_file_bytes", "get_source_review_rows", "get_source_raw_rows", "get_facility_source_descriptions"}:
+        if name in {"get_production_replacement_backups", "get_production_import_summary", "get_source_file_bytes", "get_source_review_rows", "get_source_raw_rows", "get_facility_source_descriptions"}:
             return self._authorized_call(attribute, Permission.IMPORT_DATA)
         if name in UPSERT_METHODS:
             return self._authorized_upsert(name, attribute)

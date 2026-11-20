@@ -9,7 +9,7 @@ import pytest
 from app.services.report_center import build_custom_report, report_csv, report_xlsx
 from data.repositories.base import ConcurrencyError, RepositoryError
 from data.source_scope import scope_production, PROVENANCE
-from tests.test_continuity import repo, history_repo, workbook
+from tests.test_continuity import repo, history_repo, workbook, valid_workbook
 from tests.test_report_center import user
 from data.importing import read_eims_workbook
 from data.production_intake import prepare_workbook
@@ -58,19 +58,18 @@ def test_concurrent_corrections_have_one_winner(repo):
     assert len(repo.get_record_revisions()) == 1
 
 
-def test_modified_workbook_requires_explicit_intent_not_fuzzy_dedupe(repo):
+def test_modified_workbook_replaces_complete_producer_week_without_intent_prompt(repo):
     observation(repo)
-    content=workbook()
+    content=valid_workbook()
     original=repo.archive_source_file('changed.xlsx',content,'PRODUCTION_WORKBOOK')
     _,rows,_,_=prepare_workbook(read_eims_workbook(BytesIO(content)),original['SOURCE_FILE_ID'],repo._accounts)
     batch=repo.stage_production_upload(dict(SOURCE_FILE_ID=original['SOURCE_FILE_ID'],FILE_HASH=original['FILE_HASH'],SOURCE_RECORD_COUNT=len(rows)),rows)
-    with pytest.raises(RepositoryError,match='original Production ID'):
-        repo.commit_staged_production(batch,actor='staff')
-    assert len(repo._production) == 1 and len(repo.get_raw_rows(batch)) == 3
-    assert repo.find_import_by_hash(original['FILE_HASH'])['STATUS'] == 'Staged'
-    repo.commit_staged_production(batch,actor='staff',new_observations_confirmed=True)
-    repo.commit_staged_production(batch,actor='staff',new_observations_confirmed=True)
-    assert len(repo._production) == 2  # Two independent observations, not one producer/week identity.
+    repo.commit_staged_production(batch,actor='staff')
+    repo.commit_staged_production(batch,actor='staff')
+    assert len(repo._production)==1 and repo._production.iloc[0].TOTAL==0
+    backup=repo.get_production_replacement_backups(batch)
+    assert len(backup)==1 and backup.iloc[0].OLD_VALUES['TOTAL']==600
+    assert repo.find_import_by_hash(original['FILE_HASH'])['STATUS']=='Committed'
 
 
 @pytest.mark.parametrize('values,expected,known,missing', [([600,None,400],1000,2,1),([None,None],None,0,2),([0,None],0,1,1),([-3,3],0,2,0)])
