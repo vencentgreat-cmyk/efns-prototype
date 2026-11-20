@@ -536,7 +536,8 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
             dates = pd.to_datetime(frame["EFFECTIVE_DATE"], errors="coerce")
         if date_to is not None:
             frame = frame[dates <= pd.Timestamp(date_to)]
-        return frame
+        from data.quota_lease_adjustments import attach_adjustments
+        return attach_adjustments(self, frame)
 
     @serialized_write
     def upsert_quota_transaction(self, record: dict) -> str:

@@ -177,6 +177,7 @@ def test_snowflake_validation_and_write_use_same_existing_transaction(monkeypatc
     class Tx:
         def query(self,sql,params):
             queries.append((sql,params))
+            if 'RECORD_REVISION' in sql:return pd.DataFrame()
             if 'MIGRATION_RAW_ROW' in sql:return pd.DataFrame(columns=['TRANSACTION_ID','TRANSACTION_STATE'])
             if 'FROM EFNS_DEV.CORE.ACCOUNT' in sql:return accounts[['ACCOUNT_ID']]
             if 'QUOTA_REGISTRATION' in sql:return regs.iloc[:1] if 'QUOTA_ID=%s' in sql else regs
@@ -233,6 +234,7 @@ def test_two_snowflake_sessions_reuse_existing_global_lock(monkeypatch):
             lock_statements.append(sql)
             return 1
         def query(self,sql,params):
+            if 'RECORD_REVISION' in sql:return pd.DataFrame()
             if 'MIGRATION_RAW_ROW' in sql:return pd.DataFrame(columns=['TRANSACTION_ID','TRANSACTION_STATE'])
             if 'FROM EFNS_DEV.CORE.ACCOUNT' in sql:return accounts[['ACCOUNT_ID']]
             if 'QUOTA_REGISTRATION' in sql:return regs.iloc[:1] if 'QUOTA_ID=%s' in sql else regs

@@ -6,7 +6,7 @@ from data.quota_types import quota_type_filter
 from data.repositories.base import RepositoryError
 from data.quota_leases import is_lease, validate_lease_period
 
-IMMUTABLE_LEASE = 'Saved leases cannot be edited or deleted until early termination and correction rules are approved.'
+IMMUTABLE_LEASE = 'Saved lease rows cannot be edited or deleted. Use End lease early or Return part of the lease; the original row remains unchanged.'
 
 
 def reject_saved_lease(repo, record_id):
@@ -23,6 +23,8 @@ def save_new_lease(repo, record):
     Every Snowflake validation read explicitly uses the owning tx executor.
     """
     from data.producer_identity import text
+    if any(key.startswith('_LEASE_') for key in record):
+        raise RepositoryError('Lease adjustments must use the dedicated audited action.')
     if text(record.get('LEASE_STATUS')):
         raise RepositoryError('New leases cannot set a void status. Use the Admin Void lease action on a saved lease.')
     with repo._continuity_transaction() as tx:
@@ -58,6 +60,9 @@ def save_new_lease(repo, record):
                 evidence.setdefault(key,set()).add(state)
             if any(len(v)!=1 for v in evidence.values()):raise RepositoryError('Quota state evidence is contradictory; no lease was saved.')
             inactive={key for key,values in evidence.items() if values=={'inactive'}}
+        if not repo._is_memory:
+            from data.quota_lease_adjustments import attach_adjustments
+            activity=attach_adjustments(repo,activity,tx)
         if record.get('TRANSACTION_TYPE')!='Lease (Out)':raise RepositoryError('A new lease must be recorded from the lessor as Leased out.')
         errors=validate_lease_period(record,regs,activity,inactive,load_rules())
         if errors:raise RepositoryError(' '.join(errors))

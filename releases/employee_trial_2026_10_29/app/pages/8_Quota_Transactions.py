@@ -12,7 +12,8 @@ from decimal import Decimal, InvalidOperation
 import pandas as pd
 import streamlit as st
 
-from app.auth import require_operational_page
+from app.auth import require_operational_page, require_page_permission
+from app.security import Permission, Role
 from app.navigation import ensure_record_form_state, format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, selected_row_index, timestamp_column, view_parameter
 from app.ui import apply_theme, clear_widget_prefix, page_header, section_intro, show_data_error
 from data.constants import QUOTA_LEASE_TYPES, QUOTA_TRANSACTION_TYPES, QUOTA_TYPES, UNASSIGNED_LABEL
@@ -25,7 +26,9 @@ from data.quota_leases import is_lease, is_voided
 from data.quota_lease_persistence import IMMUTABLE_LEASE
 
 
-require_operational_page()
+lease_actor = require_page_permission(Permission.VIEW_DATA)
+if lease_actor.role != Role.DEVELOPER:
+    require_operational_page()
 apply_theme()
 if "repo" not in st.session_state:
     st.session_state.repo = get_repository()
@@ -100,6 +103,10 @@ if view.name == "list":
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
     action = list_command_bar("quota_tx_list", selected=bool(selected_id))
     if action == "new": start_new_form('quota_tx_form_'); start_new_form('quota_lease_form_'); open_view("new")
+    if lease_actor.role in {Role.ADMIN,Role.DATA_EDITOR,Role.DEVELOPER} and st.button('New lease',key='quota_tx_new_lease'):
+        start_new_form('quota_tx_form_'); start_new_form('quota_lease_form_')
+        st.session_state['quota_tx_form_method']='Lease'
+        open_view('new')
     if action == "view" and selected_id: open_view("detail", selected_id)
     if action == "refresh": st.rerun()
     if action == "delete" and selected_id: st.session_state['quota_tx_form___delete_pending']=selected_id
@@ -195,6 +202,8 @@ else:
                 st.info("This page shows transaction activity only. No available quota balance has been inferred.")
             if is_lease(current):
                 from app.services.quota_lease_void_ui import render_void_action
+                from app.services.quota_lease_adjustment_ui import render_lease_adjustments
+                render_lease_adjustments(repo,current)
                 render_void_action(repo,current)
         with relationships:
             with st.container(border=True):
@@ -218,11 +227,15 @@ else:
     else:
         current = current or {}
         begin_form('quota_tx_form_',view.record_id)
+        if lease_actor.role == Role.DEVELOPER and view.record_id:
+            st.info('Your role can create and adjust leases; other saved transactions are read-only.')
+            st.stop()
         begin_form('quota_lease_form_',view.record_id)
         ensure_record_form_state("quota_tx_form_", view.record_id)
-        method = method_area.selectbox('Method',['Allocation','Lease'],index=1 if is_lease(current) else 0,disabled=bool(view.record_id),key='quota_tx_form_method')
+        method = method_area.selectbox('Method',['Allocation','Lease'],index=1 if is_lease(current) or lease_actor.role == Role.DEVELOPER else 0,disabled=bool(view.record_id) or lease_actor.role == Role.DEVELOPER,key='quota_tx_form_method')
         if method == 'Lease':
             from app.services.quota_lease_entry import render_lease_form
+            if lease_actor.role == Role.DEVELOPER and not current and st.button('Save lease',key='quota_tx_save_lease'): action='save'
             render_lease_form(repo,current,action)
             st.stop()
         if quotas.empty:

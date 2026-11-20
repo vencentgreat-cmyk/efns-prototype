@@ -91,7 +91,7 @@
       "status": "MODIFIED",
       "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
-      "candidate_lf_sha256": "048a409e31f2bac3254a5d18e69f16e73067eca2dfcac0c8febda582eab14990"
+      "candidate_lf_sha256": "25e9ea1ff7011fa7d4b372f2545e45020375b4928b7d0fd1351f5b29ef8c0f42"
     },
     {
       "path": "app/pages/9_Salmonella_Tests.py",
@@ -217,21 +217,21 @@
       "status": "MODIFIED",
       "reason": "2026-11-02: parameterized entity/ID-filtered, ordered, limited revision read; equivalent bounded memory path. No transaction/write logic changes.",
       "baseline_lf_sha256": "2d542fd6d12a2ac9acab51b2ac55bb7c29dfe64364d2a42f80b4312f569e7b7d",
-      "candidate_lf_sha256": "185d8b23c1014c222224926db81434fba05fe933b720bf8ded6bb1b61ea54f91"
+      "candidate_lf_sha256": "5419eaa9b6229148943e279eee9cefc69babae22d1de748e258012dfe1ab8d23"
     },
     {
       "path": "data/repositories/mock.py",
       "status": "MODIFIED",
       "reason": "Existing alias-compatible reads plus shared daily quota validation at commit, before writer, preserving rollback behavior.",
       "baseline_lf_sha256": "0c19af988ddc3596ae25e5e871740bb0b23fddcaceed72d0ec8c82c6d7532330",
-      "candidate_lf_sha256": "ec58d2c6b18cda3ac9038e370d387c5944581de8230c99ff5e1918e113333c68"
+      "candidate_lf_sha256": "68f327916eb5d068f091aef537dd566e99ce07eba62c41210db9a8e2406767cd"
     },
     {
       "path": "data/repositories/snowflake.py",
       "status": "MODIFIED",
       "reason": "Existing alias-compatible reads plus shared daily quota validation and unique parent checks inside existing commit transaction; no executor/transaction implementation change.",
       "baseline_lf_sha256": "b7f42aa1c5f14fd888d8d7f3ea01f7baacf9850f9bfcb51b4ab04c184f7af5e3",
-      "candidate_lf_sha256": "8ff2a2c489398c33ebe73d4176f22e6cf755a57189e9f185a67cab5c19b7cc4e"
+      "candidate_lf_sha256": "ec4afd72e1c0e068546ee81f882eb5ca3fb4b47e502fff865a850da38d730920"
     },
     {
       "path": "data/validation.py",
@@ -875,19 +875,19 @@
       "path": "app/services/quota_lease_entry.py",
       "status": "NEW",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "317815d069b283fd05fbe867a85433d359400aa8450f0bc06da968e542e383a1"
+      "candidate_lf_sha256": "ecda96f9e7be4e36549224e4d7aeca0b81e3f4db28ebb0682188a4a2288875aa"
     },
     {
       "path": "data/quota_leases.py",
       "status": "NEW",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "21f72513253a6dab04a562bdd5efb8348f14dc43c3935c4960864d8bce1e2fd5"
+      "candidate_lf_sha256": "e470c250e09a8d1844bdf819428aaed0caf281778f036ba806f10069e4cac44a"
     },
     {
       "path": "data/quota_lease_persistence.py",
       "status": "NEW",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "a2e2f3979c23ff34dc964f9008849801f9eed2c426fe8d8c191c059bc1010c87"
+      "candidate_lf_sha256": "81abe0caa3fd7ee40fec5cf7c995964ae6055455293d832e3b504ff00d088708"
     },
     {
       "path": "sql/02_core_tables.sql",
@@ -905,7 +905,7 @@
       "path": "tests/test_quota_leases.py",
       "status": "NEW",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "399f2f93c0308dc45564b8ed5aa0baa239e77b9c9a273ebdc23de5a238ad14c6"
+      "candidate_lf_sha256": "3029b13dad46d14479f776b0e8b140b2d9bee2e194067f25bdc199cfe0117e4a"
     }
   ],
   "import_overwrite_lease_void_20261119_artifacts": [
@@ -919,7 +919,7 @@
       "path": "app/services/authorized_repository.py",
       "status": "MODIFIED",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "a244719efa48455be53a942f12d27230d31c54e842c08a89fc0805c6b081ff90"
+      "candidate_lf_sha256": "1a3893e7504d893410fa67eaf68b3132a81d7c36a582375d55ec789326edfd75"
     },
     {
       "path": "tests/test_continuity.py",
@@ -985,7 +985,7 @@
       "path": "data/quota_lease_void.py",
       "status": "NEW",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "004f9fd54c248e6fa7b71c3522ef79ff15c10e62bb96fb860926bc1f9212de1b"
+      "candidate_lf_sha256": "fc9da7a324e0655790d69e09d8bc0f528dad6c0ff43c70623cb67a57a94b4251"
     },
     {
       "path": "sql/34_quota_lease_void_20261119.sql",
@@ -997,7 +997,7 @@
       "path": "tests/test_quota_lease_void.py",
       "status": "NEW",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "12ee8b9c235ea87e03170e8a94f6728c0766a0618c853e991eff6a3a6243b83b"
+      "candidate_lf_sha256": "f319b22eadf5d6a4da4be471a3d45501543e1a6c025ace948cbe92470ba235e4"
     },
     {
       "path": "data/repositories/production_replacement.py",
@@ -1023,13 +1023,31 @@
       "path": "docs/codex_reports/FLOCK_SUMMARY_LEASE_ADJUST_20261120.md",
       "status": "NEW",
       "reason": "Task 5 weekly stock report and append-only lease adjustments.",
-      "candidate_lf_sha256": "5cb94ea88a568d6477303e76210e2e4ef69a219c443070faf408870179e5a83f"
+      "candidate_lf_sha256": "59f2c87894ffe28958578577da5da3e824b2df12b58884d648b54592058413a9"
     },
     {
       "path": "tests/test_flock_summary_report.py",
       "status": "NEW",
       "reason": "Task 5 weekly stock report and append-only lease adjustments.",
       "candidate_lf_sha256": "d65b7aa9df0442812ac2396b09715b474a1bc62459d1a05ba7222d9fb4f38b7c"
+    },
+    {
+      "path": "app/services/quota_lease_adjustment_ui.py",
+      "status": "NEW",
+      "reason": "Task 5 weekly stock report and append-only lease adjustments.",
+      "candidate_lf_sha256": "447cc3177fdf82574e08598b1c4d5ea76c0e51130d82d4b46cac902059a6932e"
+    },
+    {
+      "path": "data/quota_lease_adjustments.py",
+      "status": "NEW",
+      "reason": "Task 5 weekly stock report and append-only lease adjustments.",
+      "candidate_lf_sha256": "811b1ed854d5b530472e109f1f4f1ea93751eea64d568d197fc9dba867a2baf8"
+    },
+    {
+      "path": "tests/test_quota_lease_adjustments.py",
+      "status": "NEW",
+      "reason": "Task 5 weekly stock report and append-only lease adjustments.",
+      "candidate_lf_sha256": "3d102852df531a0f85497a19df49b73e3a99454181ac4d97b7d89675b521f55a"
     }
   ]
 }

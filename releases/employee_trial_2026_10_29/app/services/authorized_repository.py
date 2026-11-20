@@ -83,6 +83,15 @@ class AuthorizedRepository:
                     kwargs['actor']={'user_id':self.actor.user_id,'email':self.actor.email}
                 return attribute(*args,**kwargs)
             return controlled_call
+        if name=='adjust_quota_lease':
+            @wraps(attribute)
+            def adjust_lease_call(*args,**kwargs):
+                self._require(Permission.VIEW_DATA)
+                if self.actor.role not in {Role.ADMIN,Role.DATA_EDITOR,Role.DEVELOPER}:
+                    raise RepositoryError('Only Admin, Data Editor or Developer may adjust a lease.')
+                kwargs['actor']={'user_id':self.actor.user_id,'email':self.actor.email,'role':self.actor.role.value}
+                return attribute(*args,**kwargs)
+            return adjust_lease_call
         if name=='void_quota_lease':
             @wraps(attribute)
             def void_lease_call(*args,**kwargs):
@@ -95,7 +104,14 @@ class AuthorizedRepository:
         if name=='create_record_once':
             @wraps(attribute)
             def create_call(*args,**kwargs):
-                self._require(Permission.CREATE_DATA)
+                from data.quota_leases import is_lease
+                entity=args[0] if args else kwargs.get('entity')
+                record=args[1] if len(args)>1 else kwargs.get('record',{})
+                if entity=='QUOTA_TRANSACTION' and is_lease(record):
+                    self._require(Permission.VIEW_DATA)
+                    if self.actor.role not in {Role.ADMIN,Role.DATA_EDITOR,Role.DEVELOPER}:
+                        raise RepositoryError('You do not have permission to create a lease. Only Admin, Data Editor or Developer may create a lease.')
+                else:self._require(Permission.CREATE_DATA)
                 kwargs['actor']={'user_id':self.actor.user_id,'email':self.actor.email}
                 return attribute(*args,**kwargs)
             return create_call
@@ -181,7 +197,12 @@ class AuthorizedRepository:
         def call(record, *args, **kwargs):
             action = "UPDATE" if record.get(id_field) else "CREATE"
             permission = Permission.UPDATE_DATA if action == "UPDATE" else Permission.CREATE_DATA
-            self._require(permission)
+            from data.quota_leases import is_lease
+            if name=='upsert_quota_transaction' and is_lease(record):
+                self._require(Permission.VIEW_DATA)
+                if self.actor.role not in {Role.ADMIN,Role.DATA_EDITOR,Role.DEVELOPER}:
+                    raise RepositoryError('You do not have permission to create a lease. Only Admin, Data Editor or Developer may create a lease.')
+            else:self._require(permission)
             result = method(record, *args, **kwargs)
             try:self.auth_store.record_action(self.actor, action, entity_type, str(result))
             except Exception as exc:self._audit_warning(action,str(result),exc,entity_type)

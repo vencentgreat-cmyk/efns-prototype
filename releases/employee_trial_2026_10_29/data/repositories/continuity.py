@@ -282,6 +282,16 @@ class ContinuityRepository:
         from data.flock_quantity import record_current_quantity
         return record_current_quantity(self,record,request_id,expected_updated_at,reason,confirmed=confirmed,actor=actor,expected_bird_count=expected_bird_count)
 
+    def get_quota_lease_adjustments(self, transaction_ids):
+        from data.quota_lease_adjustments import get_adjustments
+        return get_adjustments(self, transaction_ids)
+
+    def adjust_quota_lease(self, transaction_id, kind, adjustment_date, returned_amount, reason,
+                           request_id, expected_updated_at, expected_adjustment_ids, actor=None):
+        from data.quota_lease_adjustments import adjust_lease
+        return adjust_lease(self, transaction_id, kind, adjustment_date, returned_amount, reason,
+                            request_id, expected_updated_at, expected_adjustment_ids, actor)
+
     def void_quota_lease(self, transaction_id, reason, request_id, expected_updated_at, actor=None):
         from data.quota_lease_void import void_lease
         return void_lease(self, transaction_id, reason, request_id, expected_updated_at, actor)

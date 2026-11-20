@@ -104,7 +104,11 @@ def test_rejects_void_when_another_record_consumed_the_quota(kind):
     else:
         record=dict(QUOTA_TRANSACTION_ID='consumed',QUOTA_ID='qb',OWNER_ACCOUNT_ID='b',RELATED_ACCOUNT_ID='a',
             TRANSACTION_TYPE='Sale' if kind=='sale' else 'Lease (Out)',QUOTA_COUNT=60,EFFECTIVE_DATE='2026-12-20',END_DATE='2027-01-10')
-    r.upsert_quota_transaction(record)
+    if kind=='onward-lease':
+        # Already-saved lease from before the own-quota-only availability rule.
+        # New onward commitments are rejected; void must still protect this history.
+        r._quota_transactions=pd.concat([r._quota_transactions,pd.DataFrame([record])],ignore_index=True)
+    else:r.upsert_quota_transaction(record)
     before=r._quota_transactions.copy(deep=True);history=len(r.get_record_revisions())
     with pytest.raises(RepositoryError,match='depends|onward'):void(r,identity)
     pd.testing.assert_frame_equal(r._quota_transactions,before)
