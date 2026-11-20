@@ -37,6 +37,7 @@ def test_catalog_contains_only_confirmed_and_existing_report_names():
         "Flock Permit Form",
         "Flock Age Report",
         "Flock Status Report",
+        "Flock Summary",
         "Producers Over Quota Report",
         "Flock Status Report by Producer",
         "Flocks Counted Report",

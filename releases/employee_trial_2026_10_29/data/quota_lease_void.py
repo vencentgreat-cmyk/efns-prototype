@@ -74,6 +74,8 @@ def _evidence(repo,tx,target):
             raise RepositoryError('Quota state evidence is unavailable; the lease was not voided.')
         states.setdefault(key,set()).add(state)
     if any(len(value)!=1 for value in states.values()):raise RepositoryError('Quota state evidence is contradictory; the lease was not voided.')
+    from data.quota_lease_adjustments import attach_adjustments
+    activity=attach_adjustments(repo,activity,tx)
     return regs,activity,{key for key,value in states.items() if value=={'inactive'}}
 
 

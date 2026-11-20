@@ -652,7 +652,8 @@ class SnowflakeRepository(ControlledSupplementRepository, FlockDateRepairReposit
                 conditions.append('qr.QUOTA_TYPE = %s'); params.append(aliases)
         sql = f"SELECT qt.* FROM {self._table('QUOTA_TRANSACTION')} qt{join}"
         if conditions: sql += " WHERE " + " AND ".join(conditions)
-        return self._query(sql, tuple(params) if params else None)
+        from data.quota_lease_adjustments import attach_adjustments
+        return attach_adjustments(self, self._query(sql, tuple(params) if params else None))
     def upsert_quota_transaction(self, record):
         from data.quota_leases import is_lease
         from data.quota_lease_persistence import save_new_lease, reject_saved_lease

@@ -93,6 +93,12 @@ def run_report(definition,repo,case):
     account=ids[0] if ids else None
     registrations,activity=repo.get_quota_registrations(),repo.get_quota_transactions()
     quotas,_count,_reasons=build_flock_age_quotas(registrations,activity,a,as_of,set(),load_rules())
+    if handler=='flock_summary':
+        from app.services.flock_summary_report import build_flock_summary_report, default_flock_summary_weeks
+        calendar=repo.get_efc_dates()
+        if calendar.empty:return build_flock_summary_report(f,t,a,repo.get_facilities(),__import__('app.services.flock_summary_report',fromlist=['synthetic_efc_calendar']).synthetic_efc_calendar(today.year),today.year*100+1,today.year*100+1)
+        first,last=default_flock_summary_weeks(calendar,today)
+        return build_flock_summary_report(f,t,a,repo.get_facilities(),calendar,first,last)
     if handler in FORM_HANDLERS:
         selected=next(iter(a.get('REGISTRATION_NUMBER',pd.Series(dtype=object)).dropna()),None)
         form=build_printable_form(repo,handler,user=user(),registration=selected,

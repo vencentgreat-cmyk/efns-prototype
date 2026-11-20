@@ -36,7 +36,7 @@ def render_lease_form(repo,current,action):
     start=st.date_input('Start Date',value=halifax_today(),key='quota_lease_form_start')
     end=st.date_input('Quota End Date',value=None,key='quota_lease_form_end')
     comments=st.text_area('Comments',key='quota_lease_form_comments')
-    st.caption('Quota is leased out of the lessor and leased in to the lessee through the Quota End Date, inclusive. It returns the next day. Available quota is checked for the whole period when saved.')
+    st.caption('Quota is leased out of the lessor and leased in to the lessee through the Quota End Date, inclusive. It returns the next day. Own quota less other leases out is checked for the whole period when saved. Leased-in quota cannot be leased onward.')
     if action!='save':return
     try:value=Decimal(amount)
     except (InvalidOperation,ValueError):value=None

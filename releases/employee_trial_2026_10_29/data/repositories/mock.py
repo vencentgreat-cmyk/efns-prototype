@@ -77,7 +77,8 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
         self._salmonella_test_samples = data["salmonella_test_samples"].copy()
         self._production = data["production"].copy()
         self._size_breakdown = data["size_breakdown"].copy()
-        self._efc_dates = pd.DataFrame(columns=["DAY", "ELEMENT_CODE", "ELEMENT_CODES"])
+        from data.efc_calendar import synthetic_efc_calendar
+        self._efc_dates = pd.concat([synthetic_efc_calendar(year) for year in range(dt.date.today().year-1,dt.date.today().year+2)],ignore_index=True)
         self._import_batches: list[dict] = []
         self._raw_rows: list[dict] = []
         self._migration_batches: list[dict] = []
@@ -535,7 +536,8 @@ class MockRepository(ControlledSupplementRepository, FlockDateRepairRepository, 
             dates = pd.to_datetime(frame["EFFECTIVE_DATE"], errors="coerce")
         if date_to is not None:
             frame = frame[dates <= pd.Timestamp(date_to)]
-        return frame
+        from data.quota_lease_adjustments import attach_adjustments
+        return attach_adjustments(self, frame)
 
     @serialized_write
     def upsert_quota_transaction(self, record: dict) -> str:
