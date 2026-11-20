@@ -1011,13 +1011,13 @@
       "path": "app/services/flock_summary_report.py",
       "status": "NEW",
       "reason": "Task 5 weekly stock report and append-only lease adjustments.",
-      "candidate_lf_sha256": "35eed40ab4f8cd5b5ec955615a4cea18b916d9393deb35ca9400d802a00f4e27"
+      "candidate_lf_sha256": "56fe6b228ab82bc6538c45cdf49ba32c2e2415f391f41b1ecee8312f21ac74db"
     },
     {
       "path": "data/efc_calendar.py",
       "status": "NEW",
       "reason": "Task 5 weekly stock report and append-only lease adjustments.",
-      "candidate_lf_sha256": "a8b0c05e6dd16ac1d32f823ab24947b4cd12dbab8e9a25035c5f77a687d3d841"
+      "candidate_lf_sha256": "8a8361c318e7be09ab48e1581c3638aebca4bb3c9b3c169f49d4c006c94fb06a"
     },
     {
       "path": "docs/codex_reports/FLOCK_SUMMARY_LEASE_ADJUST_20261120.md",
@@ -1054,6 +1054,20 @@
       "status": "NEW",
       "reason": "Task 5 weekly stock report and append-only lease adjustments.",
       "candidate_lf_sha256": "b968336d19b707f4ace41e1de826cfbd46f0e64576fa90ec8177d59c4e5923c7"
+    }
+  ],
+  "flock_summary_calendar_fix_20261120_artifacts": [
+    {
+      "path": "docs/codex_reports/FLOCK_SUMMARY_CALENDAR_FIX_20261120.md",
+      "status": "NEW",
+      "reason": "Scoped EFC calendar validation and synthetic regression evidence.",
+      "candidate_lf_sha256": "a7d955a938c4b783fd7f0cb3dff05b6ff297e7d4868fec6c9bff3cfad3bd1d07"
+    },
+    {
+      "path": "tests/test_efc_calendar_scope.py",
+      "status": "NEW",
+      "reason": "Scoped EFC calendar validation and synthetic regression evidence.",
+      "candidate_lf_sha256": "bec86cef17ae1c4cb9b9c8db560df3829b495f9004c14c798476545ee89e875c"
     }
   ]
 }
