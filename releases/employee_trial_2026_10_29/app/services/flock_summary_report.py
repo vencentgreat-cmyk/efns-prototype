@@ -12,12 +12,8 @@ from data.efc_calendar import (INVENTORY_AS_OF_WEEK_DAY, WEEKLY_INVENTORY_CAPTIO
 
 def build_flock_summary_report(flocks,transactions,accounts,facilities,calendar,start_week,end_week,
                                mortality='0.4',quota_type='Egg Production',group_by_producer=False):
-    first=resolve_production_week(calendar,start_week);last=resolve_production_week(calendar,end_week)
-    if first[0]>last[0]:raise ValueError('Start Week must be on or before End Week.')
-    weeks={code:dates for code,dates in efc_weeks(calendar).items() if first[0]<=dates[0]<=last[0]}
+    weeks=efc_weeks(calendar,start_week,end_week)
     ordered=sorted(weeks)
-    if any(weeks[b][0]-weeks[a][1]!=dt.timedelta(days=1) for a,b in zip(ordered,ordered[1:])):
-        raise ValueError('The EFC calendar is missing weeks in the selected range.')
     kinds=sorted({'Egg Production',*(quota_type_key(v) or 'Not specified' for v in flocks.get('FLOCK_QUOTA_TYPE',[]) if text(v)!='Special Permit')})
     columns=['Week','Week Start','As-of Date',*(['Reg No','Account'] if group_by_producer else []),'Total Inventory',*kinds]
     owners={str(r['ACCOUNT_ID']):r for r in accounts.to_dict('records')}
