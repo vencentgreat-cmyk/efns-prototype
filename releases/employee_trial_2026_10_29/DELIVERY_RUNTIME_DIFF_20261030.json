@@ -91,7 +91,7 @@
       "status": "MODIFIED",
       "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption. Show current resolved lease status alongside original stored fields, with existing actions unchanged.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
-      "candidate_lf_sha256": "de513832417025d5ea45e649fbe4eb5fd7c5772bef33de72344232a35fc9b172"
+      "candidate_lf_sha256": "647649c21c64c71a4f030e3798140be8a0d17e2ebae2cb0e06c1a0b6ecbc9e6f"
     },
     {
       "path": "app/pages/9_Salmonella_Tests.py",
@@ -203,7 +203,7 @@
       "status": "MODIFIED",
       "reason": "Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained.",
       "baseline_lf_sha256": "814cc38fb0fba545d419a49e4132d3a5e10fe7d4f5ac6707725df04831e80579",
-      "candidate_lf_sha256": "aa9b8eb097b6e4ccc753dc0cce8be95da18b43401882a1953fa06ae4dfdfd65a"
+      "candidate_lf_sha256": "f1056ee4722240490255a5e1ba7f1fa923bbf48bf41815d555f4de2701e7bc94"
     },
     {
       "path": "data/repositories/base.py",
@@ -919,7 +919,7 @@
       "path": "app/services/authorized_repository.py",
       "status": "MODIFIED",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "1a3893e7504d893410fa67eaf68b3132a81d7c36a582375d55ec789326edfd75"
+      "candidate_lf_sha256": "91202b32251cfc5c9ac3ebdffbba4513d543724c03ad41fecd3d0554ace6868f"
     },
     {
       "path": "tests/test_continuity.py",
@@ -1128,6 +1128,38 @@
       "status": "NEW",
       "reason": "Friday decision, complete caller audit and validation evidence.",
       "candidate_lf_sha256": "e3b18e99f8dae027dab6714f309d3d8bed286acafa2e232e0119a945691c4639"
+    }
+  ],
+  "review_fixes_20261123_artifacts": [
+    {
+      "path": "data/manual_quota.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "09c7a206403697c401ac247cacaceeb5ab79d904de2eed70dc7ce93e46a7974c"
+    },
+    {
+      "path": "docs/codex_reports/REVIEW_FIXES_20261123.md",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "90d86878317569b61655e6147f931fb0705cbab7091f47cac583d1a111fd154b"
+    },
+    {
+      "path": "tests/test_daily_entry_boundaries.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "db934f407bc48b7027184ea4cbf132b3f1518c7ff9d706cfcf733bdb903e8240"
+    },
+    {
+      "path": "tests/test_delivery_transaction_choices.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "1f9a223619f559783007bcede1ed561ee63859f570f2c618312b4d23032ae6f1"
+    },
+    {
+      "path": "tests/test_review_manual_leases.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "08351a3fe8eaa6dc833a672087cca08d490ac6369943c2b55076f1666e81f124"
     }
   ]
 }

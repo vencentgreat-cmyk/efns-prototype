@@ -146,6 +146,9 @@ def create_once(repo,entity,record,request_id,actor):
             if read_record(repo,entity,target,tx) is None:raise RepositoryError('Committed creation target is missing; do not retry blindly.')
             return target
         if read_record(repo,entity,target,tx):raise RepositoryError('Target already exists without a matching creation receipt.')
+        if entity=='QUOTA_TRANSACTION':
+            from data.manual_quota import reject_new_allocation_lease
+            reject_new_allocation_lease(values)
         getattr(repo,ENTITIES[entity][1])(dict(values,**{key:target}))
         after=read_record(repo,entity,target,tx)
         if not after:raise RepositoryError('Created record could not be verified.')

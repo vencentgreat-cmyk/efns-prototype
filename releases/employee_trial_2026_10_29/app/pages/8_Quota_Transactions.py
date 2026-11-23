@@ -24,6 +24,7 @@ from data.quota_position import component_table
 from app.services.entry_fields import quota_owner_errors
 from data.quota_leases import is_lease, is_voided
 from data.quota_lease_persistence import IMMUTABLE_LEASE
+from data.manual_quota import allocation_types
 
 
 lease_actor = require_page_permission(Permission.VIEW_DATA)
@@ -257,7 +258,8 @@ else:
             quota_id = quota_options[quota_label]
             owner_id = quota_accounts[quota_id]
             left.markdown(f"**Owner Account (from Quota Registration)**  \n{account_names.get(owner_id) or 'Unknown'}")
-            transaction_type = left.selectbox("Transaction Type *", stored_options(QUOTA_TRANSACTION_TYPES,current.get("TRANSACTION_TYPE"),bool(view.record_id)), index=(stored_index(QUOTA_TRANSACTION_TYPES,current.get("TRANSACTION_TYPE")) if view.record_id else option_index(list(QUOTA_TRANSACTION_TYPES), current.get("TRANSACTION_TYPE"))), key="quota_tx_form_type")
+            type_options = allocation_types(QUOTA_TRANSACTION_TYPES, bool(view.record_id))
+            transaction_type = left.selectbox("Transaction Type *", stored_options(type_options,current.get("TRANSACTION_TYPE"),bool(view.record_id)), index=(stored_index(type_options,current.get("TRANSACTION_TYPE")) if view.record_id else option_index(type_options, current.get("TRANSACTION_TYPE"))), key="quota_tx_form_type")
             left.caption('Type list confirmed from usage data 2026-10-30; provisional until staff confirm. Base is a snapshot, intended for new registrations. Historical types remain visible on existing records.')
             effective_date = left.date_input("Effective Date *", value=as_date(current.get("EFFECTIVE_DATE"), None if view.record_id else halifax_today()), key="quota_tx_form_effective")
             end_date = left.date_input("End Date", value=as_date(current.get("END_DATE")), key="quota_tx_form_end")

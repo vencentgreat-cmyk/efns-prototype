@@ -203,7 +203,11 @@ class AuthorizedRepository:
                 if self.actor.role not in {Role.ADMIN,Role.DATA_EDITOR,Role.DEVELOPER}:
                     raise RepositoryError('You do not have permission to create a lease. Only Admin, Data Editor or Developer may create a lease.')
             else:self._require(permission)
-            result = method(record, *args, **kwargs)
+            if name=='upsert_quota_transaction' and not is_lease(record):
+                from data.manual_quota import manual_upsert
+                result = manual_upsert(self.repository,record,method,*args,**kwargs)
+            else:
+                result = method(record, *args, **kwargs)
             try:self.auth_store.record_action(self.actor, action, entity_type, str(result))
             except Exception as exc:self._audit_warning(action,str(result),exc,entity_type)
             return result
