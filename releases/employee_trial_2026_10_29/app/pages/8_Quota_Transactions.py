@@ -201,6 +201,10 @@ else:
                 right.markdown(f"**Comments**  \n{current.get('COMMENTS') or 'No comments.'}")
                 st.info("This page shows transaction activity only. No available quota balance has been inferred.")
             if is_lease(current):
+                from app.services.quota_lease_display import lease_activity, render_lease_activity
+                selected_lease = all_transactions.loc[all_transactions['QUOTA_TRANSACTION_ID'].eq(view.record_id)]
+                render_lease_activity('Current lease status', lease_activity(selected_lease, accounts, halifax_today(), incoming=False),
+                    key='quota_transaction_lease_status', as_of=halifax_today())
                 from app.services.quota_lease_void_ui import render_void_action
                 from app.services.quota_lease_adjustment_ui import render_lease_adjustments
                 render_lease_adjustments(repo,current)

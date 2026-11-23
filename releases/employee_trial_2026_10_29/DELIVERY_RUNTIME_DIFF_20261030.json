@@ -89,9 +89,9 @@
     {
       "path": "app/pages/8_Quota_Transactions.py",
       "status": "MODIFIED",
-      "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption.",
+      "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption. Show current resolved lease status alongside original stored fields, with existing actions unchanged.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
-      "candidate_lf_sha256": "25e9ea1ff7011fa7d4b372f2545e45020375b4928b7d0fd1351f5b29ef8c0f42"
+      "candidate_lf_sha256": "de513832417025d5ea45e649fbe4eb5fd7c5772bef33de72344232a35fc9b172"
     },
     {
       "path": "app/pages/9_Salmonella_Tests.py",
@@ -1088,6 +1088,32 @@
       "status": "NEW",
       "reason": "Scope, identity, persistence and validation evidence for zero-only production duplicates.",
       "candidate_lf_sha256": "c8d9cb2e3305360c772e991337de6c9cbbef4a2d40c6821ac2a53e30cc4b7063"
+    }
+  ],
+  "lessee_related_records_20261123_artifacts": [
+    {
+      "path": "app/pages/7_Quota_Registrations.py",
+      "status": "MODIFIED",
+      "reason": "Separate read-only lessee relationship and effective outgoing lease status; unchanged stored transaction table/count.",
+      "candidate_lf_sha256": "7956534faf4674445a36016c07867805f54d34d8d25adb1686c542f961a73dbd"
+    },
+    {
+      "path": "app/services/quota_lease_display.py",
+      "status": "NEW",
+      "reason": "Read-only lease relationship projection reusing confirmed daily lease resolvers.",
+      "candidate_lf_sha256": "52d62f3b4aadeae514316a62966061164880331ce0659678fe450b23ae36fbaa"
+    },
+    {
+      "path": "tests/test_quota_lease_display.py",
+      "status": "NEW",
+      "reason": "Synthetic effective values, stored/report parity, offline read and role/entrypoint tests.",
+      "candidate_lf_sha256": "63551c327867dcf349da57582bcc6dad9af4ad50617293eb6e35b97abf2ff3ae"
+    },
+    {
+      "path": "docs/codex_reports/LESSEE_RELATED_RECORDS_20261123.md",
+      "status": "NEW",
+      "reason": "Lessee display scope, existing reads, edge cases, consistency audit and test results.",
+      "candidate_lf_sha256": "6a58d98ed79311ee5f3da2361e74b7b12bb2c931ed43acfbabef318f3b310199"
     }
   ]
 }
