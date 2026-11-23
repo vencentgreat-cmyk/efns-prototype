@@ -3,8 +3,9 @@ import datetime as dt
 import pandas as pd
 from data.position_evidence import day, number
 
-INVENTORY_AS_OF_WEEK_DAY = 5  # Python weekday: Saturday; EFC week END, never a sum over time.
-WEEKLY_INVENTORY_CAPTION = 'Inventory is as of the last day of each week (Saturday).'
+INVENTORY_AS_OF_WEEK_DAY = 4  # Python weekday: Friday; staff decision 2026-11-23, Sunday start + 5 days.
+EFC_WEEK_END_WEEK_DAY = 5  # Python weekday: Saturday; calendar boundaries are unchanged.
+WEEKLY_INVENTORY_CAPTION = 'Inventory is as of Friday of each EFC week (week start + 5 days).'
 
 
 def synthetic_efc_calendar(year):
@@ -41,7 +42,7 @@ def _validated_week(groups,code):
     values=groups[code]
     days=sorted({value for value in values if value is not None})
     if (None in values or len(days)!=7 or days[0].weekday()!=6
-            or days[-1].weekday()!=INVENTORY_AS_OF_WEEK_DAY or (days[-1]-days[0]).days!=6):
+            or days[-1].weekday()!=EFC_WEEK_END_WEEK_DAY or (days[-1]-days[0]).days!=6):
         raise ValueError(f'Week {code} is not a complete Sunday-to-Saturday week in the EFC calendar.')
     return days[0],days[-1]
 
