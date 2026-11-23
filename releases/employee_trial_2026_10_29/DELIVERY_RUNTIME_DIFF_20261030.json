@@ -2,7 +2,7 @@
   "status": "LOCAL ONLY; no live query/deployment",
   "baseline": "RELEASE_SOURCE_MANIFEST.json saved deployment, LF-normalized review comparison",
   "baseline_files": 89,
-  "candidate_artifacts": 96,
+  "candidate_artifacts": 133,
   "runtime_changes": [
     {
       "path": "data/importing.py",
@@ -1132,6 +1132,12 @@
   ],
   "review_fixes_20261123_artifacts": [
     {
+      "path": "app/pages/3_Accounts_Facilities_Flocks.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "e83830cfb5493e5e955b609ebfedcedcdf91309cc91ed5be6c7686524e487ff7"
+    },
+    {
       "path": "data/manual_quota.py",
       "status": "NEW",
       "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
@@ -1141,13 +1147,19 @@
       "path": "docs/codex_reports/REVIEW_FIXES_20261123.md",
       "status": "NEW",
       "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
-      "candidate_lf_sha256": "90d86878317569b61655e6147f931fb0705cbab7091f47cac583d1a111fd154b"
+      "candidate_lf_sha256": "a1c709628b2fb35a4b6688dcc7f6cb567f42eeb4bf5970fcb7cc6fddab38c4c1"
     },
     {
       "path": "tests/test_daily_entry_boundaries.py",
       "status": "MODIFIED",
       "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
       "candidate_lf_sha256": "db934f407bc48b7027184ea4cbf132b3f1518c7ff9d706cfcf733bdb903e8240"
+    },
+    {
+      "path": "tests/test_delivery_package_guards.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "f3e7c944d6bd46ac46d1bfdf6ccd24c002be7361a7d1fab66cc4842888c4e3e6"
     },
     {
       "path": "tests/test_delivery_transaction_choices.py",
