@@ -954,8 +954,8 @@
     {
       "path": "data/production_replacement.py",
       "status": "NEW",
-      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "59a60fb1c1c209a2d968824db01c9884324f75b67ac34828fac42ffae4755396"
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report. Exempt only all-zero or blank-zero production rows from blocking identical-row validation; preserve every row and nonzero rejection.",
+      "candidate_lf_sha256": "6d80a6cf7f5a8709fa66f362509b8049f58a909afdf7e6ad55244f6ab1d4330a"
     },
     {
       "path": "docs/codex_reports/IMPORT_OVERWRITE_LEASE_VOID_20261119.md",
@@ -1068,6 +1068,26 @@
       "status": "NEW",
       "reason": "Scoped EFC calendar validation and synthetic regression evidence.",
       "candidate_lf_sha256": "bec86cef17ae1c4cb9b9c8db560df3829b495f9004c14c798476545ee89e875c"
+    }
+  ],
+  "production_zero_duplicate_20261123_artifacts": [
+    {
+      "path": "data/production_intake.py",
+      "status": "MODIFIED",
+      "reason": "Retain zero-only duplicate rows and expose a non-blocking source-row warning through existing Production Import validation.",
+      "candidate_lf_sha256": "a4599c6f72f16d2adc82ecf4b54c6682181879c497a0f70d5ff8c460aa780fac"
+    },
+    {
+      "path": "tests/test_production_zero_duplicates.py",
+      "status": "NEW",
+      "reason": "Synthetic zero-duplicate, identity, overwrite/retry, report-total and UI validation tests.",
+      "candidate_lf_sha256": "174761ae457c24b928cd17359ceaa7107ae7ce121036f86e1d7c0da6e71c575e"
+    },
+    {
+      "path": "docs/codex_reports/PRODUCTION_IMPORT_ZERO_DUPLICATES_20261123.md",
+      "status": "NEW",
+      "reason": "Scope, identity, persistence and validation evidence for zero-only production duplicates.",
+      "candidate_lf_sha256": "c8d9cb2e3305360c772e991337de6c9cbbef4a2d40c6821ac2a53e30cc4b7063"
     }
   ]
 }
