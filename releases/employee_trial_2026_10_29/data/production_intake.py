@@ -7,6 +7,7 @@ import pandas as pd
 from data.importing import build_raw_rows, normalize_eims_records, validate_eims_records
 from data.producer_identity import resolve_producer
 from data.source_evidence import evidence_json
+from data.production_replacement import zero_duplicate_warnings
 
 def review_token(rows):
     reviewed=[dict(source_row=r['SOURCE_ROW_NUMBER'],target=r.get('TARGET_ID'),status=r.get('VALIDATION_STATUS'),match=r.get('MATCH_STATUS'),account=r.get('REVIEWED_PRODUCER_ACCOUNT_ID')) for r in rows]
@@ -36,4 +37,6 @@ def prepare_workbook(raw, file_id, accounts):
         # A retained RAW row is not a validated business record.
         if not row_errors:
             accepted.append(record)
-    return pd.DataFrame(accepted, columns=records.columns.tolist() + ["SOURCE_FILE_ID", "RAW_ROW_ID", "MATCH_METHOD", "MATCH_BASIS"]), raw_rows, errors, warnings
+    prepared = pd.DataFrame(accepted, columns=records.columns.tolist() + ["SOURCE_FILE_ID", "RAW_ROW_ID", "MATCH_METHOD", "MATCH_BASIS"])
+    warnings.extend(zero_duplicate_warnings(prepared))
+    return prepared, raw_rows, errors, warnings
