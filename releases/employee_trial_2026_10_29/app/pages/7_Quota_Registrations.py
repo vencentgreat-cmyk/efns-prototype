@@ -166,6 +166,20 @@ else:
                 st.info("No Quota Transactions are connected to this registration.")
             else:
                 related_records_table("Quota Transactions", transactions, id_column="QUOTA_TRANSACTION_ID", label_column="TRANSACTION_TYPE", page_slug="Quota_Transactions", key="quota_related_transactions")
+            from app.services.quota_lease_display import incoming_lease_activity, lease_activity, render_lease_activity
+            from data.quota_leases import is_lease
+            today = halifax_today()
+            outgoing = [row for row in transactions.to_dict('records') if is_lease(row)]
+            if outgoing:
+                render_lease_activity('Lease record status', lease_activity(outgoing, accounts, today, incoming=False),
+                    key='quota_outgoing_lease_status', as_of=today)
+            try:
+                lease_records = repo.get_quota_transactions(account_id=current.get('ACCOUNT_ID')) if stored_text(current.get('ACCOUNT_ID')) else pd.DataFrame()
+                incoming = incoming_lease_activity(current, all_quotas, lease_records, accounts, today)
+                render_lease_activity('Leased in (from lease records)', incoming,
+                    key='quota_incoming_leases', as_of=today)
+            except RepositoryError:
+                st.warning('Leased-in records could not be verified. Try refreshing or contact the administrator.')
             flocks = repo.get_flocks(account_id=current.get("ACCOUNT_ID"))
             if not flocks.empty and "QUOTA_ID" in flocks:
                 flocks = flocks[flocks["QUOTA_ID"] == view.record_id]
