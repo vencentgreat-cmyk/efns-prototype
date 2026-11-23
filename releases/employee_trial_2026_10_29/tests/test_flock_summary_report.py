@@ -37,7 +37,7 @@ def test_stock_reuses_status_and_type_columns_and_producers_add_up(grouped):
     result = build_flock_summary_report(f,t,a,b,calendar,202601,202602,quota_type='All',group_by_producer=grouped)
     assert len(result) == (4 if grouped else 2)
     for code,rows in result.groupby('Week'):
-        _,summary = build_flock_status_report(f,t,a,b,{},resolve_production_week(calendar,code)[1],quota_type='All')
+        _,summary = build_flock_status_report(f,t,a,b,{},resolve_production_week(calendar,code)[0]+timedelta(days=5),quota_type='All')
         assert sum(rows['Total Inventory']) == summary['Inventory Birds']
         assert all(row['Total Inventory'] == row['Egg Production']+row['Commercial Pullet Grower'] for row in rows.to_dict('records'))
     assert not result.Week.map(str).str.contains('Total').any()
@@ -63,7 +63,7 @@ def test_absent_type_zero_does_not_turn_unknown_stock_into_zero(grouped):
     f,t,a,b=sources()
     f.loc[f.FLOCK_ID.eq('b'),'STATUS']='Inactive'
     t.loc[t.FLOCK_ID.eq('a'),'QUANTITY']=None
-    _,summary=build_flock_status_report(f,t,a,b,{},date(2026,1,3))
+    _,summary=build_flock_status_report(f,t,a,b,{},date(2026,1,2))
     assert summary['Inventory Birds'] is None
     result=build_flock_summary_report(f,t,a,b,synthetic_efc_calendar(2026),202601,202601,group_by_producer=grouped)
     assert result['Total Inventory'].tolist()==['—']

@@ -21,11 +21,12 @@ def build_flock_summary_report(flocks,transactions,accounts,facilities,calendar,
     if not internal.empty:internal['ORGANIZATION_NAME']=internal.ACCOUNT_ID.map(str)
     output=[];notes=[WEEKLY_INVENTORY_CAPTION]
     for code in ordered:
-        begin,end=weeks[code];groups={}
+        begin,_=weeks[code];groups={}
+        as_of=begin+dt.timedelta(days=(INVENTORY_AS_OF_WEEK_DAY-begin.weekday())%7)
         for kind in kinds:
             if quota_type!='All' and quota_type_key(quota_type)!=kind:continue
             source=flocks.loc[flocks.get('FLOCK_QUOTA_TYPE',pd.Series(index=flocks.index,dtype=object)).map(lambda value: quota_type_key(value) or 'Not specified').eq(kind)]
-            frame,_=build_flock_status_report(source,transactions,internal,facilities,{},end,mortality,'All' if kind=='Not specified' else kind)
+            frame,_=build_flock_status_report(source,transactions,internal,facilities,{},as_of,mortality,'All' if kind=='Not specified' else kind)
             if any(number(value) is None for value in frame['Inventory']):
                 notes.append('Some flock Inventory values are unavailable; totals sum known inventory only.')
             for row in frame.to_dict('records'):
@@ -41,7 +42,7 @@ def build_flock_summary_report(flocks,transactions,accounts,facilities,calendar,
         targets=[(identity,values) for identity,values in groups.items()] if group_by_producer else [('',{kind:combined([values.get(kind,Decimal(0)) for values in groups.values()]) for kind in kinds})]
         for identity,values in targets:
             owner=owners.get(identity,{})
-            row={'Week':code,'Week Start':begin.isoformat(),'As-of Date':end.isoformat(),**{kind:values.get(kind,Decimal(0)) for kind in kinds}}
+            row={'Week':code,'Week Start':begin.isoformat(),'As-of Date':as_of.isoformat(),**{kind:values.get(kind,Decimal(0)) for kind in kinds}}
             # Presentation-only zeros for absent types are not inventory evidence.
             row['Total Inventory']=combined(list(values.values())) if group_by_producer else stock_total
             if group_by_producer:row.update({'Reg No':text(owner.get('REGISTRATION_NUMBER')),'Account':text(owner.get('ORGANIZATION_NAME'))})

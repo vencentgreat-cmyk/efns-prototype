@@ -117,9 +117,9 @@
     {
       "path": "app/services/report_center.py",
       "status": "MODIFIED",
-      "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering.",
+      "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering. Flock Summary catalog wording: Friday snapshots.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "05254edf5be1d917b7a16089e2ef8bb99cd3aa0706996fad3cc482a04af37694"
+      "candidate_lf_sha256": "b7a3af568a4061637be6bc6a076e3579e752cf7c81718592f0c768b25ac7a4af"
     },
     {
       "path": "app/services/revision_history.py",
@@ -1010,26 +1010,26 @@
     {
       "path": "app/services/flock_summary_report.py",
       "status": "NEW",
-      "reason": "Task 5 weekly stock report and append-only lease adjustments.",
-      "candidate_lf_sha256": "56fe6b228ab82bc6538c45cdf49ba32c2e2415f391f41b1ecee8312f21ac74db"
+      "reason": "Task 5 weekly stock report and append-only lease adjustments. Use Friday for each weekly snapshot and its As-of Date, retaining all other report rules.",
+      "candidate_lf_sha256": "d3d288e747d7af9c9dbef4c597b954eeff1bac29a27c47513f9989b00bcf617f"
     },
     {
       "path": "data/efc_calendar.py",
       "status": "NEW",
-      "reason": "Task 5 weekly stock report and append-only lease adjustments.",
-      "candidate_lf_sha256": "8a8361c318e7be09ab48e1581c3638aebca4bb3c9b3c169f49d4c006c94fb06a"
+      "reason": "Task 5 weekly stock report and append-only lease adjustments. Staff-confirmed Friday inventory day, independently retaining Saturday calendar validation.",
+      "candidate_lf_sha256": "c4ef27c804ddc514563d4399e8d687cd4c5242fdc6da397eba7f21e9d7ba2760"
     },
     {
       "path": "docs/codex_reports/FLOCK_SUMMARY_LEASE_ADJUST_20261120.md",
       "status": "NEW",
-      "reason": "Task 5 weekly stock report and append-only lease adjustments.",
-      "candidate_lf_sha256": "8a6c3496a026d782bc586e820a328b80945508941dd65018bc5bc7aed923180d"
+      "reason": "Task 5 weekly stock report and append-only lease adjustments. Update Flock Summary inventory-day and export-caption wording to Friday.",
+      "candidate_lf_sha256": "3745f306daa8928af4637f2eabb61fe8eed489a6b8947257538eb9d051e13b3e"
     },
     {
       "path": "tests/test_flock_summary_report.py",
       "status": "NEW",
-      "reason": "Task 5 weekly stock report and append-only lease adjustments.",
-      "candidate_lf_sha256": "617e700fd3bf1dfb345556f56581c3f484dcce909b29b0ea5032005da7dce6c1"
+      "reason": "Task 5 weekly stock report and append-only lease adjustments. Compare the existing weekly Status invariants at Friday.",
+      "candidate_lf_sha256": "2d0c38632461333b0a92028902175178edcbd07a2f84e0fcbdf6ee0b54c7f96a"
     },
     {
       "path": "app/services/quota_lease_adjustment_ui.py",
@@ -1114,6 +1114,20 @@
       "status": "NEW",
       "reason": "Lessee display scope, existing reads, edge cases, consistency audit and test results.",
       "candidate_lf_sha256": "6a58d98ed79311ee5f3da2361e74b7b12bb2c931ed43acfbabef318f3b310199"
+    }
+  ],
+  "flock_summary_friday_20261123_artifacts": [
+    {
+      "path": "tests/test_flock_summary_friday.py",
+      "status": "NEW",
+      "reason": "Synthetic Friday cutoff, calendar, grouping and export/UI coverage.",
+      "candidate_lf_sha256": "2ef7a9ea0aeecf224e2943b8eb1e1d4f99b327805f2903e20f28328e463c90b7"
+    },
+    {
+      "path": "docs/codex_reports/FLOCK_SUMMARY_ASOF_FRIDAY_20261123.md",
+      "status": "NEW",
+      "reason": "Friday decision, complete caller audit and validation evidence.",
+      "candidate_lf_sha256": "e3b18e99f8dae027dab6714f309d3d8bed286acafa2e232e0119a945691c4639"
     }
   ]
 }
