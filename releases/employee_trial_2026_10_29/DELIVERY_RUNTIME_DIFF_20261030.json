@@ -2,7 +2,7 @@
   "status": "LOCAL ONLY; no live query/deployment",
   "baseline": "RELEASE_SOURCE_MANIFEST.json saved deployment, LF-normalized review comparison",
   "baseline_files": 89,
-  "candidate_artifacts": 134,
+  "candidate_artifacts": 135,
   "runtime_changes": [
     {
       "path": "data/importing.py",
@@ -203,7 +203,7 @@
       "status": "MODIFIED",
       "reason": "Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained.",
       "baseline_lf_sha256": "814cc38fb0fba545d419a49e4132d3a5e10fe7d4f5ac6707725df04831e80579",
-      "candidate_lf_sha256": "e9b01ddd8974fa016b3d0dbdba74c6e63b1d0ee83f9844fd42fc34ed6b2f709e"
+      "candidate_lf_sha256": "28a399d34d13a475a5ff10b30d4625793f2d2dac384c516b61d621c7638a0b0b"
     },
     {
       "path": "data/repositories/base.py",
@@ -881,7 +881,7 @@
       "path": "data/quota_leases.py",
       "status": "NEW",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "e470c250e09a8d1844bdf819428aaed0caf281778f036ba806f10069e4cac44a"
+      "candidate_lf_sha256": "ba1ad2aaeb1acb0fa3733b99c8c058795580ce0fb7361896dac1504922f3e260"
     },
     {
       "path": "data/quota_lease_persistence.py",
@@ -1147,13 +1147,19 @@
       "path": "data/manual_quota.py",
       "status": "NEW",
       "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
-      "candidate_lf_sha256": "09c7a206403697c401ac247cacaceeb5ab79d904de2eed70dc7ce93e46a7974c"
+      "candidate_lf_sha256": "a2c8c41f2a286f5351597f3d7982cb5e6287a750668de4b7452bce26e4be9965"
+    },
+    {
+      "path": "data/quota_allocation_capacity.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "018dbf8f0f7909294bc56db893d27b9c25d6c7789b5486d27ed71b9b22ba87a0"
     },
     {
       "path": "docs/codex_reports/REVIEW_FIXES_20261123.md",
       "status": "NEW",
       "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
-      "candidate_lf_sha256": "4f3b526dc64a13272a9b345a1c83443e1711265ff05c9b3634426985e1f7195e"
+      "candidate_lf_sha256": "3d6a26ed402e407d4efed13a14e4f71df6d220e1eab99bbb44c6493d0afce5d2"
     },
     {
       "path": "tests/test_authorization_proxy_coverage.py",
@@ -1178,6 +1184,12 @@
       "status": "MODIFIED",
       "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
       "candidate_lf_sha256": "1f9a223619f559783007bcede1ed561ee63859f570f2c618312b4d23032ae6f1"
+    },
+    {
+      "path": "tests/test_review_allocation_capacity.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "d2ece1182a980c515a608ca198c67a9e58799fb17e2196be8c842fca3705628a"
     },
     {
       "path": "tests/test_review_lease_confirmation.py",

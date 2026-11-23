@@ -24,4 +24,6 @@ def manual_upsert(repo, record, method, *args, **kwargs):
         identity = record.get('QUOTA_TRANSACTION_ID')
         before = read_record(repo, 'QUOTA_TRANSACTION', identity, tx) if identity else None
         reject_new_allocation_lease(record, before)
+        from data.quota_allocation_capacity import guard_allocation_change
+        guard_allocation_change(repo,tx,before,dict(before or {},**record))
         return method(record, *args, **kwargs)
