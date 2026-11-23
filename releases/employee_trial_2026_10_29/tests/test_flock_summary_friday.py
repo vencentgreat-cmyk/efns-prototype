@@ -77,7 +77,7 @@ def test_friday_date_across_52_and_53_week_year_boundary(last,first,monkeypatch)
     def status(*args,**kwargs):
         seen.append(args[5]);return original(*args,**kwargs)
     monkeypatch.setattr(module,'build_flock_status_report',status)
-    build_flock_summary_report(*sources(),calendar,last,first)
+    build_flock_summary_report(*sources(),calendar,last,first,today=date(2030,1,1))
     assert seen==[resolve_production_week(calendar,code)[0]+timedelta(days=5) for code in (last,first)]
     assert resolve_production_week(calendar,last)[1]+timedelta(days=1)==resolve_production_week(calendar,first)[0]
 

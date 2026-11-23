@@ -13,3 +13,9 @@ Tests use synthetic records only, including a blocked 500 Allocation Lease (Out)
 ## B — delivery completeness
 
 The artifact count is now derived from snowflake.yml globs (132 on base main; 133 after A adds the manual-entry helper). The missing Accounts page is registered. The guard checks every shipped source against the immutable baseline canonical repository bytes (LF for text; raw bytes for binary assets), or requires a matching runtime-diff entry. All diff sections are checked, not only runtime_changes. Binary artifacts additionally carry a raw SHA-256. Synthetic negative tests prove that unregistered modified/new files and incorrect hashes fail. Eight guard tests passed. Later parts regenerate the actual count if another runtime module is added. No runtime calculation changed.
+
+## C — Flock Summary week in progress
+
+Friday remains the planned day, but the actual snapshot is min(Friday, today in America/Halifax). Capped rows carry an As-of Note column with "as of today (week in progress)" and the actual date in screen/CSV/XLSX/PDF. Completed-only reports keep the existing columns and values; in mixed reports their new note cells are blank. Explicitly selected future weeks also cap at today (even before their Sunday start), following the stated all-future-Friday rule rather than inventing a different future-week policy. There is still no sum across weeks. The shared caption/catalog explain the cap. Forty-seven focused tests passed, including past/current/future/Friday/Saturday/year-boundary cases and exports.
+
+The review requirements are installed locally and pip check passes. lxml was installed locally for root legacy-HTML workbook tests; no runtime requirement file was changed.

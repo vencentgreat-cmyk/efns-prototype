@@ -11,7 +11,10 @@ from data.efc_calendar import (INVENTORY_AS_OF_WEEK_DAY, WEEKLY_INVENTORY_CAPTIO
 
 
 def build_flock_summary_report(flocks,transactions,accounts,facilities,calendar,start_week,end_week,
-                               mortality='0.4',quota_type='Egg Production',group_by_producer=False):
+                               mortality='0.4',quota_type='Egg Production',group_by_producer=False,today=None):
+    from data.business_time import halifax_today
+    current=day(halifax_today() if today is None else today)
+    if current is None:raise ValueError('A valid current date is required for Flock Summary.')
     weeks=efc_weeks(calendar,start_week,end_week)
     ordered=sorted(weeks)
     kinds=sorted({'Egg Production',*(quota_type_key(v) or 'Not specified' for v in flocks.get('FLOCK_QUOTA_TYPE',[]) if text(v)!='Special Permit')})
@@ -19,10 +22,12 @@ def build_flock_summary_report(flocks,transactions,accounts,facilities,calendar,
     owners={str(r['ACCOUNT_ID']):r for r in accounts.to_dict('records')}
     internal=accounts.copy()
     if not internal.empty:internal['ORGANIZATION_NAME']=internal.ACCOUNT_ID.map(str)
-    output=[];notes=[WEEKLY_INVENTORY_CAPTION]
+    output=[];notes=[WEEKLY_INVENTORY_CAPTION];in_progress=False
     for code in ordered:
         begin,_=weeks[code];groups={}
-        as_of=begin+dt.timedelta(days=(INVENTORY_AS_OF_WEEK_DAY-begin.weekday())%7)
+        planned=begin+dt.timedelta(days=(INVENTORY_AS_OF_WEEK_DAY-begin.weekday())%7)
+        as_of=min(planned,current)
+        snapshot_note='as of today (week in progress)' if planned>current else ''
         for kind in kinds:
             if quota_type!='All' and quota_type_key(quota_type)!=kind:continue
             source=flocks.loc[flocks.get('FLOCK_QUOTA_TYPE',pd.Series(index=flocks.index,dtype=object)).map(lambda value: quota_type_key(value) or 'Not specified').eq(kind)]
@@ -42,11 +47,15 @@ def build_flock_summary_report(flocks,transactions,accounts,facilities,calendar,
         targets=[(identity,values) for identity,values in groups.items()] if group_by_producer else [('',{kind:combined([values.get(kind,Decimal(0)) for values in groups.values()]) for kind in kinds})]
         for identity,values in targets:
             owner=owners.get(identity,{})
-            row={'Week':code,'Week Start':begin.isoformat(),'As-of Date':as_of.isoformat(),**{kind:values.get(kind,Decimal(0)) for kind in kinds}}
+            row={'Week':code,'Week Start':begin.isoformat(),'As-of Date':as_of.isoformat(),'As-of Note':snapshot_note,**{kind:values.get(kind,Decimal(0)) for kind in kinds}}
             # Presentation-only zeros for absent types are not inventory evidence.
             row['Total Inventory']=combined(list(values.values())) if group_by_producer else stock_total
             if group_by_producer:row.update({'Reg No':text(owner.get('REGISTRATION_NUMBER')),'Account':text(owner.get('ORGANIZATION_NAME'))})
             output.append(row)
+            in_progress=in_progress or bool(snapshot_note)
+    if in_progress:
+        columns.insert(3,'As-of Note')
+        notes.append(f'Snapshots with Friday later than today are as of today (week in progress): {current.isoformat()}.')
     result=pd.DataFrame(output,columns=columns,dtype=object)
     result=result.where(result.notna(),'—')
     result.attrs['notes']=list(dict.fromkeys(notes))
