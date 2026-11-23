@@ -19,3 +19,17 @@ The artifact count is now derived from snowflake.yml globs (132 on base main; 13
 Friday remains the planned day, but the actual snapshot is min(Friday, today in America/Halifax). Capped rows carry an As-of Note column with "as of today (week in progress)" and the actual date in screen/CSV/XLSX/PDF. Completed-only reports keep the existing columns and values; in mixed reports their new note cells are blank. Explicitly selected future weeks also cap at today (even before their Sunday start), following the stated all-future-Friday rule rather than inventing a different future-week policy. There is still no sum across weeks. The shared caption/catalog explain the cap. Forty-seven focused tests passed, including past/current/future/Friday/Saturday/year-boundary cases and exports.
 
 The review requirements are installed locally and pip check passes. lxml was installed locally for root legacy-HTML workbook tests; no runtime requirement file was changed.
+
+## D — authorization coverage guard (tests only)
+
+The test enumerates every public method on BaseRepository plus each concrete repository, and checks that the proxy returns an authorized wrapper rather than passing the original callable through. Read-prefix and explicit write rules remain unchanged. A synthetic new unguarded writer is proven to fail the guard; no repository method body is invoked. Three tests passed.
+
+Current exact pass-through allow-list:
+
+- preview_historical_corrections — read-only preview.
+- check_facility_history — read-only validation.
+- check_facility_ownership — read-only validation.
+- check_flock_reference_change — read-only validation.
+- append_operational_flock_revision — append-only history used inside guarded import writes.
+
+No runtime authorization or permission change was made for D. The A manual-upsert routing change enforces entry validation after the existing permission check; it does not change roles/permissions.

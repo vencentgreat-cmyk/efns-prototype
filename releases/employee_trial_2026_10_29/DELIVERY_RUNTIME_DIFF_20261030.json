@@ -1147,7 +1147,13 @@
       "path": "docs/codex_reports/REVIEW_FIXES_20261123.md",
       "status": "NEW",
       "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
-      "candidate_lf_sha256": "07a76ed149c6281014c292e35c5252006c4c71dad03bb2ba43fdfb2fe32485c6"
+      "candidate_lf_sha256": "c7494a668aa992af3bd79985bca36e1c1e6983752cd92b1d62bc51c314770711"
+    },
+    {
+      "path": "tests/test_authorization_proxy_coverage.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "4ffd66be08773cac1c3624a444880dde87a4e2602ec9238214b427dcfd60f8f5"
     },
     {
       "path": "tests/test_daily_entry_boundaries.py",
