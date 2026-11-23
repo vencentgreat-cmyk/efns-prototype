@@ -33,3 +33,11 @@ Current exact pass-through allow-list:
 - append_operational_flock_revision — append-only history used inside guarded import writes.
 
 No runtime authorization or permission change was made for D. The A manual-upsert routing change enforces entry validation after the existing permission check; it does not change roles/permissions.
+
+## F — retrospective report acknowledgement
+
+Past-date partial returns, early ends and voids remain permitted, but require an explicit checkbox and server-side reports_confirmed=True. The existing transactional audit records required/confirmed flags, business date, confirming actor and timestamp; other audit calls retain their existing contents. Confirmation is bound into the action request fingerprint only when true, preserving previous false/default retry fingerprints. No amount/date eligibility rule or existing void dependency check changed. Sixty focused tests passed, including UI/server enforcement, today/future actions, audit contents and exact retries.
+
+Conservative confirmation-date choice: early end uses the selected inclusive New Quota End Date (so a past selected end warns even if the first changed day is today); its existing effective next-day rule is untouched. Partial return uses Return Date. Void uses original Start Date because it corrects the whole original period. Checkbox state resets when quantitative adjustment inputs/date change.
+
+Protected-area files for F: data/quota_lease_adjustments.py and data/quota_lease_void.py enforce/store the acknowledgement; data/repositories/continuity.py forwards the optional flag; data/record_safety.py adds the optional audit detail only for these calls. Authentication, connections and lock implementation are unchanged.

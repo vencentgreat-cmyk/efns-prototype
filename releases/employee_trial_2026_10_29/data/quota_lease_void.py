@@ -79,14 +79,15 @@ def _evidence(repo,tx,target):
     return regs,activity,{key for key,value in states.items() if value=={'inactive'}}
 
 
-def void_lease(repo,transaction_id,reason,request_id,expected_updated_at,actor):
+def void_lease(repo,transaction_id,reason,request_id,expected_updated_at,actor,*,reports_confirmed=False):
     from data.repositories.continuity import stable_id
     if not isinstance(actor,dict) or actor.get('role')!='Admin' or not text(actor.get('user_id')):
         raise RepositoryError('Only an application Admin can void a lease.')
     reason=text(reason)
     if not reason or len(reason)>2000 or not text(request_id):
         raise RepositoryError('A reason of 1 to 2,000 characters and request identity are required.')
-    fingerprint=evidence_json(dict(id=transaction_id,reason=reason,actor=actor['user_id']))
+    fingerprint=evidence_json(dict(id=transaction_id,reason=reason,actor=actor['user_id'],
+        **({'reports_confirmed':True} if reports_confirmed is True else {})))
     revision_id=stable_id('void-lease',transaction_id,request_id)
     with repo._continuity_transaction() as tx:
         before=read_record(repo,'QUOTA_TRANSACTION',transaction_id,tx)
@@ -103,6 +104,8 @@ def void_lease(repo,transaction_id,reason,request_id,expected_updated_at,actor):
         if is_voided(before):raise RepositoryError('This lease is already Voided. Create a new lease instead; voiding cannot be undone here.')
         if expected_updated_at is None or version_bind(before.get('UPDATED_AT'))!=version_bind(expected_updated_at):
             raise ConcurrencyError('The lease changed after review; reload before voiding.')
+        from data.lease_confirmation import report_change_confirmation
+        confirmation=report_change_confirmation(before.get('EFFECTIVE_DATE'),reports_confirmed,actor)
         regs,activity,inactive=_evidence(repo,tx,before)
         errors=void_errors(before,regs,activity,inactive,load_rules())
         if errors:raise RepositoryError(' '.join(errors))
@@ -114,5 +117,6 @@ def void_lease(repo,transaction_id,reason,request_id,expected_updated_at,actor):
         repo._append_history(tx,'RECORD_REVISION',dict(REVISION_ID=revision_id,ENTITY_TYPE='QUOTA_TRANSACTION',ENTITY_ID=transaction_id,
             CHANGE_KIND='Voided',BUSINESS_AT=None,RECORDED_AT=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),
             RECORDED_BY=actor['user_id'],REASON=reason,BEFORE_DATA=before,AFTER_DATA=dict(after,_VOID_REQUEST=fingerprint)))
-        history_audit(repo,tx,'QUOTA_TRANSACTION',transaction_id,request_id,actor,reason,'Voided',before,after)
+        history_audit(repo,tx,'QUOTA_TRANSACTION',transaction_id,request_id,actor,reason,'Voided',before,after,
+            report_change_confirmation=confirmation)
     return transaction_id

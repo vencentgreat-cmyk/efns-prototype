@@ -35,13 +35,15 @@ def read_record(repo,entity,record_id,tx=None):
     if len(found)>1:raise RepositoryError('Record identity is ambiguous; no write accepted.')
     return found.iloc[0].to_dict() if len(found)==1 else None
 
-def history_audit(repo,tx,entity,record_id,request,actor,reason,kind,before,after):
+def history_audit(repo,tx,entity,record_id,request,actor,reason,kind,before,after,*,report_change_confirmation=None):
     from data.repositories.continuity import stable_id
     audit=dict(AUDIT_ID=stable_id('record-audit',entity,record_id,request,kind),
         ACTOR_USER_ID=actor_id(actor),ACTOR_EMAIL=actor.get('email') if isinstance(actor,dict) else None,
         ACTION=kind if kind in ('CREATE','DELETE') else 'UPDATE',ENTITY_TYPE=entity,ENTITY_ID=record_id,
         DETAILS={'reason':reason,'request_id':request,'history_kind':kind},
         OCCURRED_AT=dt.datetime.now(dt.timezone.utc))
+    if report_change_confirmation is not None:
+        audit['DETAILS']['report_change_confirmation']=report_change_confirmation
     if repo._is_memory:repo._review_insert(tx,'AUDIT_EVENT',audit)
     else:
         cols=list(audit);params=[evidence_json(audit[c]) if c=='DETAILS' else audit[c] for c in cols]

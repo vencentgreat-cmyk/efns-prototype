@@ -60,7 +60,7 @@ def attach_adjustments(repo, frame, tx=None):
 
 
 def adjust_lease(repo, transaction_id, kind, adjustment_date, returned_amount, reason,
-                 request_id, expected_updated_at, expected_adjustment_ids, actor):
+                 request_id, expected_updated_at, expected_adjustment_ids, actor,*,reports_confirmed=False):
     """Append history + audit together; original lease and lock code stay unchanged."""
     from data.repositories.continuity import stable_id
     if not isinstance(actor,dict) or actor.get('role') not in LEASE_WRITER_ROLES or not text(actor.get('user_id')):
@@ -69,7 +69,8 @@ def adjust_lease(repo, transaction_id, kind, adjustment_date, returned_amount, r
     if kind not in ADJUSTMENT_KINDS or when is None or not reason or len(reason)>2000 or not text(request_id):
         raise RepositoryError('Choose a lease adjustment, valid date and reason of 1 to 2,000 characters.')
     amount=number(returned_amount) if kind=='Partial return' else None
-    fingerprint=evidence_json(dict(id=transaction_id,kind=kind,date=when,amount=amount,reason=reason,actor=actor['user_id']))
+    fingerprint=evidence_json(dict(id=transaction_id,kind=kind,date=when,amount=amount,reason=reason,actor=actor['user_id'],
+        **({'reports_confirmed':True} if reports_confirmed is True else {})))
     revision=stable_id('lease-adjustment',transaction_id,request_id)
     with repo._continuity_transaction() as tx:
         before=read_record(repo,'QUOTA_TRANSACTION',transaction_id,tx)
@@ -91,6 +92,8 @@ def adjust_lease(repo, transaction_id, kind, adjustment_date, returned_amount, r
         try: end=effective_lease_end(target)
         except ValueError as exc: raise RepositoryError('Lease adjustment evidence is invalid.') from exc
         if start is None or end is None: raise RepositoryError('The saved lease period is incomplete.')
+        from data.lease_confirmation import report_change_confirmation
+        confirmation=report_change_confirmation(when,reports_confirmed,actor)
         change=dict(KIND=kind)
         if kind=='Ended early':
             if not start<=when<end: raise RepositoryError('New Quota End Date must be on or after Start Date and before the current end date.')
@@ -115,5 +118,6 @@ def adjust_lease(repo, transaction_id, kind, adjustment_date, returned_amount, r
         persisted=repo._history_rows('RECORD_REVISION','REVISION_ID',revision,tx)
         if len(persisted)!=1:
             raise RepositoryError('Mandatory lease adjustment history was not saved exactly once.')
-        history_audit(repo,tx,'QUOTA_TRANSACTION',transaction_id,request_id,actor,reason,kind,before_view,after_view)
+        history_audit(repo,tx,'QUOTA_TRANSACTION',transaction_id,request_id,actor,reason,kind,before_view,after_view,
+            report_change_confirmation=confirmation)
     return transaction_id

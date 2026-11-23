@@ -8,6 +8,15 @@ from app.ui import show_data_error
 from data.quota_lease_adjustments import LEASE_WRITER_ROLES
 from data.quota_leases import is_voided, effective_lease_end
 from data.business_time import halifax_today
+from data.lease_confirmation import confirmation_required, REPORT_CHANGE_WARNING
+
+
+def confirm_report_changes(scope,when,token=''):
+    if not confirmation_required(when):return False
+    import hashlib
+    st.warning(REPORT_CHANGE_WARNING)
+    key=hashlib.sha256(f'{when}|{token}'.encode()).hexdigest()[:16]
+    return st.checkbox('I understand that reports already produced for this period will change.',key=scope+'_reports_confirm_'+key)
 
 
 def render_lease_adjustments(repo, current):
@@ -33,14 +42,16 @@ def render_lease_adjustments(repo, current):
     when=st.date_input('New Quota End Date' if kind=='Ended early' else 'Return Date',value=halifax_today(),key=scope+'_date')
     value=st.text_input('Returned Amount (birds)',key=scope+'_amount') if kind=='Partial return' else None
     reason=st.text_input('Reason for adjustment *',max_chars=2000,key=scope+'_reason')
-    if st.button('Save lease adjustment',key=scope+'_save',disabled=not reason.strip()):
+    confirmed=confirm_report_changes(scope,when,f'{kind}|{value}')
+    if st.button('Save lease adjustment',key=scope+'_save',disabled=not reason.strip() or (confirmation_required(when) and not confirmed)):
         try:
             try:amount=Decimal(value) if value is not None else None
             except InvalidOperation:amount=None
-            payload=dict(id=identity,kind=kind,date=when,amount=amount,reason=reason.strip())
+            payload=dict(id=identity,kind=kind,date=when,amount=amount,reason=reason.strip(),
+                **({'reports_confirmed':True} if confirmed else {}))
             request=request_for(scope,payload)
             saved=repo.adjust_quota_lease(identity,kind,when,amount,reason.strip(),request,
-                current.get('UPDATED_AT'),[row['ADJUSTMENT_ID'] for row in adjustments])
+                current.get('UPDATED_AT'),[row['ADJUSTMENT_ID'] for row in adjustments],reports_confirmed=confirmed)
             finish_request(scope,saved)
             open_saved_record(saved)
         except Exception as exc:show_data_error(exc)

@@ -5,6 +5,8 @@ from app.security import Role
 from app.services.form_safety import request_for,finish_request,open_saved_record
 from app.ui import show_data_error
 from data.quota_leases import is_voided
+from data.lease_confirmation import confirmation_required
+from app.services.quota_lease_adjustment_ui import confirm_report_changes
 
 
 def render_void_action(repo,current):
@@ -17,10 +19,12 @@ def render_void_action(repo,current):
     identity=current['QUOTA_TRANSACTION_ID'];scope='lease_void_'+identity
     st.caption('Void lease corrects the whole saved lease period. It does not delete the record and cannot be undone here.')
     reason=st.text_input('Reason for voiding *',key=scope+'_reason',max_chars=2000)
-    if st.button('Void lease',key=scope+'_submit',disabled=not reason.strip()):
+    when=current.get('EFFECTIVE_DATE')
+    confirmed=confirm_report_changes(scope,when)
+    if st.button('Void lease',key=scope+'_submit',disabled=not reason.strip() or (confirmation_required(when) and not confirmed)):
         try:
-            request=request_for(scope,dict(id=identity,reason=reason.strip()))
-            result=repo.void_quota_lease(identity,reason.strip(),request,current.get('UPDATED_AT'))
+            request=request_for(scope,dict(id=identity,reason=reason.strip(),**({'reports_confirmed':True} if confirmed else {})))
+            result=repo.void_quota_lease(identity,reason.strip(),request,current.get('UPDATED_AT'),reports_confirmed=confirmed)
             finish_request(scope,result)
             open_saved_record(result)
         except Exception as exc:
