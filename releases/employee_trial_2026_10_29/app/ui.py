@@ -49,97 +49,89 @@ def apply_theme() -> None:
         """
         <style>
         .efns-brand {
-            margin: .35rem 0 1rem;
-            padding: .9rem 1rem;
-            background: #e8eefb;
-            color: #172554;
-            border: 1px solid #c7d0df;
-            border-radius: 8px;
+            margin: 0 0 1.5rem;
+            padding: .5rem 0 1rem;
+            color: #202C32;
+            border-bottom: 1px solid #CBD2D1;
             font-size: 1.04rem;
             font-weight: 700;
         }
         .efns-brand small {
             display: block;
-            color: #475467;
-            font-size: .75rem;
+            color: #55636B;
+            font-size: .875rem;
             font-weight: 500;
-            margin-top: .2rem;
+            margin-top: .5rem;
         }
         .efns-page-header {
-            background: #ffffff;
-            border: 1px solid #d8dee9;
-            border-left: 5px solid #3f56d9;
-            border-radius: 10px;
-            padding: 1.15rem 1.35rem;
-            margin: .35rem 0 1.25rem;
-            box-shadow: 0 2px 8px rgba(23, 32, 51, .04);
+            padding: .5rem 0 1rem;
+            margin: 0 0 1.5rem;
+            border-bottom: 2px solid #225C80;
         }
         .efns-eyebrow {
-            color: #3f56d9;
-            font-size: .72rem;
-            font-weight: 700;
-            letter-spacing: .09em;
-            text-transform: uppercase;
+            color: #55636B;
+            font-size: .875rem;
+            font-weight: 600;
         }
-        [data-testid="stMarkdownContainer"] .efns-page-header h1.efns-page-title {
-            /* Keep the title legible even when native heading CSS changes. */
-            color: #172033 !important;
-            font-size: 1.72rem;
+        .efns-page-header h1.efns-page-title {
+            color: #202C32;
+            font-family: "Source Serif", serif, sans-serif;
+            font-size: 1.75rem;
+            font-weight: 600;
             line-height: 1.2;
-            margin: .28rem 0 .32rem;
+            margin: .5rem 0;
         }
         .efns-page-copy {
-            color: #475467;
+            color: #55636B;
             line-height: 1.5;
             margin: 0;
         }
         .efns-section-title {
-            color: #172033;
-            font-size: 1.02rem;
-            font-weight: 700;
-            margin: .35rem 0 .2rem;
+            color: #202C32;
+            font-family: "Source Sans", sans-serif;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 1.5rem 0 .5rem;
+        }
+        h3.efns-section-title {
+            font-size: 1.125rem;
+            margin-top: 1rem;
         }
         .efns-section-copy {
-            color: #475467;
-            font-size: .88rem;
+            color: #55636B;
+            font-size: .875rem;
             line-height: 1.45;
-            margin: 0 0 .75rem;
+            margin: 0 0 1rem;
         }
         .efns-status {
             display: inline-block;
-            padding: .28rem .58rem;
-            border-radius: 999px;
-            background: #e8ecff;
-            color: #243bb6;
-            font-size: .72rem;
-            font-weight: 700;
+            padding: .5rem;
+            background: #EBEFF2;
+            color: #375E7A;
+            font-size: .875rem;
+            font-weight: 600;
         }
         .efns-repository {
-            color: #475467;
-            font-size: .8rem;
-            margin: .3rem 0 .65rem;
+            color: #55636B;
+            font-size: .875rem;
+            margin: .5rem 0 1rem;
         }
         .efns-next-step {
-            background: #ffffff;
-            border: 1px solid #d8dee9;
-            border-radius: 8px;
-            color: #172033;
+            color: #202C32;
             min-height: 7.2rem;
-            padding: 1rem;
+            padding: 1rem 0;
         }
         .efns-next-step strong {
-            color: #172554;
+            color: #202C32;
             display: block;
-            margin-bottom: .35rem;
+            margin-bottom: .5rem;
         }
         .efns-next-step span {
-            color: #475467;
-            font-size: .88rem;
+            color: #55636B;
+            font-size: .875rem;
             line-height: 1.45;
         }
         @media (max-width: 800px) {
-            .efns-page-header { padding: 1rem; }
-            [data-testid="stMarkdownContainer"] .efns-page-header h1.efns-page-title { font-size: 1.45rem; }
             .efns-next-step { min-height: auto; }
         }
         </style>
@@ -161,13 +153,23 @@ def page_header(title: str, description: str, eyebrow: str = "EFNS DATA SYSTEM")
     )
 
 
-def section_intro(title: str, description: str = "") -> None:
+def section_intro(title: str, description: str = "", *, level: int = 2) -> None:
+    """Render an escaped section heading without skipping the page title level."""
+    tag = "h3" if level == 3 else "h2"
     copy = (
         f'<p class="efns-section-copy">{html.escape(description)}</p>'
         if description
         else ""
     )
     st.markdown(
-        f'<div class="efns-section-title">{html.escape(title)}</div>{copy}',
+        f'<{tag} class="efns-section-title">{html.escape(title)}</{tag}>{copy}',
+        unsafe_allow_html=True,
+    )
+
+
+def secondary_text(text: str) -> None:
+    """Use the shared readable secondary style for supporting instructions."""
+    st.markdown(
+        f'<p class="efns-section-copy">{html.escape(text)}</p>',
         unsafe_allow_html=True,
     )

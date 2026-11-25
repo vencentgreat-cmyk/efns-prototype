@@ -10,7 +10,7 @@ import streamlit as st
 
 from app.auth import require_page_permission
 from app.security import Permission
-from app.ui import apply_theme, page_header, section_intro, show_data_error
+from app.ui import apply_theme, page_header, section_intro, secondary_text, show_data_error
 from data.repositories.base import RepositoryError
 from data.constants import EIMS_WORKSHEET_NAME
 from data.importing import (
@@ -33,28 +33,26 @@ repo = st.session_state.repo
 
 page_header(
     "Production Import",
-    "Load the saved EIMS 3 worksheet, review technical validation, and preserve both raw and normalized records.",
+    "Choose a saved EIMS workbook, review validation, and import the records.",
     "PRODUCTION",
 )
 
-with st.container(border=True):
-    section_intro("Workbook requirements", "Use the standard saved EIMS production workbook.")
-    col_a, col_b, col_c = st.columns(3)
-    col_a.markdown("**File type**  \nExcel `.xlsx` or `.xlsm`")
-    col_b.markdown(f"**Worksheet**  \n`{EIMS_WORKSHEET_NAME}`")
-    col_c.markdown("**Source area**  \nStandard columns A through AI; additional saved columns remain in RAW")
-    st.info(
-        "The importer reads values already saved in Excel. It does not execute macros or recalculate formulas."
-    )
+section_intro("Choose workbook", "Use the standard saved EIMS production workbook.")
+col_a, col_b, col_c = st.columns(3)
+col_a.markdown("**File type**  \nExcel `.xlsx` or `.xlsm`")
+col_b.markdown(f"**Worksheet**  \n`{EIMS_WORKSHEET_NAME}`")
+col_c.markdown("**Source area**  \nStandard columns A through AI; additional saved columns remain in RAW")
+st.info(
+    "The importer reads values already saved in Excel. It does not execute macros or recalculate formulas."
+)
 
-with st.container(border=True):
-    section_intro("Select workbook", "The original file is archived unchanged before parsing.")
-    uploaded = st.file_uploader(
-        "EIMS production workbook",
-        type=["xlsm", "xlsx"],
-        help="Choose a workbook containing the EIMS 3 worksheet.",
-        label_visibility="collapsed",
-    )
+st.caption("The original file is archived unchanged before parsing.")
+uploaded = st.file_uploader(
+    "EIMS production workbook",
+    type=["xlsm", "xlsx"],
+    help="Choose a workbook containing the EIMS 3 worksheet.",
+    label_visibility="collapsed",
+)
 
 render_past_replacements(repo)
 
@@ -87,27 +85,31 @@ prepared_id = repo.stage_production_upload({
     "SOURCE_FILE_ID": archive["SOURCE_FILE_ID"], "ERROR_COUNT": len(errors),
 }, source_rows)
 already_committed = bool(existing_import and str(existing_import.get("STATUS", "")).lower() == "committed")
-if st.button('Refresh reviewed producer matching',disabled=already_committed,key='production_refresh_review'):
-    try:
-        repo.stage_production_upload({
-            'FILENAME':uploaded.name,'SOURCE':'EIMS Production Workbook - EIMS 3',
-            'FILE_HASH':file_hash,'SOURCE_FILE_ID':archive['SOURCE_FILE_ID'],
-            'SOURCE_RECORD_COUNT':len(raw_df),
-        },source_rows,review_again=True)
-        st.success('Reviewed producer matching refreshed. Retained RAW was not changed.')
-    except Exception as exc:show_data_error(exc)
-
-
-metric_columns = st.columns(4)
-metric_columns[0].metric("Production Records", len(raw_df))
-metric_columns[1].metric("Columns Detected", len(raw_df.columns) - 1)
-metric_columns[2].metric("Blocking Errors", len(errors))
-metric_columns[3].metric("Warnings", len(warnings))
-
 with st.container(border=True):
+    section_intro("Review validation", "Check records, blocking errors and warnings before importing.")
+
+    metric_columns = st.columns(3)
+    metric_columns[0].metric("Production Records", len(raw_df))
+    metric_columns[1].metric("Blocking Errors", len(errors))
+    metric_columns[2].metric("Warnings", len(warnings))
+    with st.expander("Technical details", expanded=False):
+        st.caption(f"Columns detected: {len(raw_df.columns) - 1}")
+
+    if st.button('Refresh reviewed producer matching',disabled=already_committed,key='production_refresh_review'):
+        try:
+            repo.stage_production_upload({
+                'FILENAME':uploaded.name,'SOURCE':'EIMS Production Workbook - EIMS 3',
+                'FILE_HASH':file_hash,'SOURCE_FILE_ID':archive['SOURCE_FILE_ID'],
+                'SOURCE_RECORD_COUNT':len(raw_df),
+            },source_rows,review_again=True)
+            st.success('Reviewed producer matching refreshed. Retained RAW was not changed.')
+        except Exception as exc:show_data_error(exc)
+
+
     section_intro(
-        "Source and matching status",
+        "Producer matching",
         "Exact producer IDs or unique Account registration numbers can be matched automatically. Other relationships are not guessed.",
+        level=3,
     )
     source_col, match_col = st.columns(2)
     source_col.markdown(f"**Worksheet source**  \n`{EIMS_WORKSHEET_NAME}` · all saved source columns")
@@ -119,80 +121,84 @@ with st.container(border=True):
         status_text = ", ".join(f"{name}: {count}" for name, count in statuses.items())
         match_col.markdown(f"**Relationship status**  \n{status_text}")
 
-with st.container(border=True):
-    section_intro("Technical validation", "Required columns, reporting period, and numeric checks.")
+    section_intro("Validation results", "Required columns, production week, and numeric checks.", level=3)
     allow_duplicate = False
+    if errors or warnings:
+        st.download_button("Download validation issues",pd.DataFrame({'Validation issue':errors+warnings}).to_csv(index=False).encode('utf-8-sig'),'production-validation.csv','text/csv')
     if already_committed:
-        st.warning(f"This exact file was already imported as {existing_import['IMPORT_ID']}.")
+        st.warning("This exact file was already imported.")
+        with st.expander("Imported batch reference", expanded=False):
+            st.code(str(existing_import["IMPORT_ID"]), language=None)
         st.caption("Repeat uploads reuse the archived original and cannot duplicate this committed batch.")
     if errors:
         st.error(f"{len(errors)} blocking validation error(s) found.")
+        if len(errors) > 30:
+            secondary_text(f"Showing 30 of {len(errors)} blocking errors. Download validation issues for the full list.")
         for error in errors[:30]:
             st.write(f"• {error}")
     else:
         st.success("No blocking validation errors were found.")
     if warnings:
         st.warning(f"{len(warnings)} non-blocking warning(s) found.")
+        if len(warnings) > 30:
+            secondary_text(f"Showing 30 of {len(warnings)} warnings. Download validation issues for the full list.")
         for warning in warnings[:30]:
             st.write(f"• {warning}")
-    if errors or warnings:
-        st.download_button("Download validation issues",pd.DataFrame({'Validation issue':errors+warnings}).to_csv(index=False).encode('utf-8-sig'),'production-validation.csv','text/csv')
 
 with st.expander("Source-preserving preview · first 50 rows", expanded=False):
-    with st.container(border=True):
-        st.dataframe(raw_df.head(50), width="stretch", height=380, hide_index=True)
+    st.dataframe(raw_df.head(50), width="stretch", height=380, hide_index=True)
 
 with st.expander("Normalized preview · first 50 rows", expanded=False):
-    with st.container(border=True):
-        section_intro(
-            "Normalized import model",
-            "Automatic matching is not staff confirmation. Invalid rows remain in RAW with their reasons.",
-        )
-        priority_columns = [
-            "SOURCE_ROW_NUMBER",
-            "SOURCE_WEEK_CODE",
-            "REPORTING_YEAR",
-            "REPORTING_WEEK",
-            "PRODUCER_NUMBER",
-            "GRADER_NUMBER",
-            "MARKETING_TYPE",
-            "HOUSING_SYSTEM",
-            "EGG_TYPE",
-            "EGG_COLOUR",
-            "TOTAL",
-            "SOURCE_TYPE",
-            "MATCH_STATUS",
-        ]
-        columns = [column for column in priority_columns if column in normalized_df.columns]
-        st.dataframe(
-            normalized_df[columns].head(50),
-            width="stretch",
-            height=380,
-            hide_index=True,
-        )
+    section_intro(
+        "Import preview",
+        "Automatic matching is not staff confirmation. Invalid rows remain in RAW with their reasons.",
+        level=3,
+    )
+    priority_columns = [
+        "SOURCE_ROW_NUMBER",
+        "SOURCE_WEEK_CODE",
+        "REPORTING_YEAR",
+        "REPORTING_WEEK",
+        "PRODUCER_NUMBER",
+        "GRADER_NUMBER",
+        "MARKETING_TYPE",
+        "HOUSING_SYSTEM",
+        "EGG_TYPE",
+        "EGG_COLOUR",
+        "TOTAL",
+        "SOURCE_TYPE",
+        "MATCH_STATUS",
+    ]
+    columns = [column for column in priority_columns if column in normalized_df.columns]
+    st.dataframe(
+        normalized_df[columns].head(50),
+        width="stretch",
+        height=380,
+        hide_index=True,
+    )
 
-with st.container(border=True):
-    section_intro("Import to current repository", "Raw rows and normalized records are stored together for traceability.")
-    filename = st.text_input("Source filename", value=uploaded.name)
-    years = normalized_df["REPORTING_YEAR"].dropna().astype(int).unique()
-    weeks = normalized_df["REPORTING_WEEK"].dropna().astype(int).unique()
-    batch_year = int(years[0]) if len(years) == 1 else None
-    batch_week = int(weeks[0]) if len(weeks) == 1 else None
+section_intro("Import records", "The original rows and import records are saved together for traceability.")
+filename = st.text_input("Source filename", value=uploaded.name)
+years = normalized_df["REPORTING_YEAR"].dropna().astype(int).unique()
+weeks = normalized_df["REPORTING_WEEK"].dropna().astype(int).unique()
+batch_year = int(years[0]) if len(years) == 1 else None
+batch_week = int(weeks[0]) if len(weeks) == 1 else None
 
-    if errors:
-        st.warning("Import is blocked until all validation errors and unresolved producers are corrected. Original source rows remain in RAW.")
-    st.caption('The uploaded rows replace the complete existing set for each matched producer and production week. Other producer-weeks are unchanged.')
-    if st.button(
-        "Import validated records",
-        type="primary",
-        disabled=normalized_df.empty or bool(errors) or already_committed,
-    ):
-        try:
-            import_id, imported_count = repo.commit_staged_production(prepared_id)
-            render_import_summary(repo.get_production_import_summary(import_id))
+if errors:
+    st.warning("Import is blocked until all validation errors and unresolved producers are corrected. Original source rows remain in RAW.")
+st.write('The uploaded rows replace the complete existing set for each matched producer and production week. Other producer-weeks are unchanged.')
+if st.button(
+    "Import validated records",
+    type="primary",
+    disabled=normalized_df.empty or bool(errors) or already_committed,
+):
+    try:
+        import_id, imported_count = repo.commit_staged_production(prepared_id)
+        render_import_summary(repo.get_production_import_summary(import_id))
+        with st.expander("Import reference", expanded=False):
             st.code(import_id, language=None)
-            if getattr(repo,'last_audit_warning',None): st.warning(repo.last_audit_warning)
-        except RepositoryError as exc:
-            show_data_error(exc)
-        except Exception:
-            st.error("Import failed while processing the validated data; RAW and the original file remain saved.")
+        if getattr(repo,'last_audit_warning',None): st.warning(repo.last_audit_warning)
+    except RepositoryError as exc:
+        show_data_error(exc)
+    except Exception:
+        st.error("Import failed while processing the validated data; RAW and the original file remain saved.")

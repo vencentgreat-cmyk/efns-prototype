@@ -191,7 +191,7 @@ else:
             st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
         current_account = current.get("ACCOUNT_ID")
         with st.container(border=True):
-            general, lifecycle = st.tabs(["Summary & Relationships", "Flock Details"])
+            general, lifecycle = st.tabs(["Summary", "Details"])
             with general:
                 left, right = st.columns(2)
                 account_labels = list(account_options)

@@ -180,7 +180,7 @@ else:
     method_area = st.empty()
     if not is_form:
         st.caption(f"Created On: {format_timestamp(current.get('CREATED_AT'))} · Updated On: {format_timestamp(current.get('UPDATED_AT'))}")
-        summary, relationships = st.tabs(["Summary", "Relationships"])
+        summary, relationships = st.tabs(["Summary", "Related Records"])
         quota = repo.get_quota_registration(current.get("QUOTA_ID")) or {}
         owner_id = current.get("OWNER_ACCOUNT_ID") or quota.get("ACCOUNT_ID")
         related_account_id = current.get("RELATED_ACCOUNT_ID")

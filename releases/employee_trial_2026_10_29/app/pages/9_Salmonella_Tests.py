@@ -48,7 +48,7 @@ def test_label(row):
 
 if view.name == "list":
     page_header("Salmonella Tests", "Search and maintain flock-linked tests and result records.", "FLOCK MANAGEMENT")
-    st.info("Inspector is provisional free text. Sample-level business fields await authoritative metadata.")
+    st.info("Inspector is entered as free text for now. Sample fields are provisional until the legacy field definitions are confirmed.")
     selected_index = selected_row_index("salmonella_list_grid")
     row_ids = st.session_state.get("salmonella_list_row_ids", [])
     selected_id = row_ids[selected_index] if selected_index is not None and selected_index < len(row_ids) else None
@@ -133,7 +133,7 @@ else:
         if not flock_options:
             st.error("Create a Flock before creating a Salmonella Test."); st.stop()
         with st.container(border=True):
-            summary, result_details = st.tabs(["Summary & Relationship", "Result & Invoice"])
+            summary, result_details = st.tabs(["Summary", "Details"])
             with summary:
                 left, right = st.columns(2)
                 flock_label = left.selectbox("Flock / Permit Number *", list(flock_options), index=option_index(list(flock_options), label_for_id(flock_options, current.get("FLOCK_ID"))), key="salmonella_form_flock")

@@ -71,8 +71,10 @@ def get_quota(record_id):
 
 
 if view.name == "list":
-    page_header("Quota Registrations", "Search and maintain provisional account quota registrations.", "QUOTA MANAGEMENT")
-    st.info("Quota types and allocation rules remain provisional. This module does not calculate available quota balance.")
+    page_header("Quota Registrations", "Find and maintain each Account's Quota Registrations.", "QUOTA MANAGEMENT")
+    st.info("This page manages registrations, not available quota. Use Quota Summary in Report Center for the confirmed quota position.")
+    with st.expander("Calculation details", expanded=False):
+        st.write("Registration details do not calculate available quota balance. Quota Summary shows unknown amounts when transaction state evidence is unavailable.")
     statuses, _ = saved_view_selector("QUOTA_REGISTRATION", "Quota Registrations", key="quota_reg_saved_view", selection_keys=("quota_reg_list_grid", "quota_reg_list_row_ids", "quota_reg_delete_pending"))
     selected_index = selected_row_index("quota_reg_list_grid")
     row_ids = st.session_state.get("quota_reg_list_row_ids", [])
@@ -129,7 +131,7 @@ else:
         if st.button("Back to Quota Registrations", icon=":material/arrow_back:"): open_view("list")
         st.stop()
     is_form = view.name in {"new", "edit"}
-    page_header("New Quota Registration" if view.name == "new" else quota_title(current), "Account allocation and effective dates. Available balance is not calculated.", "QUOTA REGISTRATION")
+    page_header("New Quota Registration" if view.name == "new" else quota_title(current), "Review the Account, quota type and registration dates. Available balance is not calculated here.", "QUOTA REGISTRATION")
     action = record_command_bar("quota_reg_record", view.name)
     if action in {"back", "cancel"}: start_new_form("quota_reg_form_"); open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "refresh": st.rerun()
@@ -142,7 +144,7 @@ else:
         with summary:
             from app.services.quota_usage import render_account_usage
             render_account_usage(repo,current.get('ACCOUNT_ID'),quota_type=current.get('QUOTA_TYPE'))
-            with st.container(border=True):
+            with st.container():
                 left, middle, right = st.columns(3)
                 left.markdown(f"**Registration Number**  \n{current.get('REGISTRATION_NUMBER') or '—'}")
                 left.markdown(f"**Quota Name**  \n{current.get('QUOTA_NAME') or '—'}")
@@ -194,7 +196,7 @@ else:
         if view.name == "edit": st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
         requested_account = view_parameter("account_id")
         selected_account_id = current.get("ACCOUNT_ID") or (str(requested_account) if requested_account in set(account_options.values()) else None)
-        with st.container(border=True):
+        with st.container():
             left, right = st.columns(2)
             account_label = left.selectbox("Account *", list(account_options), index=option_index(list(account_options), label_for_id(account_options, selected_account_id)), key="quota_reg_form_account")
             registration = left.text_input("Registration Number *", value=str(current.get("REGISTRATION_NUMBER") or ""), key="quota_reg_form_number")

@@ -13,7 +13,9 @@ def summary_text(summary):
 
 def render_import_summary(summary):
     if summary:
-        st.success(summary_text(summary))
+        st.success(summary_text(summary).removeprefix(f"Batch {summary['import_id']}: "))
+        with st.expander("Batch reference", expanded=False):
+            st.code(str(summary["import_id"]), language=None)
     else:
         st.info('This batch predates the producer-week replacement summary. See its retained source and history.')
 
