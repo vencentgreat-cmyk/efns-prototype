@@ -154,6 +154,13 @@ def lease_input_errors(record, registrations):
     return errors
 
 
+def own_quota_capacity_rows(transactions, account_id):
+    """Existing capacity basis: exclude all new/legacy incoming lease quota."""
+    return [row for row in records(transactions)
+        if ((is_lease(row) and guid(row.get('OWNER_ACCOUNT_ID')) == guid(account_id))
+            or (not is_lease(row) and text(row.get('TRANSACTION_TYPE')) not in {'Lease (In)', 'Lease In'}))]
+
+
 def validate_lease_period(record, registrations, transactions, inactive_ids, rules):
     """Check every position-change boundary, not just the start/end snapshots."""
     errors=lease_input_errors(record,registrations)
@@ -174,9 +181,7 @@ def validate_lease_period(record, registrations, transactions, inactive_ids, rul
                 return ['Lease adjustment evidence is unavailable; available quota cannot be verified.']
     # Staff-verified capacity: owned allocations/base less other outgoing leases.
     # Incoming leases (legacy or new-method) never provide onward capacity.
-    capacity_rows = [row for row in records(transactions)
-                     if ((is_lease(row) and guid(row.get('OWNER_ACCOUNT_ID')) == guid(record['OWNER_ACCOUNT_ID']))
-                         or (not is_lease(row) and text(row.get('TRANSACTION_TYPE')) not in {'Lease (In)', 'Lease In'}))]
+    capacity_rows = own_quota_capacity_rows(transactions, record['OWNER_ACCOUNT_ID'])
     values=[]
     for when in sorted(events):
         position=confirmed_quota_position(registrations,capacity_rows,record['OWNER_ACCOUNT_ID'],source['QUOTA_TYPE'],when,inactive_ids,rules)

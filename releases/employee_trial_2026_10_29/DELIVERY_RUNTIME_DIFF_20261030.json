@@ -2,7 +2,7 @@
   "status": "LOCAL ONLY; no live query/deployment",
   "baseline": "RELEASE_SOURCE_MANIFEST.json saved deployment, LF-normalized review comparison",
   "baseline_files": 89,
-  "candidate_artifacts": 96,
+  "candidate_artifacts": 135,
   "runtime_changes": [
     {
       "path": "data/importing.py",
@@ -91,7 +91,7 @@
       "status": "MODIFIED",
       "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption. Show current resolved lease status alongside original stored fields, with existing actions unchanged.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
-      "candidate_lf_sha256": "de513832417025d5ea45e649fbe4eb5fd7c5772bef33de72344232a35fc9b172"
+      "candidate_lf_sha256": "647649c21c64c71a4f030e3798140be8a0d17e2ebae2cb0e06c1a0b6ecbc9e6f"
     },
     {
       "path": "app/pages/9_Salmonella_Tests.py",
@@ -119,7 +119,7 @@
       "status": "MODIFIED",
       "reason": "Historical type options, Credit Type field and view-only alias-compatible quota grouping/filtering. Flock Summary catalog wording: Friday snapshots.",
       "baseline_lf_sha256": "9a9256d7a2a0a828081e8145269568d4309865f717ee982ca1fa1eb29dba5641",
-      "candidate_lf_sha256": "b7a3af568a4061637be6bc6a076e3579e752cf7c81718592f0c768b25ac7a4af"
+      "candidate_lf_sha256": "39fb22ea9cc760fee81172e1ea34a9234bd42609b9691f9d830b8b62fee092c2"
     },
     {
       "path": "app/services/revision_history.py",
@@ -203,7 +203,7 @@
       "status": "MODIFIED",
       "reason": "Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained.",
       "baseline_lf_sha256": "814cc38fb0fba545d419a49e4132d3a5e10fe7d4f5ac6707725df04831e80579",
-      "candidate_lf_sha256": "aa9b8eb097b6e4ccc753dc0cce8be95da18b43401882a1953fa06ae4dfdfd65a"
+      "candidate_lf_sha256": "28a399d34d13a475a5ff10b30d4625793f2d2dac384c516b61d621c7638a0b0b"
     },
     {
       "path": "data/repositories/base.py",
@@ -217,7 +217,7 @@
       "status": "MODIFIED",
       "reason": "2026-11-02: parameterized entity/ID-filtered, ordered, limited revision read; equivalent bounded memory path. No transaction/write logic changes.",
       "baseline_lf_sha256": "2d542fd6d12a2ac9acab51b2ac55bb7c29dfe64364d2a42f80b4312f569e7b7d",
-      "candidate_lf_sha256": "5419eaa9b6229148943e279eee9cefc69babae22d1de748e258012dfe1ab8d23"
+      "candidate_lf_sha256": "9a58e24f8f05b4d45be08aebefd94ee455d2f625a47578b48b31c73c68b73cf1"
     },
     {
       "path": "data/repositories/mock.py",
@@ -881,7 +881,7 @@
       "path": "data/quota_leases.py",
       "status": "NEW",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "e470c250e09a8d1844bdf819428aaed0caf281778f036ba806f10069e4cac44a"
+      "candidate_lf_sha256": "ba1ad2aaeb1acb0fa3733b99c8c058795580ce0fb7361896dac1504922f3e260"
     },
     {
       "path": "data/quota_lease_persistence.py",
@@ -919,7 +919,7 @@
       "path": "app/services/authorized_repository.py",
       "status": "MODIFIED",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "1a3893e7504d893410fa67eaf68b3132a81d7c36a582375d55ec789326edfd75"
+      "candidate_lf_sha256": "91202b32251cfc5c9ac3ebdffbba4513d543724c03ad41fecd3d0554ace6868f"
     },
     {
       "path": "tests/test_continuity.py",
@@ -979,13 +979,13 @@
       "path": "app/services/quota_lease_void_ui.py",
       "status": "NEW",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "a18b502015b6f23d4baa043c17bf54342bfd43a33839b3cff555d1deef2221fa"
+      "candidate_lf_sha256": "b369709db16d667de361782c21befb85b2d0579a43578831cd87a83f386083a8"
     },
     {
       "path": "data/quota_lease_void.py",
       "status": "NEW",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "fc9da7a324e0655790d69e09d8bc0f528dad6c0ff43c70623cb67a57a94b4251"
+      "candidate_lf_sha256": "61be0fa3485ca1798109ee24b298d7e2e1bba51cfd9f35609b0411af3e0113e5"
     },
     {
       "path": "sql/34_quota_lease_void_20261119.sql",
@@ -1011,13 +1011,13 @@
       "path": "app/services/flock_summary_report.py",
       "status": "NEW",
       "reason": "Task 5 weekly stock report and append-only lease adjustments. Use Friday for each weekly snapshot and its As-of Date, retaining all other report rules.",
-      "candidate_lf_sha256": "d3d288e747d7af9c9dbef4c597b954eeff1bac29a27c47513f9989b00bcf617f"
+      "candidate_lf_sha256": "88435548cd738ab8c876f3a651588da0c51e16330f851c9c38d5b452b4b88d93"
     },
     {
       "path": "data/efc_calendar.py",
       "status": "NEW",
       "reason": "Task 5 weekly stock report and append-only lease adjustments. Staff-confirmed Friday inventory day, independently retaining Saturday calendar validation.",
-      "candidate_lf_sha256": "c4ef27c804ddc514563d4399e8d687cd4c5242fdc6da397eba7f21e9d7ba2760"
+      "candidate_lf_sha256": "46dd486d5f3fababc6f641df1c48ee35aebb4b1c030face74da6f7ae6ec3047d"
     },
     {
       "path": "docs/codex_reports/FLOCK_SUMMARY_LEASE_ADJUST_20261120.md",
@@ -1035,13 +1035,13 @@
       "path": "app/services/quota_lease_adjustment_ui.py",
       "status": "NEW",
       "reason": "Task 5 weekly stock report and append-only lease adjustments.",
-      "candidate_lf_sha256": "447cc3177fdf82574e08598b1c4d5ea76c0e51130d82d4b46cac902059a6932e"
+      "candidate_lf_sha256": "a68158b2d6b7ff004fec22ba003452d476bd2528aef6471d888921b4b54e5e1e"
     },
     {
       "path": "data/quota_lease_adjustments.py",
       "status": "NEW",
       "reason": "Task 5 weekly stock report and append-only lease adjustments.",
-      "candidate_lf_sha256": "811b1ed854d5b530472e109f1f4f1ea93751eea64d568d197fc9dba867a2baf8"
+      "candidate_lf_sha256": "37e3770eaba69b64cd341418d45e593c4f06e3101001ee1b10d241a0806749ed"
     },
     {
       "path": "tests/test_quota_lease_adjustments.py",
@@ -1121,13 +1121,93 @@
       "path": "tests/test_flock_summary_friday.py",
       "status": "NEW",
       "reason": "Synthetic Friday cutoff, calendar, grouping and export/UI coverage.",
-      "candidate_lf_sha256": "2ef7a9ea0aeecf224e2943b8eb1e1d4f99b327805f2903e20f28328e463c90b7"
+      "candidate_lf_sha256": "cb04b54341aa00959aa163d1bccf4d74efcfaf65b9f820c46711475909b6805a"
     },
     {
       "path": "docs/codex_reports/FLOCK_SUMMARY_ASOF_FRIDAY_20261123.md",
       "status": "NEW",
       "reason": "Friday decision, complete caller audit and validation evidence.",
       "candidate_lf_sha256": "e3b18e99f8dae027dab6714f309d3d8bed286acafa2e232e0119a945691c4639"
+    }
+  ],
+  "review_fixes_20261123_artifacts": [
+    {
+      "path": "app/pages/3_Accounts_Facilities_Flocks.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "e83830cfb5493e5e955b609ebfedcedcdf91309cc91ed5be6c7686524e487ff7"
+    },
+    {
+      "path": "data/lease_confirmation.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "4f2f1aac55994997321e191ee525f4a90ce13370d0b15e19745092f0663aa1ed"
+    },
+    {
+      "path": "data/manual_quota.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "a2c8c41f2a286f5351597f3d7982cb5e6287a750668de4b7452bce26e4be9965"
+    },
+    {
+      "path": "data/quota_allocation_capacity.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "018dbf8f0f7909294bc56db893d27b9c25d6c7789b5486d27ed71b9b22ba87a0"
+    },
+    {
+      "path": "docs/codex_reports/REVIEW_FIXES_20261123.md",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "3d6a26ed402e407d4efed13a14e4f71df6d220e1eab99bbb44c6493d0afce5d2"
+    },
+    {
+      "path": "tests/test_authorization_proxy_coverage.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "4ffd66be08773cac1c3624a444880dde87a4e2602ec9238214b427dcfd60f8f5"
+    },
+    {
+      "path": "tests/test_daily_entry_boundaries.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "db934f407bc48b7027184ea4cbf132b3f1518c7ff9d706cfcf733bdb903e8240"
+    },
+    {
+      "path": "tests/test_delivery_package_guards.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "f3e7c944d6bd46ac46d1bfdf6ccd24c002be7361a7d1fab66cc4842888c4e3e6"
+    },
+    {
+      "path": "tests/test_delivery_transaction_choices.py",
+      "status": "MODIFIED",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "1f9a223619f559783007bcede1ed561ee63859f570f2c618312b4d23032ae6f1"
+    },
+    {
+      "path": "tests/test_review_allocation_capacity.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "d2ece1182a980c515a608ca198c67a9e58799fb17e2196be8c842fca3705628a"
+    },
+    {
+      "path": "tests/test_review_lease_confirmation.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "b30a92edbbaaad88179537656db2b82a2c14d48d0d105ae3560187928bd03950"
+    },
+    {
+      "path": "tests/test_review_manual_leases.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "08351a3fe8eaa6dc833a672087cca08d490ac6369943c2b55076f1666e81f124"
+    },
+    {
+      "path": "tests/test_review_week_in_progress.py",
+      "status": "NEW",
+      "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
+      "candidate_lf_sha256": "ab5b30eeeb7d68e4a83713ecdc9d12f36b3124a3684c8f08d7c7b18fce60e019"
     }
   ]
 }

@@ -45,7 +45,7 @@ def test_native_writer_keeps_null_and_zero_distinct_in_parameter_bindings(entere
 def test_invalid_price_blocks_save_without_erasing_form(chain, tmp_path, monkeypatch):
     repo, account, other, facility, quota, flock, _ = chain
     app = quota_app(repo, tmp_path, monkeypatch)
-    assert app.selectbox(key='quota_tx_form_type').options == list(QUOTA_TRANSACTION_TYPES)
+    assert app.selectbox(key='quota_tx_form_type').options == [value for value in QUOTA_TRANSACTION_TYPES if not value.startswith('Lease')]
     related = next(v for v in app.selectbox(key='quota_tx_form_related_account').options if 'counterparty' in v)
     app.selectbox(key='quota_tx_form_related_account').select(related)
     app.number_input(key='quota_tx_form_count').set_value(2.5)

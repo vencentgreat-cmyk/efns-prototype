@@ -49,9 +49,9 @@ def test_historical_type_unchanged_edit_retained(chain,tmp_path,monkeypatch,kind
 def test_new_type_change_updates_optional_counterparty_label(chain,tmp_path,monkeypatch):
     repo,*_=chain
     app=quota_app(repo,tmp_path,monkeypatch)
-    assert app.selectbox(key='quota_tx_form_type').options==list(QUOTA_TRANSACTION_TYPES)
+    assert app.selectbox(key='quota_tx_form_type').options==[value for value in QUOTA_TRANSACTION_TYPES if not value.startswith('Lease')]
     assert app.selectbox(key='quota_tx_form_related_account').label=='Related Account'
-    app.selectbox(key='quota_tx_form_type').select('Lease (In)').run()
+    app.selectbox(key='quota_tx_form_type').select('Purchase').run()
     assert app.selectbox(key='quota_tx_form_related_account').label=='Related Account *'
     app.selectbox(key='quota_tx_form_type').select('Base').run()
     assert app.selectbox(key='quota_tx_form_related_account').label=='Related Account'

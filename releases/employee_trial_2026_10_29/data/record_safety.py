@@ -35,13 +35,15 @@ def read_record(repo,entity,record_id,tx=None):
     if len(found)>1:raise RepositoryError('Record identity is ambiguous; no write accepted.')
     return found.iloc[0].to_dict() if len(found)==1 else None
 
-def history_audit(repo,tx,entity,record_id,request,actor,reason,kind,before,after):
+def history_audit(repo,tx,entity,record_id,request,actor,reason,kind,before,after,*,report_change_confirmation=None):
     from data.repositories.continuity import stable_id
     audit=dict(AUDIT_ID=stable_id('record-audit',entity,record_id,request,kind),
         ACTOR_USER_ID=actor_id(actor),ACTOR_EMAIL=actor.get('email') if isinstance(actor,dict) else None,
         ACTION=kind if kind in ('CREATE','DELETE') else 'UPDATE',ENTITY_TYPE=entity,ENTITY_ID=record_id,
         DETAILS={'reason':reason,'request_id':request,'history_kind':kind},
         OCCURRED_AT=dt.datetime.now(dt.timezone.utc))
+    if report_change_confirmation is not None:
+        audit['DETAILS']['report_change_confirmation']=report_change_confirmation
     if repo._is_memory:repo._review_insert(tx,'AUDIT_EVENT',audit)
     else:
         cols=list(audit);params=[evidence_json(audit[c]) if c=='DETAILS' else audit[c] for c in cols]
@@ -146,6 +148,11 @@ def create_once(repo,entity,record,request_id,actor):
             if read_record(repo,entity,target,tx) is None:raise RepositoryError('Committed creation target is missing; do not retry blindly.')
             return target
         if read_record(repo,entity,target,tx):raise RepositoryError('Target already exists without a matching creation receipt.')
+        if entity=='QUOTA_TRANSACTION':
+            from data.manual_quota import reject_new_allocation_lease
+            reject_new_allocation_lease(values)
+            from data.quota_allocation_capacity import guard_allocation_change
+            guard_allocation_change(repo,tx,None,dict(values,**{key:target}))
         getattr(repo,ENTITIES[entity][1])(dict(values,**{key:target}))
         after=read_record(repo,entity,target,tx)
         if not after:raise RepositoryError('Created record could not be verified.')
@@ -158,6 +165,9 @@ def delete_with_history(repo,entity,record_id,method,actor,request_id,reason):
     with repo._continuity_transaction() as tx:
         before=read_record(repo,entity,record_id,tx)
         if before is None:return False
+        if entity=='QUOTA_TRANSACTION':
+            from data.quota_allocation_capacity import guard_allocation_change
+            guard_allocation_change(repo,tx,before,None)
         result=method(record_id)
         if result:
             repo._append_history(tx,'RECORD_REVISION',dict(REVISION_ID=stable_id('record-delete',entity,record_id,request_id),ENTITY_TYPE=entity,ENTITY_ID=record_id,CHANGE_KIND='DELETE',BUSINESS_AT=None,RECORDED_AT=dt.datetime.now(dt.timezone.utc).replace(tzinfo=None),RECORDED_BY=actor_id(actor),REASON=reason,BEFORE_DATA=before,AFTER_DATA=None))
@@ -191,6 +201,9 @@ def revise_entity(repo,entity,record_id,changes,reason,request_id,actor,business
             if is_lease(before) or is_lease(changes):raise RepositoryError(IMMUTABLE_LEASE)
         changes=validate_edit(repo,entity,before,changes)
         updated=dict(before,**changes,EXPECTED_UPDATED_AT=before['UPDATED_AT'])
+        if entity=='QUOTA_TRANSACTION':
+            from data.quota_allocation_capacity import guard_allocation_change
+            guard_allocation_change(repo,tx,before,updated)
         if repo._is_memory:repo._upsert_frame(ENTITIES[entity][0],key,updated)
         else:repo._upsert_with_executor(tx,entity,{key:record_id,**changes,'EXPECTED_UPDATED_AT':before['UPDATED_AT']})
         after=read_record(repo,entity,record_id,tx)

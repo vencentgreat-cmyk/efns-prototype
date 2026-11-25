@@ -5,7 +5,7 @@ from data.position_evidence import day, number
 
 INVENTORY_AS_OF_WEEK_DAY = 4  # Python weekday: Friday; staff decision 2026-11-23, Sunday start + 5 days.
 EFC_WEEK_END_WEEK_DAY = 5  # Python weekday: Saturday; calendar boundaries are unchanged.
-WEEKLY_INVENTORY_CAPTION = 'Inventory is as of Friday of each EFC week (week start + 5 days).'
+WEEKLY_INVENTORY_CAPTION = 'Inventory is as of Friday of each EFC week (week start + 5 days), or today if Friday is later than today (week in progress).'
 
 
 def synthetic_efc_calendar(year):

@@ -287,14 +287,14 @@ class ContinuityRepository:
         return get_adjustments(self, transaction_ids)
 
     def adjust_quota_lease(self, transaction_id, kind, adjustment_date, returned_amount, reason,
-                           request_id, expected_updated_at, expected_adjustment_ids, actor=None):
+                           request_id, expected_updated_at, expected_adjustment_ids, actor=None,*,reports_confirmed=False):
         from data.quota_lease_adjustments import adjust_lease
         return adjust_lease(self, transaction_id, kind, adjustment_date, returned_amount, reason,
-                            request_id, expected_updated_at, expected_adjustment_ids, actor)
+                            request_id, expected_updated_at, expected_adjustment_ids, actor,reports_confirmed=reports_confirmed)
 
-    def void_quota_lease(self, transaction_id, reason, request_id, expected_updated_at, actor=None):
+    def void_quota_lease(self, transaction_id, reason, request_id, expected_updated_at, actor=None,*,reports_confirmed=False):
         from data.quota_lease_void import void_lease
-        return void_lease(self, transaction_id, reason, request_id, expected_updated_at, actor)
+        return void_lease(self, transaction_id, reason, request_id, expected_updated_at, actor,reports_confirmed=reports_confirmed)
 
     def create_record_once(self, entity, record, request_id, actor=None):
         from data.record_safety import create_once
