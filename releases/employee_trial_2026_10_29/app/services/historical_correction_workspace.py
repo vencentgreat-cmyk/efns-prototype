@@ -2,6 +2,7 @@
 import uuid
 
 import streamlit as st
+from app.ui import section_intro
 
 from data.correction_decisions import FIELDS
 from data.historical_corrections import _variant
@@ -9,7 +10,7 @@ from data.migration import normalize_migration_row
 
 
 def render_correction_editor(repo,preview,may_save):
-    st.subheader('Manual correction decisions')
+    section_intro('Manual correction decisions')
     entity=st.selectbox('Correction entity',['All',*FIELDS],key='manual_correction_entity')
     state=st.selectbox('Decision state',['Needs confirmation','Eligible for CORE','Committed to CORE','All'],key='manual_correction_state')
     status={'Needs confirmation':'PENDING_CONFIRMATION','Eligible for CORE':'READY_CORE','Committed to CORE':'ALREADY_COMMITTED'}

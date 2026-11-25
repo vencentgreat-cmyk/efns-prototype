@@ -33,9 +33,9 @@
     {
       "path": "app/pages/13_Facility_Details.py",
       "status": "MODIFIED",
-      "reason": "R3 F5: disambiguate colliding Facility selector labels; preserve distinct target IDs and existing save behavior.",
+      "reason": "R3 F5: disambiguate colliding Facility selector labels; preserve distinct target IDs and existing save behavior. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "a21a8266cd0d09c0b130916acf219b375f2596e1dd31723903e517d08066a9e3",
-      "candidate_lf_sha256": "01027b55961a97951d5dcb6221fe8f88ee3acd92070e3c4622a865d013ecdfe2"
+      "candidate_lf_sha256": "ca5bd9564fef332c67d787088ed83f7f76653a9971ee1d5e14600c785635e746"
     },
     {
       "path": "app/pages/15_User_Management.py",
@@ -47,9 +47,9 @@
     {
       "path": "app/pages/16_Audit_Log.py",
       "status": "MODIFIED",
-      "reason": "R3 F7: caption states filters apply to the latest 5,000 loaded events; no query or permission change.",
+      "reason": "R3 F7: caption states filters apply to the latest 5,000 loaded events; no query or permission change. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "196280caca24d4764f907add13869e875f6531e30fe954d2950c92fed790a85f",
-      "candidate_lf_sha256": "ae974abdca91bd2bee5fd61fe938afe0d4abbae9de40e67f918c192a96630437"
+      "candidate_lf_sha256": "36ff39ef90afa5cf5640d3d24114c0ef5465a4306776804de8ac299ce869e180"
     },
     {
       "path": "app/pages/19_Daily_Flock_Quota_Import.py",
@@ -68,16 +68,16 @@
     {
       "path": "app/pages/4_Reports.py",
       "status": "MODIFIED",
-      "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
+      "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
-      "candidate_lf_sha256": "76005b17aaf6d79793a733be6957e73d03ed5103977d37f0a92c0cd8a2352fd5"
+      "candidate_lf_sha256": "3f27f5d0715a101403238f6c95ad069a4856483c9be0a085ac3d00d2c1fe2273"
     },
     {
       "path": "app/pages/5_Flocks.py",
       "status": "MODIFIED",
-      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained. Main-list null rendering uses Streamlit native em-dash placeholder only; unchanged Arrow values and exports. Permit-only Flock entry and readonly edit, create-only page duplicate guard, exact role-account Hatchery/Breeder names; existing identifiers, writer/audit/permission/export logic retained.",
+      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained. Main-list null rendering uses Streamlit native em-dash placeholder only; unchanged Arrow values and exports. Permit-only Flock entry and readonly edit, create-only page duplicate guard, exact role-account Hatchery/Breeder names; existing identifiers, writer/audit/permission/export logic retained. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
-      "candidate_lf_sha256": "6d023457aaf72617271989c82dae0f8b653456fad0b16d85709d2b36d195de2a"
+      "candidate_lf_sha256": "a26e5f8e8e264436ea7c8617e670c8f20cdd944b8a2aa630e5e4653c2b027119"
     },
     {
       "path": "app/pages/6_Flock_Transactions.py",
@@ -89,16 +89,16 @@
     {
       "path": "app/pages/8_Quota_Transactions.py",
       "status": "MODIFIED",
-      "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption. Show current resolved lease status alongside original stored fields, with existing actions unchanged.",
+      "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption. Show current resolved lease status alongside original stored fields, with existing actions unchanged. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
-      "candidate_lf_sha256": "647649c21c64c71a4f030e3798140be8a0d17e2ebae2cb0e06c1a0b6ecbc9e6f"
+      "candidate_lf_sha256": "5016fdee473997ad3efd68b146524e5a1e2eeba80fa2ea7ea7228491d6951fd6"
     },
     {
       "path": "app/pages/9_Salmonella_Tests.py",
       "status": "MODIFIED",
-      "reason": "R3 F5/F6: disambiguate colliding Flock/Account labels and offer stored result filters; legacy edit preservation and new-entry choices unchanged.",
+      "reason": "R3 F5/F6: disambiguate colliding Flock/Account labels and offer stored result filters; legacy edit preservation and new-entry choices unchanged. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "ffbd36c984fbdf71f6451b0e97ede64322f5293ae61674e799b9a925d2625e3e",
-      "candidate_lf_sha256": "d1ba4bddf360fc3a2e476c08317584cdb6fdf357c0efe3ff2d475a69ad231b9f"
+      "candidate_lf_sha256": "84ea3890237c6887057d65dce5aaf013d526b592aa44c5c25fb4fe12ab87072d"
     },
     {
       "path": "app/services/quota_usage.py",
@@ -810,14 +810,14 @@
     {
       "path": ".streamlit/config.toml",
       "status": "MODIFIED",
-      "reason": "Append the requested Snowflake 10-minute sleep setting; preserve all existing settings and bytes.",
-      "candidate_lf_sha256": "1c03edd1669cbb70594b6115f2a16734234297cde61e2c57e060f1223b5987e6"
+      "reason": "Append the requested Snowflake 10-minute sleep setting; preserve all existing settings and bytes. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
+      "candidate_lf_sha256": "f2bb19709adeeb05360011fa85da4d63c413d194eed7b6431f421af1fcf8bd4a"
     },
     {
       "path": "tests/test_light_theme.py",
       "status": "MODIFIED",
-      "reason": "Retain exact theme/packaging checks while allowing only the explicitly requested Snowflake sleep section and exact value.",
-      "candidate_lf_sha256": "ff846833edc57d1df3bb3345b038c8de5b81fafd9032be05d143dd9496c2b2b0"
+      "reason": "Retain exact theme/packaging checks while allowing only the explicitly requested Snowflake sleep section and exact value. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
+      "candidate_lf_sha256": "4687bc14985cfa7444ab74ccfef2131976c2164dfca1880efb847c8316cb94c4"
     }
   ],
   "production_j2_review_artifacts": [
@@ -874,8 +874,8 @@
     {
       "path": "app/services/quota_lease_entry.py",
       "status": "NEW",
-      "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "ecda96f9e7be4e36549224e4d7aeca0b81e3f4db28ebb0682188a4a2288875aa"
+      "reason": "Part E opt-in effective-dated quota lease implementation and offline verification. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
+      "candidate_lf_sha256": "8e87fecff94d05af0a861c339905e95022668d2b736d7bc8d10e9bae8b1f5f4e"
     },
     {
       "path": "data/quota_leases.py",
@@ -912,8 +912,8 @@
     {
       "path": "app/pages/1_Production_Import.py",
       "status": "MODIFIED",
-      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "d87fa42c4d0198f0a9a9a7a38930be08e0993cb288b21c30755ea4a6d72f096d"
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
+      "candidate_lf_sha256": "f30d8a2e3a633c86d8cc4ef4c55005bb57b4f912606a46a2ab115e39c9d1542f"
     },
     {
       "path": "app/services/authorized_repository.py",
@@ -948,8 +948,8 @@
     {
       "path": "app/services/production_import_review.py",
       "status": "NEW",
-      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "5d30566d1beccdc8b8b83bfcc94e3cd6ccc5b7eb5316206e18d923e804c0f9c2"
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
+      "candidate_lf_sha256": "e3236143d78827c3fe04780a0e8bc985746681d6cd3978494c22af7997fad78f"
     },
     {
       "path": "data/production_replacement.py",
@@ -1094,8 +1094,8 @@
     {
       "path": "app/pages/7_Quota_Registrations.py",
       "status": "MODIFIED",
-      "reason": "Separate read-only lessee relationship and effective outgoing lease status; unchanged stored transaction table/count.",
-      "candidate_lf_sha256": "7956534faf4674445a36016c07867805f54d34d8d25adb1686c542f961a73dbd"
+      "reason": "Separate read-only lessee relationship and effective outgoing lease status; unchanged stored transaction table/count. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
+      "candidate_lf_sha256": "51c274b8ce3b8240fc2f8d83eef4a625a71a4f54a20b2d2cfb20d633301af513"
     },
     {
       "path": "app/services/quota_lease_display.py",
@@ -1208,6 +1208,56 @@
       "status": "NEW",
       "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
       "candidate_lf_sha256": "ab5b30eeeb7d68e4a83713ecdc9d12f36b3124a3684c8f08d7c7b18fce60e019"
+    }
+  ],
+  "ui_polish_a_20261125_artifacts": [
+    {
+      "path": "app/Home.py",
+      "status": "MODIFIED",
+      "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
+      "candidate_lf_sha256": "06c7469af7fd5982a62d80c25839a745744050d89ce63fea855bf33d22bd167d"
+    },
+    {
+      "path": "app/pages/18_Farm_Locations.py",
+      "status": "MODIFIED",
+      "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
+      "candidate_lf_sha256": "8e821f5c2df620a198efde101c833666a53d9b6921848a7b033274eb517dee67"
+    },
+    {
+      "path": "app/pages/20_EIMS_Reference_Data.py",
+      "status": "MODIFIED",
+      "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
+      "candidate_lf_sha256": "cddfb174684b9c2708474b069ccf591fd29752f79bf87285d3f880def09b2658"
+    },
+    {
+      "path": "app/services/historical_correction_workspace.py",
+      "status": "MODIFIED",
+      "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
+      "candidate_lf_sha256": "32426a5aad20b5cde3e55f74f0ade5c5032a76696c5328fbe5e30d05de5cde61"
+    },
+    {
+      "path": "app/ui.py",
+      "status": "MODIFIED",
+      "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
+      "candidate_lf_sha256": "ef471e65bd3ea0f3ab6b9d98c23786991b2c115fad7adac5c788b301ca34e522"
+    },
+    {
+      "path": "docs/codex_reports/ui_polish_a_20261125.md",
+      "status": "ADDED",
+      "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
+      "candidate_lf_sha256": "c8cf321bb6d5e7c6de4e65fb02d6e9952b812b2190d5457d3c613b1d1c463018"
+    },
+    {
+      "path": "tests/test_ui_and_export.py",
+      "status": "MODIFIED",
+      "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
+      "candidate_lf_sha256": "4949af2890f055a0d9b87f4a85073c943cf33579044ee4aa01688cdf692d665e"
+    },
+    {
+      "path": "tests/test_ui_polish_a.py",
+      "status": "ADDED",
+      "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
+      "candidate_lf_sha256": "2970ef433d6c981ea3ac59e6620bcec8d35a8538d5a4e08ccf51ce890078508e"
     }
   ]
 }

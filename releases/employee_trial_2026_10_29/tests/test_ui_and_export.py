@@ -59,29 +59,45 @@ def test_native_light_theme_and_scoped_custom_css():
     )
     assert config["theme"] == {
         "base": "light",
-        "primaryColor": "#3F56D9",
-        "backgroundColor": "#F6F8FC",
+        "primaryColor": "#225C80",
+        "backgroundColor": "#F7F6F2",
         "secondaryBackgroundColor": "#FFFFFF",
-        "textColor": "#172033",
-        "font": "sans serif",
-        "borderColor": "#C7D0DF",
-        "dataframeHeaderBackgroundColor": "#E8EEF7",
+        "textColor": "#202C32",
+        "font": "sans-serif",
+        "headingFont": "sans-serif",
+        "baseFontSize": 16,
+        "headingFontSizes": ["1.75rem", "1.25rem", "1.125rem"],
+        "headingFontWeights": [600, 600, 600],
+        "borderColor": "#CBD2D1",
+        "dataframeHeaderBackgroundColor": "#EEF2F1",
         "showWidgetBorder": True,
-        "linkColor": "#2453BE",
+        "linkColor": "#225C80",
+        "codeTextColor": "#202C32",
+        "codeBackgroundColor": "#FFFFFF",
+        "redColor": "#9D3640",
+        "redTextColor": "#9D3640",
+        "redBackgroundColor": "#F5EBEC",
+        "greenColor": "#2E6B4E",
+        "greenTextColor": "#2E6B4E",
+        "greenBackgroundColor": "#EAF0ED",
+        "yellowColor": "#7A5417",
+        "yellowTextColor": "#7A5417",
+        "yellowBackgroundColor": "#F2EEE8",
+        "blueColor": "#375E7A",
+        "blueTextColor": "#375E7A",
+        "blueBackgroundColor": "#EBEFF2",
         "sidebar": {
-            "primaryColor": "#3F56D9",
-            "backgroundColor": "#F1F5F9",
+            "primaryColor": "#225C80",
+            "backgroundColor": "#F7F6F2",
             "secondaryBackgroundColor": "#FFFFFF",
-            "textColor": "#172033",
-            "borderColor": "#C7D0DF",
+            "textColor": "#202C32",
+            "borderColor": "#CBD2D1",
         },
     }
 
     ui_source = (project_root / "app" / "ui.py").read_text(encoding="utf-8")
-    # Current live theme deliberately scopes a contrast fix to EFNS markup;
-    # do not apply the pre-light-theme blanket ban to that specific selector.
-    assert '[data-testid="stMarkdownContainer"] .efns-page-header h1.efns-page-title' in ui_source
-    for forbidden in ('stButton','stDataFrame','data-baseweb','button {','input {','html {'):
+    assert '.efns-page-header h1.efns-page-title' in ui_source
+    for forbidden in ('stButton','stDataFrame','data-baseweb','data-testid','button {','input {','html {'):
         assert forbidden not in ui_source
     assert "header[" not in ui_source
 

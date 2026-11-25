@@ -57,7 +57,7 @@ def dashboard() -> None:
         show_data_error(exc)
         return
 
-    section_intro("Operational overview", "Current session counts from public repository queries.")
+    section_intro("Operational overview", "Current Account, Facility, Flock and Quota Registration counts.")
     cols = st.columns(4)
     for column, label, value in zip(
         cols,
@@ -81,8 +81,7 @@ def dashboard() -> None:
         column.metric(label, f"{operations.get(key, 0):,}")
 
     st.info(
-        "Prototype status: entity names and relationships remain provisional until "
-        "authoritative Dataverse metadata is available."
+        "Some record types and relationships remain provisional pending confirmation of the legacy data definitions."
     )
 
     section_intro("Next actions", "Continue with the most common operational tasks.")
@@ -110,7 +109,7 @@ def dashboard() -> None:
         ),
         (
             "Open Report Center",
-            "Run curated reports or customize an allowlisted operational dataset.",
+            "Run operational reports or choose fields for a custom report.",
             "4_Reports.py",
             "Open Report Center",
         ),
@@ -124,7 +123,7 @@ def dashboard() -> None:
             )
             st.page_link(page_file(page), label=label)
 
-    with st.container(border=True):
+    with st.container():
         section_intro("Recent imports", "The ten most recent workbook or synthetic import batches.")
         imports = repo.get_import_batches()
         if imports.empty:
@@ -153,7 +152,7 @@ def dashboard() -> None:
 
 with st.sidebar:
     st.markdown(
-        '<div class="efns-brand">EFNS Data System<small>Internal operations prototype</small></div>',
+        '<div class="efns-brand">EFNS Data System<small>Internal operations</small></div>',
         unsafe_allow_html=True,
     )
 

@@ -52,6 +52,8 @@ else:
     if entity_filter != "All":
         filtered = filtered[filtered["ENTITY_TYPE"] == entity_filter]
     section_intro("Audit events", f"{len(filtered):,} of {len(frame):,} event(s).")
+    if filtered.empty:
+        st.info("No records match these filters.")
     st.dataframe(
         filtered,
         width="stretch",

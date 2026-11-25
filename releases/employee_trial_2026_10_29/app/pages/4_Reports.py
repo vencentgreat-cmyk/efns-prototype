@@ -53,7 +53,7 @@ if "repo" not in st.session_state:
     st.session_state.repo = get_repository()
 repo = st.session_state.repo
 
-page_header("Report Center", "Run curated operational reports or build an allowlisted custom report.", "REPORTING")
+page_header("Report Center", "Run operational reports or choose fields for a custom report.", "REPORTING")
 section = st.radio("Report Center section", ["Report Library", "Customize Report", "Saved Reports"], horizontal=True, key="report_center_section")
 
 
@@ -114,10 +114,12 @@ if section == "Report Library":
     st.caption(f"{len(filtered)} report definition(s)")
     if not filtered:
         st.info("No reports match the current filters.")
+    section_intro("Report Library")
     for item in filtered:
-        with st.container(border=True):
+        with st.container():
             title, action = st.columns([5, 1])
-            title.markdown(f"### {item.name}")
+            with title:
+                section_intro(item.name, level=3)
             title.caption(f"{item.category} · {item.report_type} · {item.status}")
             title.write(item.description)
             title.caption("Parameters: " + ", ".join(item.parameters))
@@ -140,8 +142,8 @@ if section == "Report Library":
             prefix = definition.handler
             parameters = st.columns(3)
             year = parameters[0].number_input('Year',min_value=1900,max_value=9999,value=halifax_today().year,step=1,key=prefix+'_year') if prefix == 'production_nest_run' else halifax_today().year
-            start = parameters[1].text_input('Start Week',value=str(year)+'01',key=prefix+'_start')
-            end = parameters[2].text_input('End Week',value=str(year)+'53',key=prefix+'_end')
+            start = parameters[1].text_input('Start Week',help='Production Week (YYYYWW), for example 202601.',value=str(year)+'01',key=prefix+'_start')
+            end = parameters[2].text_input('End Week',help='Production Week (YYYYWW), for example 202653.',value=str(year)+'53',key=prefix+'_end')
             source_accounts = repo.get_accounts()
             types,selected_accounts,grader_key = list(MARKETING_TYPES),None,None
             unit, weekly_only = 'Dozens', False
@@ -280,11 +282,15 @@ if section == "Report Library":
             quota_type = params[1].selectbox("Quota Type", QUOTA_TYPES, key=prefix+"_type")
             account_label = params[2].selectbox("Account", list(account_options), key=prefix+"_account")
             status = params[3].selectbox("Status", ["Active", "Inactive", "Expired", "All"], key=prefix+"_status")
-            st.caption("Status filters Quota Registrations; registration dates do not limit Account listing. Address and contact details come from Account. Calculations use Active owner transactions and Active Registrations at the as-of date; unavailable state evidence leaves amounts unknown.")
+            st.write("Review quota by Account at the selected as-of date.")
+            st.info("Amounts are unknown when transaction state evidence is unavailable.")
+            with st.expander("Calculation details", expanded=False):
+                st.write("Status filters Quota Registrations; registration dates do not limit Account listing. Address and contact details come from Account. Calculations use Active owner transactions and Active Registrations at the as-of date; unavailable state evidence leaves amounts unknown.")
             if prefix == 'quota_summary':
                 st.caption('Issuance is the confirmed owner quota position at the as-of date.')
             else:
-                st.caption('Details retains existing transaction totals. New leases show positive Lease (In) and negative Lease (Out), using their effective amounts at the as-of date. Existing Sale, historical Lease (Out) and Terminate Quota are not subtracted; historical totals can still differ from net Issuance.')
+                with st.expander('How Details differs from Issuance', expanded=False):
+                    st.write('Details retains existing transaction totals. New leases show positive Lease (In) and negative Lease (Out), using their effective amounts at the as-of date. Existing Sale, historical Lease (Out) and Terminate Quota are not subtracted; historical totals can still differ from net Issuance.')
             if st.button("Run Report", type="primary", icon=":material/play_arrow:", key="run_"+prefix):
                 st.session_state.pop(prefix+'_result', None)
                 try:
@@ -303,7 +309,7 @@ if section == "Report Library":
             metrics = st.session_state.get(prefix+"_metrics")
             if isinstance(result, pd.DataFrame):
                 applied = st.session_state.get(prefix+"_parameters", {})
-                st.markdown("## " + definition.name)
+                section_intro("Results")
                 st.caption(
                     f"Quota Type: {applied.get('quota_type', quota_type)} · "
                     f"As of: {applied.get('as_of', as_of)} · "
@@ -335,8 +341,8 @@ if section == "Report Library":
                     st.info(str(exc))
                 else:
                     params = st.columns(2)
-                    first = params[0].text_input('Start Week', value=str(first), key='flock_summary_start')
-                    last = params[1].text_input('End Week', value=str(last), key='flock_summary_end')
+                    first = params[0].text_input('Start Week',help='Production Week (YYYYWW), for example 202601.', value=str(first), key='flock_summary_start')
+                    last = params[1].text_input('End Week',help='Production Week (YYYYWW), for example 202653.', value=str(last), key='flock_summary_end')
                     mortality = st.text_input('Mortality (% per month)', value='0.4', key='flock_summary_mortality')
                     flocks = repo.get_flocks()
                     kinds = {quota_type_key(v) for v in flocks.get('FLOCK_QUOTA_TYPE', []) if stored_text(v)} - {'Special Permit','Egg Production','All',None}
@@ -364,7 +370,7 @@ if section == "Report Library":
             source_flocks, source_accounts = repo.get_flocks(), repo.get_accounts()
             params = st.columns(3)
             as_of = params[0].date_input('Report Date', value=halifax_today(), key=handler+'_date')
-            mortality = params[1].number_input('Mortality', min_value=0.0, value=0.4, step=0.1, format='%.3f', key=handler+'_mortality')
+            mortality = params[1].number_input('Mortality (% per month)', min_value=0.0, value=0.4, step=0.1, format='%.3f', key=handler+'_mortality')
             kinds = {str(value).strip() for value in source_flocks.get('FLOCK_QUOTA_TYPE', pd.Series(dtype=object)).dropna() if str(value).strip()}
             selected_type = params[2].selectbox('Quota Type', ['Egg Production', 'All', *sorted(kinds-{'Egg Production','All','Special Permit'})], key=handler+'_type')
             st.caption('All producers with positive confirmed quota are listed. Over-quota Account Total percentages are highlighted red. Uses the Flock Status scope and confirmed Egg Production quota basis.')
@@ -430,21 +436,28 @@ if section == "Report Library":
                 extra = st.columns(2)
                 from_age = extra[0].number_input('Flock Minimum Age', min_value=0, value=19, step=1, key=handler+'_from_age')
                 to_age = extra[1].number_input('Flock Maximum Age', min_value=0, value=255, step=1, key=handler+'_to_age')
-                st.caption('Uses Flock Age inclusion and inventory, including Delivery fallback. Unknown Inventory excluded; DEV_TEST follows the same inclusion rules.')
+                with st.expander('Calculation details', expanded=False):
+                    st.write('Uses Flock Age inclusion and inventory, including Delivery fallback. Unknown Inventory excluded; DEV_TEST follows the same inclusion rules.')
             elif handler == 'scheduled_flock_placements':
-                st.caption('Inventory uses the latest of all recorded dated Deliveries, otherwise BIRD_COUNT. Mortality is unused. Conflicting Delivery quantities remain unknown. Totals sum known values. Quota is confirmed at the start date; disposal uses actual, otherwise estimated, at that date.')
+                with st.expander('Calculation details', expanded=False):
+                    st.write('Inventory uses the latest of all recorded dated Deliveries, otherwise BIRD_COUNT. Mortality is unused. Conflicting Delivery quantities remain unknown. Totals sum known values. Quota is confirmed at the start date; disposal uses actual, otherwise estimated, at that date.')
             elif handler == 'flocks_needing_counts':
                 extra = st.columns(3)
                 from_age = extra[0].number_input('From Age', min_value=0, value=19, step=1, key=handler+'_from_age')
                 to_age = extra[1].number_input('To Age', min_value=0, value=299, step=1, key=handler+'_to_age')
                 count_type = extra[2].selectbox('Count Type', ['All', 'Board', 'Producer', 'EFC/CEMA'], key=handler+'_count_type')
-                st.caption('Uses placed Flock Age inclusion; Delivery is not a Count. EFC/CEMA means labels other than Producer or Board, including blank labels.')
+                with st.expander('Calculation details', expanded=False):
+                    st.write('Uses placed Flock Age inclusion; Delivery is not a Count. EFC/CEMA means labels other than Producer or Board, including blank labels.')
             elif handler == 'flock_disposals':
-                st.caption('Disposal Age = whole weeks from Hatch Date to actual Disposal Date +19. The offset is derived from 30 legacy fixtures, not a business rule. Placed uses earliest Delivery quantity, otherwise BIRD_COUNT.')
+                st.warning('Disposal Age includes a 19-week offset derived from legacy examples, not a confirmed business rule.')
+                with st.expander('Calculation details', expanded=False):
+                    st.caption('Disposal Age = whole weeks from Hatch Date to actual Disposal Date +19. The offset is derived from 30 legacy fixtures, not a business rule. Placed uses earliest Delivery quantity, otherwise BIRD_COUNT.')
             if handler in {'flock_status', 'flocks_counted', 'flock_disposals'}:
-                st.caption('Quota uses confirmed Account Egg Production positions at the report/end date. Unavailable state evidence leaves quota unknown. Totals sum known values.')
+                with st.expander('Calculation details', expanded=False):
+                    st.write('Quota uses confirmed Account Egg Production positions at the report/end date. Unavailable state evidence leaves quota unknown. Totals sum known values.')
             elif handler == 'flock_status_producer':
-                st.caption('NFPMC Allocation is province-wide confirmed Egg Production quota. Issuance is the selected Account quota. Provincial Utilization divides Account inventory by province allocation; row Util. divides by Account quota. Unavailable evidence remains unknown.')
+                with st.expander('Calculation details', expanded=False):
+                    st.write('NFPMC Allocation is province-wide confirmed Egg Production quota. Issuance is the selected Account quota. Provincial Utilization divides Account inventory by province allocation; row Util. divides by Account quota. Unavailable evidence remains unknown.')
             if st.button('Run Report', type='primary', key='run_'+handler, disabled=handler == 'flock_status_producer' and account_id is None):
                 st.session_state.pop(handler+'_result', None)
                 try:
@@ -514,7 +527,9 @@ if section == "Report Library":
             age_date = params[0].date_input('As of Date', value=halifax_today(), key='flock_age_date')
             age_mortality = params[1].text_input('Mortality (% per month)', value='0.4', key='flock_age_mortality')
             age_type = params[2].selectbox('Quota Type', options, index=options.index('Egg Production') if 'Egg Production' in options else 0, key='flock_age_type')
-            st.caption('Special Permit excluded. Quota uses confirmed owner Egg Production positions; unavailable transaction-state evidence leaves allocation and utilization unknown. Flock inclusion remains provisional.')
+            st.warning('Flock inclusion remains provisional. Allocation and utilization are unknown when transaction state evidence is unavailable.')
+            with st.expander('Calculation details', expanded=False):
+                st.write('Special Permit excluded. Quota uses confirmed owner Egg Production positions; unavailable transaction-state evidence leaves allocation and utilization unknown. Flock inclusion remains provisional.')
             if st.button('Run Report', type='primary', key='run_flock_age'):
                 st.session_state.pop('flock_age_result', None)
                 try:
@@ -560,7 +575,9 @@ if section == "Report Library":
             report_date = params[0].date_input('As of Date' if selected_account is not None else 'Report date', value=halifax_today(), key=prefix+'_date')
             mortality = params[1].text_input('Mortality (% per month)', value='0.4', key=prefix+'_mortality')
             selected_type = params[2].selectbox('Quota Type', options, index=options.index('Egg Production') if 'Egg Production' in options else 0, key=prefix+'_type')
-            st.caption('Provisional inclusion: Active Flocks only, before actual disposal when present, otherwise estimated disposal. Egg Production includes Special Permit. Subtotals sum known values and disclose exclusions.')
+            st.warning('Provisional inclusion: Active Flocks only, before actual disposal when present, otherwise estimated disposal. Egg Production includes Special Permit.')
+            with st.expander('Calculation details', expanded=False):
+                st.write('Provisional inclusion: Active Flocks only, before actual disposal when present, otherwise estimated disposal. Egg Production includes Special Permit. Subtotals sum known values and disclose exclusions.')
             if st.button('Run Report', type='primary', key='run_'+prefix):
                 st.session_state.pop(prefix+'_result', None)
                 try:
@@ -716,7 +733,7 @@ else:
     if not saved:
         st.info("No report configurations have been saved in this session.")
     for name, configuration in saved.items():
-        with st.container(border=True):
+        with st.container():
             st.markdown(f"**{name}**")
             st.caption(f"Dataset: {configuration['dataset']} · Fields: {len(configuration['selected_fields'])}")
             if st.button("Run saved report", key=f"run_saved_{name}"):

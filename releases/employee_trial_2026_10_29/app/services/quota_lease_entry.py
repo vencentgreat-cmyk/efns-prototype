@@ -20,7 +20,7 @@ def render_lease_form(repo,current,action):
     kinds=sorted({quota_type_key(r.get('QUOTA_TYPE')) for r in active if quota_type_key(r.get('QUOTA_TYPE'))})
     if not kinds:
         st.info('Active Quota Registrations are required before recording a lease.');return
-    kind=st.selectbox('Quota Type',kinds,index=kinds.index('Egg Production') if 'Egg Production' in kinds else 0,key='quota_lease_form_type')
+    kind=st.selectbox('Quota Type *',kinds,index=kinds.index('Egg Production') if 'Egg Production' in kinds else 0,key='quota_lease_form_type')
     selected=[r for r in active if quota_type_key(r.get('QUOTA_TYPE'))==kind]
     ids=sorted({str(r['ACCOUNT_ID']) for r in selected if str(r['ACCOUNT_ID']) in accounts})
     if not ids:
@@ -28,15 +28,17 @@ def render_lease_form(repo,current,action):
     def label(identity):
         row=accounts[identity]
         return ' - '.join(filter(None,[text(row.get('ORGANIZATION_NAME')),text(row.get('REGISTRATION_NUMBER'))])) or identity
-    lessor=st.selectbox('Lessor',ids,format_func=label,key='quota_lease_form_lessor')
-    lessee=st.selectbox('Lessee',ids,index=1 if len(ids)>1 else 0,format_func=label,key='quota_lease_form_lessee')
+    lessor=st.selectbox('Lessor *',ids,format_func=label,key='quota_lease_form_lessor',help='The Account that leases out quota.')
+    lessee=st.selectbox('Lessee *',ids,index=1 if len(ids)>1 else 0,format_func=label,key='quota_lease_form_lessee',help='The Account that leases in quota.')
     owned={str(r['QUOTA_ID']):r for r in selected if str(r['ACCOUNT_ID'])==lessor}
-    quota_id=st.selectbox('Lessor Quota Registration',list(owned),format_func=lambda identity:text(owned[identity].get('QUOTA_NAME')) or text(owned[identity].get('REGISTRATION_NUMBER')) or identity,key='quota_lease_form_quota')
-    amount=st.text_input('Lease amount (birds)',key='quota_lease_form_amount')
-    start=st.date_input('Start Date',value=halifax_today(),key='quota_lease_form_start')
-    end=st.date_input('Quota End Date',value=None,key='quota_lease_form_end')
+    quota_id=st.selectbox('Lessor Quota Registration *',list(owned),format_func=lambda identity:text(owned[identity].get('QUOTA_NAME')) or text(owned[identity].get('REGISTRATION_NUMBER')) or identity,key='quota_lease_form_quota')
+    amount=st.text_input('Lease amount (birds) *',key='quota_lease_form_amount')
+    start=st.date_input('Start Date *',value=halifax_today(),key='quota_lease_form_start')
+    end=st.date_input('Quota End Date *',value=None,key='quota_lease_form_end')
     comments=st.text_area('Comments',key='quota_lease_form_comments')
-    st.caption('Quota is leased out of the lessor and leased in to the lessee through the Quota End Date, inclusive. It returns the next day. Own quota less other leases out is checked for the whole period when saved. Leased-in quota cannot be leased onward.')
+    st.write('The lessor leases out quota; the lessee leases in quota. The Quota End Date is included.')
+    with st.expander('Calculation details', expanded=False):
+        st.write('Quota is leased out of the lessor and leased in to the lessee through the Quota End Date, inclusive. It returns the next day. Own quota less other leases out is checked for the whole period when saved. Leased-in quota cannot be leased onward.')
     if action!='save':return
     try:value=Decimal(amount)
     except (InvalidOperation,ValueError):value=None

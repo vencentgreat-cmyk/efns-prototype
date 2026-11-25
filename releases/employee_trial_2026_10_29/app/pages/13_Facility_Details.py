@@ -42,7 +42,8 @@ def label_for_id(mapping, value):
 
 
 if view.name == "list":
-    page_header("Facility Details", "Maintain the existing provisional detail records associated with Facilities.", "FACILITY MANAGEMENT")
+    page_header("Facility Details", "Review and maintain the detail records linked to each Facility.", "FACILITY MANAGEMENT")
+    st.info("Facility Detail fields remain provisional pending confirmation of the legacy data definitions.")
     statuses, _ = saved_view_selector("FACILITY_DETAIL", "Facility Details", key="facility_detail_saved_view", selection_keys=("facility_detail_list_grid", "facility_detail_list_row_ids", "facility_detail_delete_pending"))
     selected_index = selected_row_index("facility_detail_list_grid")
     row_ids = st.session_state.get("facility_detail_list_row_ids", [])
@@ -82,7 +83,8 @@ else:
         if st.button("Back to Facility Details", icon=":material/arrow_back:"): open_view("list")
         st.stop()
     is_form = view.name in {"new", "edit"}
-    page_header("New Facility Detail" if view.name == "new" else stored_text(current.get("DETAIL_NAME")) or "Facility Detail", "Facility relationship and existing provisional detail fields.", "FACILITY DETAIL")
+    page_header("New Facility Detail" if view.name == "new" else stored_text(current.get("DETAIL_NAME")) or "Facility Detail", "Review the linked Facility and its recorded details.", "FACILITY DETAIL")
+    st.info("Facility Detail fields remain provisional pending confirmation of the legacy data definitions.")
     action = record_command_bar("facility_detail_record", view.name)
     if action in {"back", "cancel"}: start_new_form("facility_detail_form_"); open_view("detail", view.record_id) if action == "cancel" and view.record_id else open_view("list")
     if action == "refresh": st.rerun()

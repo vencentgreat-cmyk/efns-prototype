@@ -30,6 +30,8 @@ with contacts_tab:
     contact_search = st.text_input("Contact name, email, or phone", key="eims_contact_search")
     try:
         contacts = repo.get_contacts(keyword=contact_search or None)
+        if contacts.empty:
+            st.info("No records match these filters.")
         st.dataframe(contacts, hide_index=True, width="stretch")
     except Exception as exc:
         show_data_error(exc)
@@ -43,6 +45,8 @@ with allocations_tab:
             quota_type=quota_type or None,
             province=province or None,
         )
+        if allocations.empty:
+            st.info("No records match these filters.")
         st.dataframe(allocations, hide_index=True, width="stretch")
     except Exception as exc:
         show_data_error(exc)
@@ -56,6 +60,8 @@ with dates_tab:
     else:
         try:
             dates = repo.get_efc_dates(date_from=date_from, date_to=date_to)
+            if dates.empty:
+                st.info("No records match these filters.")
             st.dataframe(dates, hide_index=True, width="stretch")
         except Exception as exc:
             show_data_error(exc)

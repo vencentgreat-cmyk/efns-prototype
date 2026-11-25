@@ -118,7 +118,7 @@ else:
                 right.write(" · ".join(filter(None, [current.get("CITY"), current.get("PROVINCE"), current.get("POSTAL_CODE")])))
                 right.markdown(f"**Phone**  \n{current.get('PHONE') or '—'}")
         with related:
-            st.caption("Farm Location currently has one confirmed relationship: its parent Account.")
+            st.caption("This Farm Location is linked to its parent Account.")
             if current.get("ACCOUNT_ID") and st.button("View Account", icon=":material/account_circle:"):
                 open_module("Accounts_&_Facilities", "detail", current["ACCOUNT_ID"])
     else:
