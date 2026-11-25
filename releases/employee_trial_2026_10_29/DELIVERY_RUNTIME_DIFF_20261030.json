@@ -33,7 +33,7 @@
     {
       "path": "app/pages/13_Facility_Details.py",
       "status": "MODIFIED",
-      "reason": "R3 F5: disambiguate colliding Facility selector labels; preserve distinct target IDs and existing save behavior.",
+      "reason": "R3 F5: disambiguate colliding Facility selector labels; preserve distinct target IDs and existing save behavior. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "a21a8266cd0d09c0b130916acf219b375f2596e1dd31723903e517d08066a9e3",
       "candidate_lf_sha256": "ca5bd9564fef332c67d787088ed83f7f76653a9971ee1d5e14600c785635e746"
     },
@@ -47,7 +47,7 @@
     {
       "path": "app/pages/16_Audit_Log.py",
       "status": "MODIFIED",
-      "reason": "R3 F7: caption states filters apply to the latest 5,000 loaded events; no query or permission change.",
+      "reason": "R3 F7: caption states filters apply to the latest 5,000 loaded events; no query or permission change. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "196280caca24d4764f907add13869e875f6531e30fe954d2950c92fed790a85f",
       "candidate_lf_sha256": "36ff39ef90afa5cf5640d3d24114c0ef5465a4306776804de8ac299ce869e180"
     },
@@ -68,14 +68,14 @@
     {
       "path": "app/pages/4_Reports.py",
       "status": "MODIFIED",
-      "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection.",
+      "reason": "Historical type filters, record-count reporting preserved, canonical quota filters and Credit Type selection. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "fc9532b806bddb40c448e032918ea9012b33fc54a8305cefbb4e3b0f71622be0",
       "candidate_lf_sha256": "3f27f5d0715a101403238f6c95ad069a4856483c9be0a085ac3d00d2c1fe2273"
     },
     {
       "path": "app/pages/5_Flocks.py",
       "status": "MODIFIED",
-      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained. Main-list null rendering uses Streamlit native em-dash placeholder only; unchanged Arrow values and exports. Permit-only Flock entry and readonly edit, create-only page duplicate guard, exact role-account Hatchery/Breeder names; existing identifiers, writer/audit/permission/export logic retained.",
+      "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained. Main-list null rendering uses Streamlit native em-dash placeholder only; unchanged Arrow values and exports. Permit-only Flock entry and readonly edit, create-only page duplicate guard, exact role-account Hatchery/Breeder names; existing identifiers, writer/audit/permission/export logic retained. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
       "candidate_lf_sha256": "a26e5f8e8e264436ea7c8617e670c8f20cdd944b8a2aa630e5e4653c2b027119"
     },
@@ -89,14 +89,14 @@
     {
       "path": "app/pages/8_Quota_Transactions.py",
       "status": "MODIFIED",
-      "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption. Show current resolved lease status alongside original stored fields, with existing actions unchanged.",
+      "reason": "Price NULL/0, signed Adjustment/decimal fidelity and legacy edits; guarded owner component table with Account names and ID fallback; concise activity-only caption. Show current resolved lease status alongside original stored fields, with existing actions unchanged. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "df19ef30b2472d7f0d53fd939f4e12e59c32c2dfe3d3110cdcc0c8435fc82586",
       "candidate_lf_sha256": "5016fdee473997ad3efd68b146524e5a1e2eeba80fa2ea7ea7228491d6951fd6"
     },
     {
       "path": "app/pages/9_Salmonella_Tests.py",
       "status": "MODIFIED",
-      "reason": "R3 F5/F6: disambiguate colliding Flock/Account labels and offer stored result filters; legacy edit preservation and new-entry choices unchanged.",
+      "reason": "R3 F5/F6: disambiguate colliding Flock/Account labels and offer stored result filters; legacy edit preservation and new-entry choices unchanged. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "ffbd36c984fbdf71f6451b0e97ede64322f5293ae61674e799b9a925d2625e3e",
       "candidate_lf_sha256": "84ea3890237c6887057d65dce5aaf013d526b592aa44c5c25fb4fe12ab87072d"
     },
@@ -810,13 +810,13 @@
     {
       "path": ".streamlit/config.toml",
       "status": "MODIFIED",
-      "reason": "Append the requested Snowflake 10-minute sleep setting; preserve all existing settings and bytes.",
+      "reason": "Append the requested Snowflake 10-minute sleep setting; preserve all existing settings and bytes. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "candidate_lf_sha256": "f2bb19709adeeb05360011fa85da4d63c413d194eed7b6431f421af1fcf8bd4a"
     },
     {
       "path": "tests/test_light_theme.py",
       "status": "MODIFIED",
-      "reason": "Retain exact theme/packaging checks while allowing only the explicitly requested Snowflake sleep section and exact value.",
+      "reason": "Retain exact theme/packaging checks while allowing only the explicitly requested Snowflake sleep section and exact value. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "candidate_lf_sha256": "4687bc14985cfa7444ab74ccfef2131976c2164dfca1880efb847c8316cb94c4"
     }
   ],
@@ -874,7 +874,7 @@
     {
       "path": "app/services/quota_lease_entry.py",
       "status": "NEW",
-      "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
+      "reason": "Part E opt-in effective-dated quota lease implementation and offline verification. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "candidate_lf_sha256": "8e87fecff94d05af0a861c339905e95022668d2b736d7bc8d10e9bae8b1f5f4e"
     },
     {
@@ -912,7 +912,7 @@
     {
       "path": "app/pages/1_Production_Import.py",
       "status": "MODIFIED",
-      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "candidate_lf_sha256": "f30d8a2e3a633c86d8cc4ef4c55005bb57b4f912606a46a2ab115e39c9d1542f"
     },
     {
@@ -948,7 +948,7 @@
     {
       "path": "app/services/production_import_review.py",
       "status": "NEW",
-      "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
+      "reason": "Task 3 scoped production replacement / lease void, offline validation and report. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "candidate_lf_sha256": "e3236143d78827c3fe04780a0e8bc985746681d6cd3978494c22af7997fad78f"
     },
     {
@@ -1094,7 +1094,7 @@
     {
       "path": "app/pages/7_Quota_Registrations.py",
       "status": "MODIFIED",
-      "reason": "Separate read-only lessee relationship and effective outgoing lease status; unchanged stored transaction table/count.",
+      "reason": "Separate read-only lessee relationship and effective outgoing lease status; unchanged stored transaction table/count. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "candidate_lf_sha256": "51c274b8ce3b8240fc2f8d83eef4a625a71a4f54a20b2d2cfb20d633301af513"
     },
     {
@@ -1240,6 +1240,12 @@
       "status": "MODIFIED",
       "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
       "candidate_lf_sha256": "ef471e65bd3ea0f3ab6b9d98c23786991b2c115fad7adac5c788b301ca34e522"
+    },
+    {
+      "path": "docs/codex_reports/ui_polish_a_20261125.md",
+      "status": "ADDED",
+      "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
+      "candidate_lf_sha256": "c8cf321bb6d5e7c6de4e65fb02d6e9952b812b2190d5457d3c613b1d1c463018"
     },
     {
       "path": "tests/test_ui_and_export.py",
