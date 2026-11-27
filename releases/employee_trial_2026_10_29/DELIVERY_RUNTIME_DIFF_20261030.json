@@ -1135,7 +1135,7 @@
       "path": "app/pages/3_Accounts_Facilities_Flocks.py",
       "status": "MODIFIED",
       "reason": "2026-11-23 review fixes / complete shipped-file coverage.",
-      "candidate_lf_sha256": "e83830cfb5493e5e955b609ebfedcedcdf91309cc91ed5be6c7686524e487ff7"
+      "candidate_lf_sha256": "9940d8638b2e6ef9fa33aa1184f8aa51a3071c205fbb4a880cd736a2079049e6"
     },
     {
       "path": "data/lease_confirmation.py",
@@ -1308,6 +1308,14 @@
       "status": "MODIFIED",
       "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
       "candidate_lf_sha256": "48a3c977d0e5b66fbd503ce247bad05379a5e5dac19b541fc3f3cba92cf791c9"
+    }
+  ],
+  "account_primary_contact_20261127": [
+    {
+      "path": "tests/test_account_primary_contact.py",
+      "status": "ADDED",
+      "reason": "Account Primary Contact form input and synthetic regression tests; existing persistence and PDF layout retained.",
+      "candidate_lf_sha256": "d7308ca63fc50e9a842dac68a5c099c388273c172cd8e2e88b275cacb445d547"
     }
   ]
 }
