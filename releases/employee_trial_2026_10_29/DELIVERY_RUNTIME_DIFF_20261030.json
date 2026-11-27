@@ -84,7 +84,7 @@
       "status": "MODIFIED",
       "reason": "R3 F5: disambiguate colliding Flock labels while preserving normal labels, current-quantity confirmation, CAS and save paths.",
       "baseline_lf_sha256": "a5373c0ae327966158e0d1f14607cdbcee8aadb40bb8eceba8ccfa47b8dbce30",
-      "candidate_lf_sha256": "2fb780052870eb738163e6b47f6e9ff69e3080395712be042b4e76d12e86ffe7"
+      "candidate_lf_sha256": "1d022a1739b6d8b5de61c78daca75a2128293eb2577574d5353496af874ae310"
     },
     {
       "path": "app/pages/8_Quota_Transactions.py",
@@ -1269,9 +1269,15 @@
     },
     {
       "path": "tests/history_actor_support.py",
-      "status": "ADDED",
+      "status": "MODIFIED",
       "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
       "candidate_lf_sha256": "685aa3e105dcaaad270b14781227feb39d80cfb8d2fc9cefd5b2c4d577fde99e"
+    },
+    {
+      "path": "tests/test_flock_activity_entry.py",
+      "status": "ADDED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "54705df81e783687cbd9f27384ae9e511911ebc066a62d14b773fe0f51708a01"
     },
     {
       "path": "tests/test_flock_disposal_entry.py",
@@ -1281,9 +1287,21 @@
     },
     {
       "path": "tests/test_import_audit_actor.py",
-      "status": "ADDED",
+      "status": "MODIFIED",
       "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
       "candidate_lf_sha256": "cc169b60bd668e12365df5b139e1a2658c23a83423bbc09b59114c34b1c818ba"
+    },
+    {
+      "path": "tests/test_round2.py",
+      "status": "MODIFIED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "f3848417affc885fe22a409a404fcfa8b8507986b6eca02276d6bec2f99e4503"
+    },
+    {
+      "path": "tests/test_round2_boundaries.py",
+      "status": "MODIFIED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "5cea7b9d782ec528982335f097d2a3e199658afb5080c3ce25e3644a3f325a37"
     },
     {
       "path": "tests/test_round3_environment.py",

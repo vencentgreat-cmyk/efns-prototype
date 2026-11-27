@@ -28,6 +28,17 @@ facility_names = {row.FACILITY_ID: row.FACILITY_NAME for row in facilities.itert
 flock_names = {row.FLOCK_ID: row.FLOCK_NUMBER for row in flocks.itertuples()}
 flock_options = unique_identity_options((f"{row.FLOCK_NUMBER} · {account_names.get(row.ACCOUNT_ID, 'Unknown')}", row.FLOCK_ID) for row in flocks.itertuples())
 
+def reset_quantity_confirmation():
+    st.session_state['flock_tx_form_quantity_intent'] = False
+    for key in list(st.session_state):
+        if key.startswith('flock_tx_form_apply_'):
+            st.session_state[key] = False
+
+
+if view.name != 'new':
+    st.session_state.pop('flock_tx_form_new_ready', None)
+
+
 def option_index(options, value): return options.index(value) if value in options else 0
 def label_for_id(mapping, value): return next((label for label, item_id in mapping.items() if item_id == value), next(iter(mapping), None))
 def get_record(record_id):
@@ -81,9 +92,18 @@ else:
         with related:
             if st.button("Open related Flock", icon=":material/visibility:"):
                 open_module("Flocks", "detail", current["FLOCK_ID"])
+        activity_notice = st.session_state.pop('_flock_tx_activity_notice', None)
+        if activity_notice:
+            st.info(activity_notice)
     else:
         current = current or {}
         begin_form('flock_tx_form_',view.record_id)
+        if not view.record_id and not st.session_state.get('flock_tx_form_new_ready'):
+            reset_quantity_confirmation()
+            st.session_state.pop('flock_tx_form_date', None)
+            st.session_state['flock_tx_form_new_ready'] = True
+        if st.session_state.pop('flock_tx_form_reset_quantity', False):
+            reset_quantity_confirmation()
         expected_key = f"flock_tx_form_expected_{view.record_id}"
         if view.name == "edit" and view.record_id:
             st.session_state.setdefault(expected_key, current.get("UPDATED_AT"))
@@ -94,7 +114,7 @@ else:
             stored_quantity=current.get('QUANTITY')
             quantity_default=1 if stored_quantity is None or pd.isna(stored_quantity) else int(stored_quantity)
             quantity = st.text_input("Quantity *",value=stored_text(stored_quantity),key="flock_tx_form_quantity") if view.record_id else st.number_input("Quantity *", min_value=quantity_minimum, value=1, key="flock_tx_form_quantity",help='Zero is valid only when Count is explicitly confirmed as a current quantity observation. Removal, Delivery, Sale and unconfirmed activity require a positive whole number.')
-            transaction_date = st.date_input("Transaction Date *", value=(optional_form_date(current.get("TRANSACTION_DATE")) if view.record_id else halifax_today()), key="flock_tx_form_date")
+            transaction_date = st.date_input("Transaction Date *", value=(optional_form_date(current.get("TRANSACTION_DATE")) if view.record_id else halifax_today()), key="flock_tx_form_date", on_change=reset_quantity_confirmation)
             notes = st.text_area("Notes", value=str(current.get("NOTES") or ""), key="flock_tx_form_notes")
             apply_current=False
             quantity_reason=''
@@ -109,7 +129,7 @@ else:
                     st.session_state[review_key]={'UPDATED_AT':reviewed.get('UPDATED_AT'),'BIRD_COUNT':reviewed.get('BIRD_COUNT')}
                     st.session_state[version_key]=reviewed.get('UPDATED_AT')
                     st.session_state['flock_tx_form_quantity_scope']=reviewed['FLOCK_ID']
-                    st.session_state.setdefault('flock_tx_form_quantity_intent',False)
+                    st.session_state['flock_tx_form_quantity_intent']=False
                     st.session_state.pop('flock_tx_form_quantity_request',None)
                     st.session_state['flock_tx_form_apply_'+reviewed['FLOCK_ID']]=False
                 observed=st.session_state[review_key]
@@ -120,12 +140,17 @@ else:
                     st.session_state[review_key]={'UPDATED_AT':reviewed.get('UPDATED_AT'),'BIRD_COUNT':reviewed.get('BIRD_COUNT')}
                     st.session_state[version_key]=reviewed.get('UPDATED_AT')
                     st.session_state['flock_tx_form_apply_'+reviewed['FLOCK_ID']]=False
+                    st.session_state['flock_tx_form_quantity_intent']=False
                     st.session_state.pop('flock_tx_form_quantity_request',None)
                     st.rerun()
-                apply_current=st.checkbox('Apply this confirmed current Count/Removal to Bird Count',key='flock_tx_form_apply_'+reviewed['FLOCK_ID'],disabled=not can_current(Permission.UPDATE_DATA))
+                is_today = transaction_date == halifax_today()
+                if not is_today:
+                    reset_quantity_confirmation()
+                    st.caption("Only today's Count/Removal can update Bird Count. Other dates are saved as activity only.")
+                apply_current=st.checkbox('Apply this confirmed current Count/Removal to Bird Count',key='flock_tx_form_apply_'+reviewed['FLOCK_ID'],disabled=not is_today or not can_current(Permission.UPDATE_DATA))
                 if 'flock_tx_form_quantity_reason' not in st.session_state:
                     st.session_state['flock_tx_form_quantity_reason']=st.session_state.get('flock_tx_form_quantity_reason_draft','')
-                if apply_current: st.session_state['flock_tx_form_quantity_intent']=True
+                st.session_state['flock_tx_form_quantity_intent']=bool(apply_current)
                 quantity_reason=st.text_input('Reason/evidence for current quantity',key='flock_tx_form_quantity_reason')
                 st.session_state.setdefault('flock_tx_form_quantity_request',uuid.uuid4().hex)
         capture_form('flock_tx_form_',current,{'FLOCK_ID': ['flock_tx_form_flock'], 'TRANSACTION_TYPE': ['flock_tx_form_type'], 'QUANTITY': ['flock_tx_form_quantity'], 'TRANSACTION_DATE': ['flock_tx_form_date'], 'NOTES': ['flock_tx_form_notes']})
@@ -138,11 +163,15 @@ else:
                 if apply_current:
                     saved_id=repo.record_current_flock_quantity(record,st.session_state.flock_tx_form_quantity_request,st.session_state.get(version_key),quantity_reason,confirmed=True,expected_bird_count=st.session_state[review_key]['BIRD_COUNT'])
                 else:
-                    if transaction_type in ('Count','Removal') and st.session_state.get('flock_tx_form_quantity_intent'):
-                        raise RepositoryError('Current quantity is not confirmed. Review the reloaded Bird Count and confirm again, or cancel and start a new activity-only entry.')
                     saved_id=save_form(repo,'FLOCK_TRANSACTION',record,current,'flock_tx_form_')
+                    if not view.record_id:
+                        st.session_state['_flock_tx_activity_notice']='Bird Count was not changed. The transaction was saved as activity only.'
                 open_saved_record(saved_id)
-            except Exception as exc: show_data_error(exc)
+            except Exception as exc:
+                st.session_state['flock_tx_form_quantity_intent']=False
+                if apply_current:
+                    st.session_state['flock_tx_form_reset_quantity']=True
+                show_data_error(exc)
 
 _pending=st.session_state.get('flock_tx_form___delete_pending')
 if _pending and delete_confirmation(repo,'delete_flock_transaction',_pending,'flock_tx_form___delete'):

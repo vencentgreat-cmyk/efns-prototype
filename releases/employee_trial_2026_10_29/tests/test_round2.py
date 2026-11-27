@@ -311,9 +311,8 @@ def test_B5_account_edit_keeps_relationship_links_when_untouched(chain, tmp_path
     assert pd.isna(after['PROVINCE_OF_REGISTRATION'])
 
 
-def test_B6_reload_without_reconfirm_does_not_silently_save_plain_activity(chain, tmp_path, monkeypatch):
-    """After 'Reload reviewed Bird Count' the apply box is cleared. If the user then presses Save,
-    the page should not silently create an unapplied Count activity that looks like success."""
+def test_B6_reload_without_reconfirm_saves_explicitly_notified_activity(chain, tmp_path, monkeypatch):
+    """Urgent C: Reload clears intent and allows activity, with an explicit Bird Count notice."""
     r, a, o, f, q, flock, record = chain
     app = _open(_app(r, tmp_path, monkeypatch), 'app/pages/6_Flock_Transactions.py', None, view='new')
     app.selectbox(key='flock_tx_form_type').select('Count').run()
@@ -327,7 +326,9 @@ def test_B6_reload_without_reconfirm_does_not_silently_save_plain_activity(chain
     before = len(r.get_flock_transactions(flock_id=flock))
     app.button(key='flock_tx_record_save').click().run()     # user forgets to re-tick
     created = len(r.get_flock_transactions(flock_id=flock)) - before
-    assert created == 0 and _msgs(app), ('plain Count activity saved silently', created)
+    assert created == 1 and not app.exception and not app.error
+    assert r.get_flock(flock)['BIRD_COUNT'] == 8
+    assert any('Bird Count was not changed' in m.value for m in app.info)
 
 
 def test_B7_snowflake_alias_list_queries_keep_ff9_versions():
