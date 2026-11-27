@@ -2,7 +2,7 @@
   "status": "LOCAL ONLY; no live query/deployment",
   "baseline": "RELEASE_SOURCE_MANIFEST.json saved deployment, LF-normalized review comparison",
   "baseline_files": 89,
-  "candidate_artifacts": 135,
+  "candidate_artifacts": 136,
   "runtime_changes": [
     {
       "path": "data/importing.py",
@@ -77,7 +77,7 @@
       "status": "MODIFIED",
       "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained. Main-list null rendering uses Streamlit native em-dash placeholder only; unchanged Arrow values and exports. Permit-only Flock entry and readonly edit, create-only page duplicate guard, exact role-account Hatchery/Breeder names; existing identifiers, writer/audit/permission/export logic retained. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
-      "candidate_lf_sha256": "a26e5f8e8e264436ea7c8617e670c8f20cdd944b8a2aa630e5e4653c2b027119"
+      "candidate_lf_sha256": "df1b38f896008ace5f738073994fd61f03bc2ecc686f882439f8b9da24a52f8f"
     },
     {
       "path": "app/pages/6_Flock_Transactions.py",
@@ -1258,6 +1258,20 @@
       "status": "ADDED",
       "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
       "candidate_lf_sha256": "2970ef433d6c981ea3ac59e6620bcec8d35a8538d5a4e08ccf51ce890078508e"
+    }
+  ],
+  "urgent_flock_import_20261127": [
+    {
+      "path": "app/services/flock_disposal_entry.py",
+      "status": "ADDED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "f0f13d44af9cdedf3f10bce84409f8fb174786c5910b7dec063632837cb17919"
+    },
+    {
+      "path": "tests/test_flock_disposal_entry.py",
+      "status": "ADDED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "2614c1f747c0e157db5b84b7158f982e3b8658969b497e64e629e5b51c221934"
     }
   ]
 }
