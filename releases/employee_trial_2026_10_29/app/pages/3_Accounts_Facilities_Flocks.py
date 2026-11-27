@@ -283,6 +283,7 @@ else:
             with st.container(border=True):
                 left, right = st.columns(2)
                 account_name = left.text_input("Account Name *", value=str(current.get("ORGANIZATION_NAME") or ""), key="account_form_name")
+                contact_name = left.text_input("Primary Contact", value=str(current.get("CONTACT_NAME") or ""), key="account_form_contact_name")
                 email = left.text_input("Account Email", value=str(current.get("CONTACT_EMAIL") or ""), key="account_form_email")
                 phone = left.text_input("Main Phone", value=str(current.get("CONTACT_PHONE") or ""), key="account_form_phone")
                 fax = left.text_input("Fax", value=str(current.get("FAX") or ""), key="account_form_fax")
@@ -321,7 +322,7 @@ else:
                 for index, (field, label) in enumerate(ROLE_FIELDS):
                     role_values[field] = columns[index % 3].checkbox(label, value=bool(current.get(field)), key=f"account_form_role_{field.lower()}")
 
-        capture_form('account_form_',current,{'ORGANIZATION_NAME': ['account_form_name'], 'CONTACT_EMAIL': ['account_form_email'], 'CONTACT_PHONE': ['account_form_phone'], 'FAX': ['account_form_fax'], 'WEBSITE': ['account_form_website'], 'REGISTRATION_NUMBER': ['account_form_registration'], 'PROVINCE_OF_REGISTRATION': ['account_form_province_registration'], 'PARENT_ACCOUNT_ID': ['account_form_parent'], 'GRADING_STATION_ACCOUNT_ID': ['account_form_grading'], 'PULLET_GROWER_ACCOUNT_ID': ['account_form_pullet'], 'SPENT_FOWL_PLANS_ACCOUNT_ID': ['account_form_spent_fowl_account'], 'DEFAULT_ON_REPORTS': ['account_form_default_reports'], 'NO_SVG': ['account_form_no_svg'], 'STATUS': ['account_form_status'], 'DESCRIPTION': ['account_form_description'], 'ADDRESS_LINE1': ['account_form_street1'], 'ADDRESS_LINE2': ['account_form_street2'], 'ADDRESS_LINE3': ['account_form_street3'], 'CITY': ['account_form_city'], 'PROVINCE': ['account_form_province'], 'POSTAL_CODE': ['account_form_postal'], 'COUNTRY_REGION': ['account_form_country'], 'LATITUDE': ['account_form_latitude'], 'LONGITUDE': ['account_form_longitude'], 'PRODUCER_ROLE': ['account_form_role_producer_role'], 'BREEDER_ROLE': ['account_form_role_breeder_role'], 'HATCHERY_ROLE': ['account_form_role_hatchery_role'], 'PULLET_GROWER_ROLE': ['account_form_role_pullet_grower_role'], 'GRADER_ROLE': ['account_form_role_grader_role'], 'PROCESSOR_BREAKER_ROLE': ['account_form_role_processor_breaker_role'], 'DISPOSAL_PLANT_ROLE': ['account_form_role_disposal_plant_role'], 'UNREGULATED_ROLE': ['account_form_role_unregulated_role'], 'PROV_BOARD_EFC_ROLE': ['account_form_role_prov_board_efc_role'], 'GOVERNMENT_ROLE': ['account_form_role_government_role'], 'VENDOR_ROLE': ['account_form_role_vendor_role'], 'RESEARCH_EXEMPT_ROLE': ['account_form_role_research_exempt_role'], 'SHIPPER_ROLE': ['account_form_role_shipper_role'], 'OTHER_ROLE': ['account_form_role_other_role']})
+        capture_form('account_form_',current,{'ORGANIZATION_NAME': ['account_form_name'], 'CONTACT_NAME': ['account_form_contact_name'], 'CONTACT_EMAIL': ['account_form_email'], 'CONTACT_PHONE': ['account_form_phone'], 'FAX': ['account_form_fax'], 'WEBSITE': ['account_form_website'], 'REGISTRATION_NUMBER': ['account_form_registration'], 'PROVINCE_OF_REGISTRATION': ['account_form_province_registration'], 'PARENT_ACCOUNT_ID': ['account_form_parent'], 'GRADING_STATION_ACCOUNT_ID': ['account_form_grading'], 'PULLET_GROWER_ACCOUNT_ID': ['account_form_pullet'], 'SPENT_FOWL_PLANS_ACCOUNT_ID': ['account_form_spent_fowl_account'], 'DEFAULT_ON_REPORTS': ['account_form_default_reports'], 'NO_SVG': ['account_form_no_svg'], 'STATUS': ['account_form_status'], 'DESCRIPTION': ['account_form_description'], 'ADDRESS_LINE1': ['account_form_street1'], 'ADDRESS_LINE2': ['account_form_street2'], 'ADDRESS_LINE3': ['account_form_street3'], 'CITY': ['account_form_city'], 'PROVINCE': ['account_form_province'], 'POSTAL_CODE': ['account_form_postal'], 'COUNTRY_REGION': ['account_form_country'], 'LATITUDE': ['account_form_latitude'], 'LONGITUDE': ['account_form_longitude'], 'PRODUCER_ROLE': ['account_form_role_producer_role'], 'BREEDER_ROLE': ['account_form_role_breeder_role'], 'HATCHERY_ROLE': ['account_form_role_hatchery_role'], 'PULLET_GROWER_ROLE': ['account_form_role_pullet_grower_role'], 'GRADER_ROLE': ['account_form_role_grader_role'], 'PROCESSOR_BREAKER_ROLE': ['account_form_role_processor_breaker_role'], 'DISPOSAL_PLANT_ROLE': ['account_form_role_disposal_plant_role'], 'UNREGULATED_ROLE': ['account_form_role_unregulated_role'], 'PROV_BOARD_EFC_ROLE': ['account_form_role_prov_board_efc_role'], 'GOVERNMENT_ROLE': ['account_form_role_government_role'], 'VENDOR_ROLE': ['account_form_role_vendor_role'], 'RESEARCH_EXEMPT_ROLE': ['account_form_role_research_exempt_role'], 'SHIPPER_ROLE': ['account_form_role_shipper_role'], 'OTHER_ROLE': ['account_form_role_other_role']})
         if view.record_id: st.text_input("Reason for correction *",key='account_form_revision_reason')
         if action == "save":
             errors = []
@@ -338,6 +339,8 @@ else:
                     coordinate_errors.append(str(exc))
             if not account_name.strip():
                 errors.append("Account Name is required.")
+            if (not view.record_id or field_changed("account_form_", "CONTACT_NAME")) and len(contact_name.strip()) > 255:
+                errors.append("Primary Contact must be 255 characters or fewer.")
             if registration.strip():
                 duplicates = repo.find_accounts_by_registration_number(registration.strip())
                 if view.record_id:
@@ -351,6 +354,7 @@ else:
                 record = {
                     "ACCOUNT_ID": view.record_id,
                     "ORGANIZATION_NAME": account_name.strip(),
+                    "CONTACT_NAME": contact_name.strip() or None,
                     "CONTACT_EMAIL": email.strip() or None,
                     "CONTACT_PHONE": phone.strip() or None,
                     "FAX": fax.strip() or None,
