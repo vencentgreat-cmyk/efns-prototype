@@ -73,5 +73,5 @@ def test_three_other_cas_writers_advance_under_frozen_sql_clock(route):
     for index in range(2):
         if route=='match':repo.match_production_producer('p',actor='automatic')
         elif route=='event':repo.record_flock_event('f','MOVE',dt.datetime(2026,2+index,1,tzinfo=dt.timezone.utc),'Synthetic',str(index),'new',actor='staff',position_confirmed=True)
-        else:repo.revise_record('PRODUCTION_RECORD','p',{'TOTAL':650+index},'Synthetic',str(index),actor='staff',expected_updated_at=ex.version.isoformat())
+        else:repo.revise_record('PRODUCTION_RECORD','p',{'TOTAL':650+index},'Synthetic',str(index),actor={'user_id':'staff','email':'staff@example.invalid'},expected_updated_at=ex.version.isoformat())
     assert ex.version==ex.clock+pd.Timedelta(2,unit='ns')

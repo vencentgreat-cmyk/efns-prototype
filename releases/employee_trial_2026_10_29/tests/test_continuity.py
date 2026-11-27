@@ -17,6 +17,8 @@ from tests.test_report_center import user
 @pytest.fixture
 def repo():
     result = MockRepository()
+    from tests.history_actor_support import MemoryUsers
+    result._history_auth_store = MemoryUsers('staff')
     result._accounts = pd.DataFrame([
         dict(ACCOUNT_ID='a',REGISTRATION_NUMBER='001',ORGANIZATION_NAME='Synthetic A'),
         dict(ACCOUNT_ID='b',REGISTRATION_NUMBER='002',ORGANIZATION_NAME='Synthetic B'),

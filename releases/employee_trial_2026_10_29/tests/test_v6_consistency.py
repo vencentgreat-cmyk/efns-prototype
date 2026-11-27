@@ -193,7 +193,7 @@ def test_sql_production_correction_uses_same_transaction_and_native_binds():
                 self.total=params[0]
             return 1
     executor=SQL(); repository=SnowflakeRepository(executor)
-    repository.revise_record('PRODUCTION_RECORD','p',{'TOTAL':650},'Synthetic correction','r',actor='staff',expected_updated_at=pd.Timestamp('2026-01-01'))
+    repository.revise_record('PRODUCTION_RECORD','p',{'TOTAL':650},'Synthetic correction','r',actor={'user_id':'staff','email':'staff@example.invalid'},expected_updated_at=pd.Timestamp('2026-01-01'))
     writes=[sql for sql,_ in executor.calls]
     assert sum('UPDATE EFNS_DEV.CORE.PRODUCTION_RECORD' in sql for sql in writes)==1
     assert sum('INSERT INTO EFNS_DEV.APP.RECORD_REVISION' in sql for sql in writes)==1

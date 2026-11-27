@@ -62,6 +62,8 @@ class AuthorizedRepository:
     def __init__(self, repository, auth_store: AuthStore, actor: User):
         self.repository = repository
         self.auth_store = auth_store
+        if getattr(repository, "_is_memory", False):
+            repository._history_auth_store = auth_store
         self.actor = actor
         self.repository_name = type(repository).__name__.replace("Repository", "")
         self.last_audit_warning = None
