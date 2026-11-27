@@ -165,7 +165,7 @@ def test_production_exact_retry_has_explicit_message(chain,tmp_path,monkeypatch)
     next(b for b in app.button if b.label=='Save new production record').click().run()
     assert len(r._production)==2
 
-def test_quantity_intent_is_cleared_only_by_explicit_new_scope(chain,tmp_path,monkeypatch):
+def test_quantity_intent_is_cleared_by_explicit_new_scope(chain,tmp_path,monkeypatch):
     r,a,o,f,q,fid,_=chain
     app=_open(_app(r,tmp_path,monkeypatch),'app/pages/6_Flock_Transactions.py',None,view='new')
     app.checkbox(key='flock_tx_form_apply_'+fid).check().run()
@@ -188,7 +188,9 @@ def test_switching_flock_requires_fresh_confirmation(chain,tmp_path,monkeypatch)
     app.selectbox(key='flock_tx_form_flock').select(original).run()
     assert not app.checkbox(key='flock_tx_form_apply_'+fid).value
     app.button(key='flock_tx_record_save').click().run()
-    assert app.error and r._flock_transactions.empty
+    assert not app.exception and not app.error
+    assert len(r._flock_transactions)==1 and r.get_flock(fid)['BIRD_COUNT']==10
+    assert any('Bird Count was not changed' in m.value for m in app.info)
 
 @pytest.mark.parametrize('null',[None,float('nan'),pd.NA,''])
 def test_snowflake_daily_create_then_update_optional_detail_contract(null):

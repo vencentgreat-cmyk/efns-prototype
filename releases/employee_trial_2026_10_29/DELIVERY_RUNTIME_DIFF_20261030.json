@@ -2,7 +2,7 @@
   "status": "LOCAL ONLY; no live query/deployment",
   "baseline": "RELEASE_SOURCE_MANIFEST.json saved deployment, LF-normalized review comparison",
   "baseline_files": 89,
-  "candidate_artifacts": 135,
+  "candidate_artifacts": 136,
   "runtime_changes": [
     {
       "path": "data/importing.py",
@@ -77,14 +77,14 @@
       "status": "MODIFIED",
       "reason": "Latest Count observations/conflicts; guarded draft failure; concise caption with details in calculation expander. Original navigation unchanged. Legacy display labels/order only; original stored values, filters, selection, save payloads and Report Center exports retained. Main-list null rendering uses Streamlit native em-dash placeholder only; unchanged Arrow values and exports. Permit-only Flock entry and readonly edit, create-only page duplicate guard, exact role-account Hatchery/Breeder names; existing identifiers, writer/audit/permission/export logic retained. UI polish A: approved presentation/regression updates only; business rules and export data unchanged.",
       "baseline_lf_sha256": "8eb8d27e3379901149137a653c473303f83335812aa634a10c60f9e8bf05afc3",
-      "candidate_lf_sha256": "a26e5f8e8e264436ea7c8617e670c8f20cdd944b8a2aa630e5e4653c2b027119"
+      "candidate_lf_sha256": "df1b38f896008ace5f738073994fd61f03bc2ecc686f882439f8b9da24a52f8f"
     },
     {
       "path": "app/pages/6_Flock_Transactions.py",
       "status": "MODIFIED",
       "reason": "R3 F5: disambiguate colliding Flock labels while preserving normal labels, current-quantity confirmation, CAS and save paths.",
       "baseline_lf_sha256": "a5373c0ae327966158e0d1f14607cdbcee8aadb40bb8eceba8ccfa47b8dbce30",
-      "candidate_lf_sha256": "2fb780052870eb738163e6b47f6e9ff69e3080395712be042b4e76d12e86ffe7"
+      "candidate_lf_sha256": "1d022a1739b6d8b5de61c78daca75a2128293eb2577574d5353496af874ae310"
     },
     {
       "path": "app/pages/8_Quota_Transactions.py",
@@ -203,7 +203,7 @@
       "status": "MODIFIED",
       "reason": "Signed Adjustment corrections and type-only sign guard; unchanged historical values preserved, with existing CAS/transaction/audit protection retained.",
       "baseline_lf_sha256": "814cc38fb0fba545d419a49e4132d3a5e10fe7d4f5ac6707725df04831e80579",
-      "candidate_lf_sha256": "28a399d34d13a475a5ff10b30d4625793f2d2dac384c516b61d621c7638a0b0b"
+      "candidate_lf_sha256": "4a5eed20c15f074f9b30f1e017158e0ad6cc43a124c89cdeeed928d958a8427d"
     },
     {
       "path": "data/repositories/base.py",
@@ -905,7 +905,7 @@
       "path": "tests/test_quota_leases.py",
       "status": "NEW",
       "reason": "Part E opt-in effective-dated quota lease implementation and offline verification.",
-      "candidate_lf_sha256": "3029b13dad46d14479f776b0e8b140b2d9bee2e194067f25bdc199cfe0117e4a"
+      "candidate_lf_sha256": "240e17a18cbf69e317fd746fd5960b7434b0abc8185519bf551e1d2e1595afb0"
     }
   ],
   "import_overwrite_lease_void_20261119_artifacts": [
@@ -919,13 +919,13 @@
       "path": "app/services/authorized_repository.py",
       "status": "MODIFIED",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "91202b32251cfc5c9ac3ebdffbba4513d543724c03ad41fecd3d0554ace6868f"
+      "candidate_lf_sha256": "042a75bc0311a1105c914b419c3acb256d8e8fc3398869775c6dd7e94d57c7cf"
     },
     {
       "path": "tests/test_continuity.py",
       "status": "MODIFIED",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "e80f3f0504a96492ca5d1aee736027a3db923808e362ee87f79c12177766cad9"
+      "candidate_lf_sha256": "3a607ade22b6e22a968c0fd16192f2d6d8a0b9b0cbfd38f33e768bd55cb8a92e"
     },
     {
       "path": "tests/test_review_integrated.py",
@@ -937,13 +937,13 @@
       "path": "tests/test_staff_workflows.py",
       "status": "MODIFIED",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "d06380425b12c8ccb0910c865517c9a8469d95966adf956c171f573520771304"
+      "candidate_lf_sha256": "07dcd529fb8980de5caffff84369144bd480580569d0dd4c468c8ca1763f07be"
     },
     {
       "path": "tests/test_v6_consistency.py",
       "status": "MODIFIED",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "6074187f0c3e29fcd11b6ed765764cf581406eb0e34030b06a51f6747ffbede8"
+      "candidate_lf_sha256": "4acebbd1752352b4ea4715d31db6c0fa30f51bf663abc65b62efdd5e11d91542"
     },
     {
       "path": "app/services/production_import_review.py",
@@ -973,7 +973,7 @@
       "path": "tests/test_production_replacement.py",
       "status": "NEW",
       "reason": "Task 3 scoped production replacement / lease void, offline validation and report.",
-      "candidate_lf_sha256": "a746e90724733ec474c7634a0cf27b1474288305b2c06de117d13dfef93debb8"
+      "candidate_lf_sha256": "e63de9a5620df28cc079209b7248fa77a2ef6ffbe22df1a3daf89d0f300b3dbc"
     },
     {
       "path": "app/services/quota_lease_void_ui.py",
@@ -1258,6 +1258,56 @@
       "status": "ADDED",
       "reason": "Approved UI polish A: presentation and verification only; business rules, writes, authorization and exports unchanged.",
       "candidate_lf_sha256": "2970ef433d6c981ea3ac59e6620bcec8d35a8538d5a4e08ccf51ce890078508e"
+    }
+  ],
+  "urgent_flock_import_20261127": [
+    {
+      "path": "app/services/flock_disposal_entry.py",
+      "status": "MODIFIED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "f0f13d44af9cdedf3f10bce84409f8fb174786c5910b7dec063632837cb17919"
+    },
+    {
+      "path": "tests/history_actor_support.py",
+      "status": "MODIFIED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "685aa3e105dcaaad270b14781227feb39d80cfb8d2fc9cefd5b2c4d577fde99e"
+    },
+    {
+      "path": "tests/test_flock_activity_entry.py",
+      "status": "ADDED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "54705df81e783687cbd9f27384ae9e511911ebc066a62d14b773fe0f51708a01"
+    },
+    {
+      "path": "tests/test_flock_disposal_entry.py",
+      "status": "MODIFIED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "2614c1f747c0e157db5b84b7158f982e3b8658969b497e64e629e5b51c221934"
+    },
+    {
+      "path": "tests/test_import_audit_actor.py",
+      "status": "MODIFIED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "cc169b60bd668e12365df5b139e1a2658c23a83423bbc09b59114c34b1c818ba"
+    },
+    {
+      "path": "tests/test_round2.py",
+      "status": "MODIFIED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "f3848417affc885fe22a409a404fcfa8b8507986b6eca02276d6bec2f99e4503"
+    },
+    {
+      "path": "tests/test_round2_boundaries.py",
+      "status": "MODIFIED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "5cea7b9d782ec528982335f097d2a3e199658afb5080c3ce25e3644a3f325a37"
+    },
+    {
+      "path": "tests/test_round3_environment.py",
+      "status": "MODIFIED",
+      "reason": "Urgent Flock disposal, import actor and transaction-form fixes with existing audit/history guarantees.",
+      "candidate_lf_sha256": "48a3c977d0e5b66fbd503ce247bad05379a5e5dac19b541fc3f3cba92cf791c9"
     }
   ]
 }

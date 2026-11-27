@@ -21,6 +21,8 @@ from data.source_evidence import evidence_json
 @pytest.fixture
 def chain():
     r=MockRepository()
+    from tests.history_actor_support import MemoryUsers
+    r._history_auth_store = MemoryUsers('staff', 'synthetic')
     for attr in ('_accounts','_facilities','_flocks','_flock_transactions','_quota_registrations','_quota_transactions','_salmonella_tests','_production'):
         setattr(r,attr,getattr(r,attr).iloc[:0].copy())
     a=r.upsert_account(dict(ORGANIZATION_NAME='DEV_TEST staff producer',REGISTRATION_NUMBER='001',STATUS='Active'))

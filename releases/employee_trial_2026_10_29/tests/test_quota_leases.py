@@ -46,6 +46,8 @@ def pos(regs, tx, owner, when, inactive=set()):
 
 def repository():
     repo=MockRepository()
+    from tests.history_actor_support import MemoryUsers
+    repo._history_auth_store = MemoryUsers('synthetic-user', 'synthetic-staff')
     accounts,regs,tx=ledger()
     repo._accounts=accounts.reindex(columns=repo._accounts.columns.union(accounts.columns))
     repo._quota_registrations=regs.reindex(columns=repo._quota_registrations.columns.union(regs.columns))

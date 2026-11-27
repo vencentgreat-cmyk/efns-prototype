@@ -21,6 +21,8 @@ from app.services.production_import_review import summary_text
 
 def repo():
     result=MockRepository()
+    from tests.history_actor_support import MemoryUsers
+    result._history_auth_store = MemoryUsers('staff', 'synthetic-staff')
     result._accounts=pd.DataFrame([dict(ACCOUNT_ID=a,REGISTRATION_NUMBER=n,STATUS='Active') for a,n in [('a','001'),('b','002')]])
     result._production=result._production.iloc[:0].copy()
     result._size_breakdown=result._size_breakdown.iloc[:0].copy()

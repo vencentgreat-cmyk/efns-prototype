@@ -35,10 +35,35 @@ def read_record(repo,entity,record_id,tx=None):
     if len(found)>1:raise RepositoryError('Record identity is ambiguous; no write accepted.')
     return found.iloc[0].to_dict() if len(found)==1 else None
 
+def audit_actor_email(repo, tx, actor):
+    """Resolve scalar actors under the owning transaction; never invent an email."""
+    import os
+    email = text(actor.get('email')) if isinstance(actor, dict) else None
+    if email:
+        return email
+    identity = actor_id(actor)
+    try:
+        if repo._is_memory:
+            store = getattr(repo, '_history_auth_store', None)
+            user = store.get_user(identity) if store is not None else None
+            email = text(user.get('email')) if isinstance(user, dict) else text(getattr(user, 'email', None))
+        else:
+            if tx is None:
+                raise RepositoryError('Audit identity lookup requires the existing transaction.')
+            schema = repo._identifier(getattr(repo, 'schema_security', os.getenv('SNOWFLAKE_SCHEMA_SECURITY', 'SECURITY')), 'SECURITY schema')
+            rows = tx.query(f'SELECT EMAIL FROM {repo.database}.{schema}.APP_USER WHERE USER_ID=%s LIMIT 2', (identity,))
+            email = text(rows.iloc[0].get('EMAIL')) if len(rows) == 1 else None
+    except Exception as exc:
+        raise RepositoryError('The audit actor email could not be resolved from User Management. The audited operation was refused.') from exc
+    if not email:
+        raise RepositoryError('The audit actor has no resolvable User Management email. The audited operation was refused.')
+    return email
+
+
 def history_audit(repo,tx,entity,record_id,request,actor,reason,kind,before,after,*,report_change_confirmation=None):
     from data.repositories.continuity import stable_id
     audit=dict(AUDIT_ID=stable_id('record-audit',entity,record_id,request,kind),
-        ACTOR_USER_ID=actor_id(actor),ACTOR_EMAIL=actor.get('email') if isinstance(actor,dict) else None,
+        ACTOR_USER_ID=actor_id(actor),ACTOR_EMAIL=audit_actor_email(repo,tx,actor),
         ACTION=kind if kind in ('CREATE','DELETE') else 'UPDATE',ENTITY_TYPE=entity,ENTITY_ID=record_id,
         DETAILS={'reason':reason,'request_id':request,'history_kind':kind},
         OCCURRED_AT=dt.datetime.now(dt.timezone.utc))

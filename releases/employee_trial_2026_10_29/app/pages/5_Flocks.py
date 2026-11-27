@@ -13,7 +13,8 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
-from app.auth import require_operational_page, can_current
+from app.auth import require_operational_page, can_current, current_user
+from app.services.flock_disposal_entry import save_flock_edit
 from app.security import Permission
 from app.services.flock_related import flock_quota_link
 from app.navigation import format_timestamp, list_command_bar, open_module, open_view, read_record_view, record_command_bar, related_records_table, saved_view_selector, selected_row_index, timestamp_column
@@ -236,6 +237,8 @@ else:
                     if calculated_disposal and calculated_disposal != optional_form_date(current.get("EST_DISPOSAL")):
                         right.caption(f"Calculated from Placement Date: {calculated_disposal.isoformat()}")
                 disposal_date = right.date_input("Disposal Date", value=optional_form_date(current.get("DISPOSAL_DATE")), key="flock_form_disposal")
+                if view.record_id:
+                    right.caption("A changed Disposal Date is recorded as an actual disposal event. Clearing it requires Record Review & History.")
                 birds_disposed_input = right.text_input("Birds Disposed",value=text(current.get("BIRDS_DISPOSED")) or "",key="flock_form_disposed_text")
                 bird_strain = bird_strain_input(flocks, current.get('BIRD_STRAIN'), target=right)
                 comments = st.text_area("Comments", value=str(current.get("COMMENTS") or ""), key="flock_form_comments")
@@ -273,9 +276,7 @@ else:
             else:
                 try:
                     if view.record_id:
-                        record=preserve_form(record,current,'flock_form_')
-                        repo.check_flock_reference_change(record)
-                        saved_id = save_form(repo,'FLOCK',record,current,'flock_form_',revision_reason)
+                        saved_id = save_flock_edit(repo,record,current,revision_reason,actor=current_user().user_id)
                     elif initial_confirmed:
                         if not placement_date or not initial_reason.strip(): raise RepositoryError('Confirmed initial position requires placement date, time and evidence.')
                         saved_id = repo.create_flock_with_initial_position(record,dt.datetime.combine(placement_date,initial_time,ZoneInfo('America/Halifax')),initial_reason,st.session_state.flock_form_initial_request)
